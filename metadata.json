@@ -1,0 +1,6 @@
+{
+  "name": "Bete Finder",
+  "description": "Ethiopian real estate and property rental platform with responsive search, multi-language support (Amharic & English), verified listings, and local payment integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
