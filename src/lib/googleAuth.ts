@@ -28,12 +28,33 @@ export function parseGoogleJwt(token: string): any {
   }
 }
 
+let cachedServerClientId: string | null = null;
+
+// Attempt to fetch server-configured Google Client ID
+if (typeof window !== 'undefined') {
+  fetch('/api/auth/google-config')
+    .then((res) => res.json())
+    .then((data) => {
+      if (data?.clientId && typeof data.clientId === 'string' && data.clientId.trim() !== '') {
+        cachedServerClientId = data.clientId.trim();
+      }
+    })
+    .catch(() => {
+      // Non-critical, fallback will be used
+    });
+}
+
 // Get configured Google Client ID
 export function getGoogleClientId(): string {
   // Check client-side env variable
   const envClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID;
   if (envClientId && typeof envClientId === 'string' && envClientId.trim() !== '') {
     return envClientId.trim();
+  }
+
+  // Check cached server client ID
+  if (cachedServerClientId) {
+    return cachedServerClientId;
   }
 
   // Check window global injection if any

@@ -17,7 +17,8 @@ import {
   isSlashAllowedForEmail,
   extractDestinationEmail,
   verifyRegisteredAccountAndPhone,
-  normalizePhoneNumber
+  normalizePhoneNumber,
+  isSlashAllowedForPassword
 } from '../lib/passwords';
 import { authenticateWithGoogle } from '../lib/googleAuth';
 
@@ -259,6 +260,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { 
         success: false, 
         message: 'The "/" symbol is reserved for Admin and Owner accounts only and cannot be used in registration.' 
+      };
+    }
+
+    if (!isSlashAllowedForPassword(email, data.password)) {
+      return {
+        success: false,
+        message: "The '/' symbol in passwords is reserved for Admin and Owner accounts only."
       };
     }
 

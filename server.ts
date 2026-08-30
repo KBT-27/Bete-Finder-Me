@@ -525,7 +525,24 @@ app.post('/api/auth/change-password', async (req, res) => {
       });
     }
 
-    // Slash restriction check
+    // Check if "/" is used in password (allowed ONLY for Admin and Owner)
+    if (inputNew.includes('/')) {
+      const isAllowedAdminOwner = 
+        inputEmail === 'kalebbereket49@gmail.com/owner' || 
+        inputEmail === 'kalebbereket49@gmail.com/admin' || 
+        inputEmail === 'kalebbereket49@gmail.com' ||
+        inputEmail.endsWith('/admin') || 
+        inputEmail.endsWith('/owner');
+      
+      if (!isAllowedAdminOwner) {
+        return res.status(400).json({
+          success: false,
+          message: "The '/' symbol in passwords is reserved for Admin and Owner accounts only."
+        });
+      }
+    }
+
+    // Slash restriction check in email
     if (inputEmail.includes('/')) {
       const isAllowedSlash = inputEmail.endsWith('/admin') || inputEmail.endsWith('/owner');
       if (!isAllowedSlash) {
@@ -901,6 +918,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
     }
 
+    const cleanPass = newPassword.trim();
     const resetReq = activeResetCodes.get(lookupKey);
     let targetEmail = resetReq?.email;
 
@@ -915,6 +933,23 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
     if (!targetEmail) {
       return res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
+    }
+
+    // Validate slash in password
+    if (cleanPass.includes('/')) {
+      const isAllowedAdminOwner = 
+        targetEmail.toLowerCase() === 'kalebbereket49@gmail.com/owner' || 
+        targetEmail.toLowerCase() === 'kalebbereket49@gmail.com/admin' || 
+        targetEmail.toLowerCase() === 'kalebbereket49@gmail.com' ||
+        targetEmail.toLowerCase().endsWith('/admin') || 
+        targetEmail.toLowerCase().endsWith('/owner');
+      
+      if (!isAllowedAdminOwner) {
+        return res.status(400).json({
+          success: false,
+          message: "The '/' symbol in passwords is reserved for Admin and Owner accounts only."
+        });
+      }
     }
 
     // Mark code as used
@@ -964,6 +999,12 @@ app.post('/api/auth/reset-password', async (req, res) => {
     console.error('[Reset Password Error]:', error);
     res.status(500).json({ success: false, message: error?.message || 'Failed to reset password.' });
   }
+});
+
+// Google OAuth client config endpoint
+app.get('/api/auth/google-config', (req, res) => {
+  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
+  res.json({ clientId });
 });
 
 // Start the server with Vite middleware in dev or static serving in prod

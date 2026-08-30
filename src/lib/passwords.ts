@@ -33,6 +33,20 @@ export const isSlashAllowedForEmail = (email: string): boolean => {
   return normalized.endsWith('/admin') || normalized.endsWith('/owner');
 };
 
+// Check if "/" is allowed in password (allowed ONLY for Admin and Owner)
+export const isSlashAllowedForPassword = (emailOrRole: string, password: string): boolean => {
+  if (!password || !password.includes('/')) return true; // No slash: allowed for everyone
+  const normalized = (emailOrRole || '').trim().toLowerCase();
+  // Allowed if email is admin/owner or role is admin/owner
+  return (
+    normalized === 'owner' ||
+    normalized === 'admin' ||
+    normalized.endsWith('/admin') ||
+    normalized.endsWith('/owner') ||
+    normalized === 'kalebbereket49@gmail.com'
+  );
+};
+
 // Extract real destination email for SMTP sending (e.g. kalebbereket49@gmail.com/owner -> kalebbereket49@gmail.com)
 export const extractDestinationEmail = (email: string): string => {
   const normalized = (email || '').trim().toLowerCase();
@@ -293,17 +307,28 @@ export const markTokenAsUsed = (tokenOrCode: string) => {
 
 export const updateAccountPasswordByEmail = (email: string, newPass: string): { success: boolean; message: string } => {
   const normalizedEmail = email.trim().toLowerCase();
+  const cleanPass = newPass.trim();
+
+  // Validate slash symbol in password
+  if (!isSlashAllowedForPassword(normalizedEmail, cleanPass)) {
+    return { 
+      success: false, 
+      message: "The '/' symbol in passwords is reserved for Admin and Owner accounts only." 
+    };
+  }
 
   // 1. Check Owner account
   const owner = getOwnerCredentials();
-  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com') {
-    saveOwnerCredentials({ password: newPass.trim() });
+  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com' || normalizedEmail === 'kalebbereket49@gmail.com/owner') {
+    saveOwnerCredentials({ password: cleanPass });
+    return { success: true, message: 'Owner password updated successfully!' };
   }
 
   // 2. Check Admin account
   const admin = getAdminCredentials();
-  if (admin.email.toLowerCase() === normalizedEmail) {
-    saveAdminCredentials({ password: newPass.trim() });
+  if (admin.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
+    saveAdminCredentials({ password: cleanPass });
+    return { success: true, message: 'Admin password updated successfully!' };
   }
 
   // 3. Check Registered users
@@ -311,7 +336,7 @@ export const updateAccountPasswordByEmail = (email: string, newPass: string): { 
   const foundIndex = registered.findIndex(u => u.email.toLowerCase() === normalizedEmail);
 
   if (foundIndex >= 0) {
-    registered[foundIndex].password = newPass.trim();
+    registered[foundIndex].password = cleanPass;
     localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(registered));
     return { success: true, message: 'Password updated successfully!' };
   }
@@ -323,7 +348,7 @@ export const updateAccountPasswordByEmail = (email: string, newPass: string): { 
     email: normalizedEmail,
     phone: '+251995406697',
     role: 'tenant',
-    password: newPass.trim(),
+    password: cleanPass,
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
     savedPropertyIds: ['prop-1'],
     postedPropertyIds: [],
@@ -345,13 +370,36 @@ export const changeAccountPassword = (
   const cleanCurrent = currentPass.trim();
   const cleanNew = newPass.trim();
 
-  if (cleanNew.length < 6) {
+  if (!normalizedEmail) {
+    return { success: false, message: 'Registered Gmail / Email is required.' };
+  }
+  if (!cleanPhone) {
+    return { success: false, message: 'Registered Phone Number is required.' };
+  }
+  if (!cleanCurrent) {
+    return { success: false, message: 'Current Password is required.' };
+  }
+  if (!cleanNew || cleanNew.length < 6) {
     return { success: false, message: 'New password must be at least 6 characters.' };
   }
 
+  // Validate slash symbol in password
+  if (!isSlashAllowedForPassword(normalizedEmail, cleanNew)) {
+    return { 
+      success: false, 
+      message: "The '/' symbol in passwords is reserved for Admin and Owner accounts only." 
+    };
+  }
+
+  const inputPhoneNorm = normalizePhoneNumber(cleanPhone);
+
   // 1. Check Owner account
   const owner = getOwnerCredentials();
-  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/owner') {
+  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/owner' || normalizedEmail === 'kalebbereket49@gmail.com') {
+    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '+251995406697');
+    if (ownerPhoneNorm !== inputPhoneNorm) {
+      return { success: false, message: 'Provided phone number does not match registered Owner phone number.' };
+    }
     if (owner.password !== cleanCurrent) {
       return { success: false, message: 'Current password is incorrect for Owner account.' };
     }
@@ -365,6 +413,10 @@ export const changeAccountPassword = (
   // 2. Check Admin account
   const admin = getAdminCredentials();
   if (admin.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
+    const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
+    if (adminPhoneNorm !== inputPhoneNorm) {
+      return { success: false, message: 'Provided phone number does not match registered Admin phone number.' };
+    }
     if (admin.password !== cleanCurrent) {
       return { success: false, message: 'Current password is incorrect for Admin account.' };
     }
@@ -381,8 +433,12 @@ export const changeAccountPassword = (
 
   if (foundIndex >= 0) {
     const userAcc = registered[foundIndex];
+    const userPhoneNorm = normalizePhoneNumber(userAcc.phone || '');
+    if (userPhoneNorm && userPhoneNorm !== inputPhoneNorm) {
+      return { success: false, message: `The provided Phone Number does not match the registered phone number for ${normalizedEmail}.` };
+    }
     if (userAcc.password && userAcc.password !== cleanCurrent) {
-      return { success: false, message: 'Current password is incorrect.' };
+      return { success: false, message: 'Current password is incorrect. Please check and try again.' };
     }
     registered[foundIndex] = {
       ...userAcc,
@@ -390,25 +446,12 @@ export const changeAccountPassword = (
       phone: cleanPhone || userAcc.phone
     };
     localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(registered));
-    return { success: true, message: 'Password changed successfully!' };
+    return { success: true, message: 'Password changed successfully in database!' };
   }
 
-  // If not found in registered accounts list, register it with the new password
-  const newAccount: RegisteredAccount = {
-    id: `user-${Date.now()}`,
-    name: email.split('@')[0] || 'User',
-    email: normalizedEmail,
-    phone: cleanPhone || '+251995406697',
-    role: 'tenant',
-    password: cleanNew,
-    provider: 'local',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-    savedPropertyIds: ['prop-1'],
-    postedPropertyIds: [],
-    toursBooked: []
+  return { 
+    success: false, 
+    message: 'No registered account found with this Gmail / Email. Please register an account first.' 
   };
-  saveRegisteredUser(newAccount);
-
-  return { success: true, message: 'Password set and account saved successfully!' };
 };
 

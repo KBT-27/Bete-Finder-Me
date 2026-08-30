@@ -13,6 +13,7 @@ import {
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProperties } from '../../context/PropertyContext';
+import { isSlashAllowedForPassword } from '../../lib/passwords';
 
 interface ResetPasswordViewProps {
   initialToken?: string;
@@ -104,6 +105,11 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
 
     if (newPassword.length < 6) {
       setErrorMessage('Password must be at least 6 characters long.');
+      return;
+    }
+
+    if (!isSlashAllowedForPassword(targetEmail, newPassword)) {
+      setErrorMessage("The '/' symbol in passwords is reserved for Admin and Owner accounts only.");
       return;
     }
 

@@ -18,6 +18,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth, AuthModalMode } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { ResetPasswordView } from './ResetPasswordView';
+import { isSlashAllowedForPassword } from '../../lib/passwords';
 
 const GoogleIcon: React.FC = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -142,6 +143,13 @@ export const AuthModal: React.FC = () => {
           setIsLoading(false);
           return;
         }
+        if (!isSlashAllowedForPassword(email, password)) {
+          setErrorMessage(language === 'am' 
+            ? 'የ "/" ምልክት በይለፍ ቃል ውስጥ ለአድሚንና ለባለቤት መለያዎች ብቻ የተፈቀደ ነው።'
+            : "The '/' symbol in passwords is reserved for Admin and Owner accounts only.");
+          setIsLoading(false);
+          return;
+        }
         const result = signup({
           name: name.trim() || email.split('@')[0],
           email: email.trim(),
@@ -208,6 +216,14 @@ export const AuthModal: React.FC = () => {
         }
         if (!newPassword.trim() || newPassword.trim().length < 6) {
           setErrorMessage(language === 'am' ? 'አዲሱ የይለፍ ቃል ቢያንስ 6 ቁምፊዎች መሆን አለበት።' : 'New password must be at least 6 characters.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (!isSlashAllowedForPassword(email, newPassword)) {
+          setErrorMessage(language === 'am'
+            ? 'የ "/" ምልክት በይለፍ ቃል ውስጥ ለአድሚንና ለባлеቤት መለያዎች ብቻ የተፈቀደ ነው።'
+            : "The '/' symbol in passwords is reserved for Admin and Owner accounts only.");
           setIsLoading(false);
           return;
         }
@@ -283,7 +299,7 @@ export const AuthModal: React.FC = () => {
           </p>
         </div>
 
-        {/* Mode Switcher Tabs */}
+        {/* Mode Switcher Tabs - Strictly Sign In and Sign Up only */}
         {mode !== 'reset' && (
           <div className="flex bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">
             <button
@@ -317,22 +333,6 @@ export const AuthModal: React.FC = () => {
               }`}
             >
               {t('authSignUpTab')}
-            </button>
-            <button
-              type="button"
-              id="auth-tab-change"
-              onClick={() => {
-                setMode('change');
-                setErrorMessage(null);
-                setSuccessMessage(null);
-              }}
-              className={`flex-1 py-2 rounded-lg transition-all cursor-pointer ${
-                mode === 'change'
-                  ? 'bg-white text-emerald-800 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              {language === 'am' ? 'ይለፍ ቃል ቀይር' : 'Change Pass'}
             </button>
           </div>
         )}
@@ -448,7 +448,13 @@ export const AuthModal: React.FC = () => {
               {/* Gmail / Email Address */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {mode === 'change' ? (language === 'am' ? 'Gmail / የኢሜይል አድራሻ' : 'Gmail / Email Address') : t('authEmailLabel')}
+                  {mode === 'forgot' ? (
+                    language === 'am' ? '1. የተመዘገበ Gmail / ኢሜይል *' : '1. Registered Gmail / Email *'
+                  ) : mode === 'change' ? (
+                    language === 'am' ? '1. የተመዘገበ Gmail / ኢሜይል *' : '1. Registered Gmail / Email *'
+                  ) : (
+                    t('authEmailLabel')
+                  )}
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -464,21 +470,27 @@ export const AuthModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Phone Number for Sign Up and Change Password */}
-              {(mode === 'signup' || mode === 'change') && (
+              {/* Phone Number for Sign Up, Forgot Password, and Change Password */}
+              {(mode === 'signup' || mode === 'change' || mode === 'forgot') && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {mode === 'change' ? (language === 'am' ? 'ስልክ ቁጥር' : 'Phone Number') : t('authPhoneLabel')}
+                    {mode === 'forgot' ? (
+                      language === 'am' ? '2. የተመዘገበ ስልክ ቁጥር *' : '2. Registered Phone Number *'
+                    ) : mode === 'change' ? (
+                      language === 'am' ? '2. የተመዘገበ ስልክ ቁጥር *' : '2. Registered Phone Number *'
+                    ) : (
+                      t('authPhoneLabel')
+                    )}
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="tel"
-                      required={mode === 'change'}
+                      required={mode === 'change' || mode === 'forgot'}
                       id="auth-phone-input"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="0912345678"
+                      placeholder="09... or +251..."
                       className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                     />
                   </div>
@@ -489,7 +501,7 @@ export const AuthModal: React.FC = () => {
               {mode === 'change' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {language === 'am' ? 'የአሁኑ የይለፍ ቃል' : 'Current Password'}
+                    {language === 'am' ? '3. የአሁኑ የይለፍ ቃል *' : '3. Current Password *'}
                   </label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -517,7 +529,7 @@ export const AuthModal: React.FC = () => {
               {mode === 'change' && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {language === 'am' ? 'አዲስ የይለፍ ቃል (ቢያንስ 6 ቁምፊዎች)' : 'New Password (min 6 characters)'}
+                    {language === 'am' ? '4. አዲስ የይለፍ ቃል (ቢያንስ 6 ቁምፊዎች) *' : '4. New Password (min 6 characters) *'}
                   </label>
                   <div className="relative">
                     <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
