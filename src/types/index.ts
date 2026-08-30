@@ -89,6 +89,16 @@ export interface PropertyFilterState {
   selectedAmenities: string[];
 }
 
+export interface PasswordResetRequest {
+  id: string;
+  email: string;
+  token: string;
+  code?: string;
+  createdAt: string;
+  expiresAt: string;
+  used: boolean;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -96,6 +106,7 @@ export interface UserProfile {
   phone: string;
   role: UserRole;
   avatar: string;
+  provider?: 'local' | 'google';
   savedPropertyIds: string[];
   postedPropertyIds: string[];
   toursBooked: TourBooking[];

@@ -26,15 +26,20 @@ import {
   DollarSign,
   Tag,
   FileCheck2,
-  Sliders
+  Sliders,
+  RefreshCw,
+  Database,
+  Users,
+  HardDrive
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
 import { useAuth } from '../../context/AuthContext';
+import { getRegisteredUsers } from '../../lib/passwords';
 import { PaymentRequest } from '../../types';
 
 export const AdminDashboard: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { 
     properties, 
     deleteProperty, 
@@ -49,7 +54,11 @@ export const AdminDashboard: React.FC = () => {
     plans,
     updatePlanPrice,
     telebirrSettings,
-    updateTelebirrSettings
+    updateTelebirrSettings,
+    syncWithDatabase,
+    isDatabaseSyncing,
+    isNeonConnected,
+    lastDbSyncTimestamp
   } = useProperties();
   
   const { 
@@ -64,10 +73,22 @@ export const AdminDashboard: React.FC = () => {
 
   const isOwner = role === 'owner';
 
-  const [activeAdminTab, setActiveAdminTab] = useState<'payments' | 'properties' | 'pricing_settings' | 'security'>('payments');
+  const [activeAdminTab, setActiveAdminTab] = useState<'payments' | 'properties' | 'pricing_settings' | 'security' | 'sync'>('payments');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [propertyFilter, setPropertyFilter] = useState<'all' | 'unverified' | 'verified'>('all');
   const [selectedScreenshot, setSelectedScreenshot] = useState<string | null>(null);
+  const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+
+  const registeredUsersList = getRegisteredUsers();
+
+  const handleManualSync = async () => {
+    setSyncToastMessage('Synchronizing with Database...');
+    const res = await syncWithDatabase();
+    setSyncToastMessage(res.message);
+    setTimeout(() => {
+      setSyncToastMessage(null);
+    }, 4000);
+  };
 
   // Reject dialog state
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
@@ -201,7 +222,16 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            <button
+              onClick={handleManualSync}
+              disabled={isDatabaseSyncing}
+              id="admin-sync-db-btn"
+              className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isDatabaseSyncing ? 'animate-spin' : ''}`} />
+              <span>{isDatabaseSyncing ? 'Syncing...' : 'Sync with Database'}</span>
+            </button>
             <button
               onClick={() => setCurrentView('post')}
               className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
@@ -217,6 +247,19 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Sync Toast Notification */}
+        {syncToastMessage && (
+          <div className="mb-6 p-4 bg-amber-50 border border-amber-300 rounded-2xl flex items-center justify-between gap-3 text-amber-950 font-bold text-xs shadow-md animate-fade-in">
+            <div className="flex items-center gap-2.5">
+              <Database className="w-5 h-5 text-amber-600 shrink-0" />
+              <span>{syncToastMessage}</span>
+            </div>
+            <span className="text-[11px] text-amber-800 bg-amber-200/60 px-2 py-0.5 rounded-md font-mono">
+              {new Date().toLocaleTimeString()}
+            </span>
+          </div>
+        )}
 
         {/* Key Metrics - (Telebirr Revenue removed per request) */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
@@ -308,6 +351,16 @@ export const AdminDashboard: React.FC = () => {
           >
             <Lock className="w-4 h-4 text-amber-500" />
             <span>Security & Profile Settings</span>
+          </button>
+
+          <button
+            onClick={() => setActiveAdminTab('sync')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'sync' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            }`}
+          >
+            <Database className="w-4 h-4 text-blue-400" />
+            <span>Database & Cross-Device Sync ({registeredUsersList.length} users)</span>
           </button>
         </div>
 
@@ -872,6 +925,154 @@ export const AdminDashboard: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* TAB 5: Database & Multi-Device Cross Sync */}
+        {activeAdminTab === 'sync' && (
+          <div className="space-y-6 animate-in fade-in">
+            {/* Status cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${isNeonConnected ? 'bg-emerald-100 text-emerald-700' : 'bg-blue-100 text-blue-700'}`}>
+                  <Database className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-bold uppercase">Database Engine</p>
+                  <p className="text-sm font-black text-slate-900">
+                    {isNeonConnected ? 'Neon PostgreSQL (Live)' : 'Server Persistent Store'}
+                  </p>
+                  <span className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mt-0.5">
+                    <CheckCircle2 className="w-3 h-3" /> Active & Synchronized
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center">
+                  <Users className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-bold uppercase">Registered Accounts</p>
+                  <p className="text-sm font-black text-slate-900">
+                    {registeredUsersList.length} User Account{registeredUsersList.length !== 1 ? 's' : ''}
+                  </p>
+                  <span className="text-[11px] text-slate-400">Merged across web & DB</span>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <RefreshCw className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-bold uppercase">Last Sync Time</p>
+                  <p className="text-sm font-black text-slate-900">
+                    {new Date(lastDbSyncTimestamp).toLocaleTimeString()}
+                  </p>
+                  <span className="text-[11px] text-slate-400">Auto-sync every 12s + focus</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Sync control block */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                    <HardDrive className="w-5 h-5 text-emerald-600" />
+                    <span>Global Database Cross-Device Synchronization</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                    When you or users make any change (post a property, delete a property, accept or reject payment, change password, or register), all changes are saved to the persistent database and automatically synced to all devices.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleManualSync}
+                  disabled={isDatabaseSyncing}
+                  id="sync-tab-trigger-btn"
+                  className="px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center gap-2 cursor-pointer transition-all disabled:opacity-50 shrink-0"
+                >
+                  <RefreshCw className={`w-4 h-4 text-emerald-400 ${isDatabaseSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isDatabaseSyncing ? 'Synchronizing...' : 'Force Sync to Database Now'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Registered Users Table */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  <span>Database Registered Users ({registeredUsersList.length})</span>
+                </h3>
+                <span className="text-xs text-slate-400">All authenticated identities</span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px]">
+                      <th className="pb-3 px-3">Name</th>
+                      <th className="pb-3 px-3">Gmail / Email</th>
+                      <th className="pb-3 px-3">Phone</th>
+                      <th className="pb-3 px-3">Role</th>
+                      <th className="pb-3 px-3">Active Plan</th>
+                      <th className="pb-3 px-3">Listings</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {registeredUsersList.map((u) => {
+                      const userProps = properties.filter(p => p.owner.email.toLowerCase() === u.email.toLowerCase());
+                      return (
+                        <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="py-3 px-3 font-bold text-slate-900 flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-black text-[11px]">
+                              {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                            </div>
+                            <span>{u.name || 'User'}</span>
+                          </td>
+                          <td className="py-3 px-3 font-mono text-slate-700 font-medium">
+                            {u.email}
+                          </td>
+                          <td className="py-3 px-3 text-slate-600 font-mono">
+                            {u.phone || '—'}
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-md font-bold uppercase text-[10px] ${
+                              u.role === 'owner' 
+                                ? 'bg-amber-100 text-amber-900 border border-amber-300' 
+                                : u.role === 'admin' 
+                                ? 'bg-purple-100 text-purple-900 border border-purple-300' 
+                                : u.role === 'landlord' 
+                                ? 'bg-blue-100 text-blue-900' 
+                                : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3">
+                            <span className={`px-2 py-0.5 rounded-md font-bold text-[10px] uppercase ${
+                              u.activePlan === 'vip' 
+                                ? 'bg-amber-100 text-amber-900' 
+                                : u.activePlan === 'premium' 
+                                ? 'bg-emerald-100 text-emerald-900' 
+                                : 'bg-slate-100 text-slate-600'
+                            }`}>
+                              {u.activePlan || 'basic'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3 text-slate-700 font-bold">
+                            {userProps.length} property
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 

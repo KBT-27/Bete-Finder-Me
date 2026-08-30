@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { PropertyProvider, useProperties } from './context/PropertyContext';
@@ -16,32 +16,11 @@ import { PostPropertyView } from './components/properties/PostPropertyView';
 import { PlansPricingView } from './components/plans/PlansPricingView';
 import { UserDashboard } from './components/dashboard/UserDashboard';
 import { AuthModal } from './components/auth/AuthModal';
+import { ResetPasswordView } from './components/auth/ResetPasswordView';
 import { PaymentModal } from './components/payment/PaymentModal';
-import { neon } from './lib/neon'; // የኒዮን ክላየንት ማካተቻ
 
 const MainContent: React.FC = () => {
-  const { currentView } = useProperties();
-  const [todos, setTodos] = useState<any[]>([]);
-
-  // ከኒዮን ዳታቤዝ መረጃዎችን የሚቀበል ኮድ
-  useEffect(() => {
-    async function fetchTodos() {
-      try {
-        const { data } = await neon
-          .from('todos')
-          .select('*')
-          .order('id', { ascending: false });
-
-        if (data) {
-          setTodos(data);
-        }
-      } catch (error) {
-        console.error("Error fetching todos:", error);
-      }
-    }
-
-    fetchTodos();
-  }, []);
+  const { currentView, setCurrentView } = useProperties();
 
   return (
     <main className="min-h-screen flex flex-col justify-between">
@@ -54,20 +33,6 @@ const MainContent: React.FC = () => {
             <PopularLocations />
             <WhyChooseUs />
             <LatestProperties />
-            
-            {/* ከኒዮን ዳታቤዝ የመጡትን ቶዶዎች በሆም ገጽ ላይ ማሳያ (መሞከሪያ) */}
-            <div className="p-6 bg-white my-4 mx-auto max-w-4xl rounded-lg shadow">
-              <h3 className="text-xl font-bold mb-3">የ Neon Todos ዝርዝር:</h3>
-              {todos.length > 0 ? (
-                <ul className="list-disc pl-5">
-                  {todos.map((todo) => (
-                    <li key={todo.id}>{todo.title || JSON.stringify(todo)}</li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-gray-500">ምንም መረጃ የለም ወይም ሠንጠረዡ ባዶ ነው።</p>
-              )}
-            </div>
           </>
         )}
 
@@ -80,6 +45,15 @@ const MainContent: React.FC = () => {
         {currentView === 'pricing' && <PlansPricingView />}
 
         {currentView === 'dashboard' && <UserDashboard />}
+
+        {currentView === 'reset-password' && (
+          <div className="py-16 px-4 max-w-7xl mx-auto flex items-center justify-center min-h-[70vh]">
+            <ResetPasswordView 
+              onSuccess={() => setCurrentView('home')} 
+              onCancel={() => setCurrentView('home')}
+            />
+          </div>
+        )}
       </div>
 
       <Footer />

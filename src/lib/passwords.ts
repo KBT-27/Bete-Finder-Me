@@ -1,4 +1,4 @@
-import { UserProfile } from '../types';
+import { UserProfile, PasswordResetRequest } from '../types';
 
 export interface StoredCredentials {
   email: string;
@@ -20,9 +20,129 @@ const DEFAULT_ADMIN_CREDENTIALS: StoredCredentials = {
 
 const DEFAULT_OWNER_CREDENTIALS: StoredCredentials = {
   email: 'kalebbereket49@gmail.com/owner',
-  password: '1234567890owner',
+  password: 'Kaleb5873',
   name: 'Owner (Kaleb Bereket)',
   phone: '+251995406697'
+};
+
+// Check if "/" is allowed for this email/username (allowed ONLY for Admin and Owner)
+export const isSlashAllowedForEmail = (email: string): boolean => {
+  const normalized = (email || '').trim().toLowerCase();
+  if (!normalized.includes('/')) return true; // No slash: standard email
+  // Slash is strictly restricted to Admin and Owner
+  return normalized.endsWith('/admin') || normalized.endsWith('/owner');
+};
+
+// Extract real destination email for SMTP sending (e.g. kalebbereket49@gmail.com/owner -> kalebbereket49@gmail.com)
+export const extractDestinationEmail = (email: string): string => {
+  const normalized = (email || '').trim().toLowerCase();
+  if (normalized.includes('/')) {
+    return normalized.split('/')[0].trim();
+  }
+  return normalized;
+};
+
+// Normalize Ethiopian & international phone numbers for robust matching (e.g. +251995406697, 0995406697, 995406697)
+export const normalizePhoneNumber = (phone: string): string => {
+  if (!phone) return '';
+  const digitsOnly = phone.replace(/\D/g, '');
+  if (digitsOnly.length >= 9) {
+    return digitsOnly.slice(-9); // Compare the core 9 digits
+  }
+  return digitsOnly;
+};
+
+// Verify that the requested Gmail and Phone Number are both registered and belong to the same account
+export const verifyRegisteredAccountAndPhone = (
+  email: string,
+  phone: string
+): { 
+  matched: boolean; 
+  accountType?: 'owner' | 'admin' | 'user'; 
+  accountName?: string; 
+  registeredPhone?: string; 
+  error?: string 
+} => {
+  const normEmail = (email || '').trim().toLowerCase();
+  const normPhone = normalizePhoneNumber(phone);
+
+  if (!normEmail) {
+    return { matched: false, error: 'Registered Gmail / Email is required.' };
+  }
+  if (!normPhone) {
+    return { matched: false, error: 'Registered Phone Number is required.' };
+  }
+
+  // 1. Check Owner Account
+  const owner = getOwnerCredentials();
+  if (
+    normEmail === owner.email.toLowerCase() ||
+    normEmail === 'kalebbereket49@gmail.com/owner' ||
+    normEmail === 'kalebbereket49@gmail.com'
+  ) {
+    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '+251995406697');
+    if (ownerPhoneNorm === normPhone) {
+      return { 
+        matched: true, 
+        accountType: 'owner', 
+        accountName: owner.name, 
+        registeredPhone: owner.phone 
+      };
+    } else {
+      return { 
+        matched: false, 
+        error: 'The provided Phone Number does not match the registered Owner account phone number (+251995406697).' 
+      };
+    }
+  }
+
+  // 2. Check Admin Account
+  const admin = getAdminCredentials();
+  if (
+    normEmail === admin.email.toLowerCase() ||
+    normEmail === 'kalebbereket49@gmail.com/admin'
+  ) {
+    const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
+    if (adminPhoneNorm === normPhone) {
+      return { 
+        matched: true, 
+        accountType: 'admin', 
+        accountName: admin.name, 
+        registeredPhone: admin.phone 
+      };
+    } else {
+      return { 
+        matched: false, 
+        error: 'The provided Phone Number does not match the registered Admin account phone number.' 
+      };
+    }
+  }
+
+  // 3. Check Registered Users
+  const registered = getRegisteredUsers();
+  const foundUser = registered.find(u => u.email.toLowerCase() === normEmail);
+
+  if (foundUser) {
+    const userPhoneNorm = normalizePhoneNumber(foundUser.phone || '');
+    if (userPhoneNorm && userPhoneNorm === normPhone) {
+      return { 
+        matched: true, 
+        accountType: 'user', 
+        accountName: foundUser.name, 
+        registeredPhone: foundUser.phone 
+      };
+    } else {
+      return { 
+        matched: false, 
+        error: `The provided Phone Number does not match the registered phone number for ${normEmail}.` 
+      };
+    }
+  }
+
+  return { 
+    matched: false, 
+    error: 'No registered account found with this Gmail / Email address. You must have a registered account in Bete Finder.' 
+  };
 };
 
 export const getAdminCredentials = (): StoredCredentials => {
@@ -45,7 +165,15 @@ export const saveAdminCredentials = (creds: Partial<StoredCredentials>) => {
 export const getOwnerCredentials = (): StoredCredentials => {
   try {
     const saved = localStorage.getItem('bete_finder_owner_creds');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migrate old default password if still set to placeholder
+      if (parsed.password === '1234567890owner') {
+        parsed.password = 'Kaleb5873';
+        localStorage.setItem('bete_finder_owner_creds', JSON.stringify(parsed));
+      }
+      return parsed;
+    }
   } catch {
     // fallback
   }
@@ -82,3 +210,205 @@ export const saveRegisteredUser = (account: RegisteredAccount) => {
   localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
   return updated;
 };
+
+export const getPasswordResetTokens = (): PasswordResetRequest[] => {
+  try {
+    const saved = localStorage.getItem('bete_finder_reset_tokens');
+    if (saved) return JSON.parse(saved);
+  } catch {
+    // fallback
+  }
+  return [];
+};
+
+export const savePasswordResetToken = (request: PasswordResetRequest): PasswordResetRequest => {
+  const all = getPasswordResetTokens();
+  const filtered = all.filter(r => r.id !== request.id);
+  const updated = [request, ...filtered];
+  localStorage.setItem('bete_finder_reset_tokens', JSON.stringify(updated));
+  return request;
+};
+
+export const generateSecureToken = (): string => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let token = 'rst_';
+  for (let i = 0; i < 32; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return token;
+};
+
+export const generateVerificationCode = (): string => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+export const createPasswordResetRequest = (email: string): PasswordResetRequest => {
+  const token = generateSecureToken();
+  const code = generateVerificationCode();
+  const now = Date.now();
+  const request: PasswordResetRequest = {
+    id: `reset-req-${now}`,
+    email: email.trim().toLowerCase(),
+    token,
+    code,
+    createdAt: new Date(now).toISOString(),
+    expiresAt: new Date(now + 1000 * 60 * 60 * 2).toISOString(), // 2 hours validity
+    used: false
+  };
+  savePasswordResetToken(request);
+  return request;
+};
+
+export const validatePasswordResetToken = (tokenOrCode: string): { valid: boolean; email?: string; error?: string; request?: PasswordResetRequest } => {
+  if (!tokenOrCode || !tokenOrCode.trim()) {
+    return { valid: false, error: 'Invalid or missing reset token / verification code.' };
+  }
+
+  const clean = tokenOrCode.trim();
+  const all = getPasswordResetTokens();
+  const match = all.find(r => r.token === clean || r.code === clean);
+
+  if (!match) {
+    return { valid: false, error: 'Verification code / reset link is invalid or has expired.' };
+  }
+
+  if (match.used) {
+    return { valid: false, error: 'This verification code / reset link has already been used.' };
+  }
+
+  const expiryTime = new Date(match.expiresAt).getTime();
+  if (expiryTime <= Date.now()) {
+    return { valid: false, error: 'This verification code / reset link has expired (valid for 2 hours).' };
+  }
+
+  return { valid: true, email: match.email, request: match };
+};
+
+export const markTokenAsUsed = (tokenOrCode: string) => {
+  const clean = tokenOrCode.trim();
+  const all = getPasswordResetTokens();
+  const updated = all.map(r => (r.token === clean || r.code === clean) ? { ...r, used: true } : r);
+  localStorage.setItem('bete_finder_reset_tokens', JSON.stringify(updated));
+};
+
+export const updateAccountPasswordByEmail = (email: string, newPass: string): { success: boolean; message: string } => {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  // 1. Check Owner account
+  const owner = getOwnerCredentials();
+  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com') {
+    saveOwnerCredentials({ password: newPass.trim() });
+  }
+
+  // 2. Check Admin account
+  const admin = getAdminCredentials();
+  if (admin.email.toLowerCase() === normalizedEmail) {
+    saveAdminCredentials({ password: newPass.trim() });
+  }
+
+  // 3. Check Registered users
+  const registered = getRegisteredUsers();
+  const foundIndex = registered.findIndex(u => u.email.toLowerCase() === normalizedEmail);
+
+  if (foundIndex >= 0) {
+    registered[foundIndex].password = newPass.trim();
+    localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(registered));
+    return { success: true, message: 'Password updated successfully!' };
+  }
+
+  // If user wasn't registered before, create account with new password
+  const newAccount: RegisteredAccount = {
+    id: `user-${Date.now()}`,
+    name: email.split('@')[0] || 'User',
+    email: normalizedEmail,
+    phone: '+251995406697',
+    role: 'tenant',
+    password: newPass.trim(),
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+    savedPropertyIds: ['prop-1'],
+    postedPropertyIds: [],
+    toursBooked: []
+  };
+  saveRegisteredUser(newAccount);
+
+  return { success: true, message: 'Password updated successfully!' };
+};
+
+export const changeAccountPassword = (
+  email: string,
+  phone: string,
+  currentPass: string,
+  newPass: string
+): { success: boolean; message: string } => {
+  const normalizedEmail = email.trim().toLowerCase();
+  const cleanPhone = phone.trim();
+  const cleanCurrent = currentPass.trim();
+  const cleanNew = newPass.trim();
+
+  if (cleanNew.length < 6) {
+    return { success: false, message: 'New password must be at least 6 characters.' };
+  }
+
+  // 1. Check Owner account
+  const owner = getOwnerCredentials();
+  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/owner') {
+    if (owner.password !== cleanCurrent) {
+      return { success: false, message: 'Current password is incorrect for Owner account.' };
+    }
+    saveOwnerCredentials({
+      password: cleanNew,
+      phone: cleanPhone || owner.phone
+    });
+    return { success: true, message: 'Owner password changed successfully!' };
+  }
+
+  // 2. Check Admin account
+  const admin = getAdminCredentials();
+  if (admin.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
+    if (admin.password !== cleanCurrent) {
+      return { success: false, message: 'Current password is incorrect for Admin account.' };
+    }
+    saveAdminCredentials({
+      password: cleanNew,
+      phone: cleanPhone || admin.phone
+    });
+    return { success: true, message: 'Admin password changed successfully!' };
+  }
+
+  // 3. Check Registered accounts
+  const registered = getRegisteredUsers();
+  const foundIndex = registered.findIndex(u => u.email.toLowerCase() === normalizedEmail);
+
+  if (foundIndex >= 0) {
+    const userAcc = registered[foundIndex];
+    if (userAcc.password && userAcc.password !== cleanCurrent) {
+      return { success: false, message: 'Current password is incorrect.' };
+    }
+    registered[foundIndex] = {
+      ...userAcc,
+      password: cleanNew,
+      phone: cleanPhone || userAcc.phone
+    };
+    localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(registered));
+    return { success: true, message: 'Password changed successfully!' };
+  }
+
+  // If not found in registered accounts list, register it with the new password
+  const newAccount: RegisteredAccount = {
+    id: `user-${Date.now()}`,
+    name: email.split('@')[0] || 'User',
+    email: normalizedEmail,
+    phone: cleanPhone || '+251995406697',
+    role: 'tenant',
+    password: cleanNew,
+    provider: 'local',
+    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+    savedPropertyIds: ['prop-1'],
+    postedPropertyIds: [],
+    toursBooked: []
+  };
+  saveRegisteredUser(newAccount);
+
+  return { success: true, message: 'Password set and account saved successfully!' };
+};
+

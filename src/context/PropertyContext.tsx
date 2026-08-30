@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { Property, PropertyFilterState, ListingPlan, PaymentRequest, TelebirrSettings } from '../types';
 import { INITIAL_PROPERTIES, LISTING_PLANS } from '../data/initialProperties';
 import { useAuth } from './AuthContext';
@@ -65,8 +65,8 @@ interface PropertyContextType {
   latestProperties: Property[];
   selectedProperty: Property | null;
   setSelectedProperty: (prop: Property | null) => void;
-  currentView: 'home' | 'properties' | 'details' | 'post' | 'pricing' | 'dashboard';
-  setCurrentView: (view: 'home' | 'properties' | 'details' | 'post' | 'pricing' | 'dashboard') => void;
+  currentView: 'home' | 'properties' | 'details' | 'post' | 'pricing' | 'dashboard' | 'reset-password';
+  setCurrentView: (view: 'home' | 'properties' | 'details' | 'post' | 'pricing' | 'dashboard' | 'reset-password') => void;
   activeListingType: 'all' | 'rent' | 'sale';
   setActiveListingType: (type: 'all' | 'rent' | 'sale') => void;
   toggleFavorite: (propertyId: string) => void;
@@ -104,6 +104,10 @@ interface PropertyContextType {
   rejectPaymentRequest: (requestId: string, reason: string) => void;
   deletePaymentRequest: (requestId: string) => void;
   userPaymentRequests: PaymentRequest[];
+  syncWithDatabase: () => Promise<{ success: boolean; message: string; connectedNeon: boolean }>;
+  isDatabaseSyncing: boolean;
+  isNeonConnected: boolean;
+  lastDbSyncTimestamp: number;
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
@@ -141,10 +145,16 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         return JSON.parse(saved);
       } catch {
-        return { accountNumber: '0995406697', accountName: 'Desalegn Guta' };
+        return {
+          accountNumber: '0995406697',
+          accountName: 'Kaleb Bereket (Bete Finder Owner)'
+        };
       }
     }
-    return { accountNumber: '0995406697', accountName: 'Desalegn Guta' };
+    return {
+      accountNumber: '0995406697',
+      accountName: 'Kaleb Bereket (Bete Finder Owner)'
+    };
   });
 
   const [paymentRequests, setPaymentRequests] = useState<PaymentRequest[]>(() => {
@@ -161,42 +171,103 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const [filters, setFilters] = useState<PropertyFilterState>(DEFAULT_FILTER);
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(null);
-  const [currentView, setCurrentView] = useState<'home' | 'properties' | 'details' | 'post' | 'pricing' | 'dashboard'>('home');
+  const [currentView, setCurrentView] = useState<'home' | 'properties' | 'details' | 'post' | 'pricing' | 'dashboard' | 'reset-password'>('home');
   const [activeListingType, setActiveListingType] = useState<'all' | 'rent' | 'sale'>('all');
+
   const [selectedPlan, setSelectedPlan] = useState<ListingPlan | null>(null);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [pendingPaymentPurpose, setPendingPaymentPurpose] = useState<'plan' | 'boost' | null>(null);
 
+  const [isDatabaseSyncing, setIsDatabaseSyncing] = useState(false);
+  const [isNeonConnected, setIsNeonConnected] = useState(false);
+  const [lastDbSyncTimestamp, setLastDbSyncTimestamp] = useState(Date.now());
+
+  // Database Synchronization Function
+  const syncWithDatabase = useCallback(async (): Promise<{ success: boolean; message: string; connectedNeon: boolean }> => {
+    setIsDatabaseSyncing(true);
+    try {
+      // 1. Fetch current server DB state
+      const res = await fetch('/api/db/sync');
+      if (!res.ok) throw new Error('Database server responded with error');
+      const json = await res.json();
+
+      if (json.success && json.data) {
+        const remote = json.data;
+        setIsNeonConnected(Boolean(json.connectedNeon));
+        setLastDbSyncTimestamp(Date.now());
+
+        // Update properties
+        if (remote.properties && Array.isArray(remote.properties) && remote.properties.length > 0) {
+          setProperties(remote.properties);
+          localStorage.setItem('bete_finder_properties', JSON.stringify(remote.properties));
+        }
+
+        // Update payment requests
+        if (remote.paymentRequests && Array.isArray(remote.paymentRequests)) {
+          setPaymentRequests(remote.paymentRequests);
+          localStorage.setItem('bete_finder_payment_requests', JSON.stringify(remote.paymentRequests));
+        }
+
+        // Update settings
+        if (remote.telebirrSettings) {
+          setTelebirrSettings(remote.telebirrSettings);
+          localStorage.setItem('bete_finder_telebirr_settings', JSON.stringify(remote.telebirrSettings));
+        }
+
+        setIsDatabaseSyncing(false);
+        return {
+          success: true,
+          message: json.connectedNeon 
+            ? 'Synced successfully with Neon Database & Server Store.' 
+            : 'Synced successfully with Persistent Server Database.',
+          connectedNeon: Boolean(json.connectedNeon)
+        };
+      }
+
+      setIsDatabaseSyncing(false);
+      return { success: false, message: 'Sync failed: invalid payload.', connectedNeon: false };
+    } catch (err: any) {
+      setIsDatabaseSyncing(false);
+      return { success: false, message: err?.message || 'Database connection error.', connectedNeon: false };
+    }
+  }, []);
+
+  // Initial Sync and Periodic Poll (every 10s and on window focus)
+  useEffect(() => {
+    syncWithDatabase();
+
+    const handleFocus = () => {
+      syncWithDatabase();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    const interval = setInterval(syncWithDatabase, 12000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(interval);
+    };
+  }, [syncWithDatabase]);
+
+  // Persist properties locally
   useEffect(() => {
     localStorage.setItem('bete_finder_properties', JSON.stringify(properties));
   }, [properties]);
 
+  // Persist plans locally
   useEffect(() => {
     localStorage.setItem('bete_finder_plans', JSON.stringify(plans));
   }, [plans]);
 
+  // Persist telebirr settings locally
   useEffect(() => {
     localStorage.setItem('bete_finder_telebirr_settings', JSON.stringify(telebirrSettings));
   }, [telebirrSettings]);
 
+  // Persist payment requests locally
   useEffect(() => {
     localStorage.setItem('bete_finder_payment_requests', JSON.stringify(paymentRequests));
   }, [paymentRequests]);
-
-  const updateTelebirrSettings = (accountNumber: string, accountName: string) => {
-    setTelebirrSettings({
-      accountNumber: accountNumber.trim(),
-      accountName: accountName.trim()
-    });
-  };
-
-  const updatePlanPrice = (planId: string, newPrice: number) => {
-    setPlans(prev => prev.map(p => p.id === planId ? { ...p, price: Number(newPrice) } : p));
-  };
-
-  const updatePlan = (planId: string, updates: Partial<ListingPlan>) => {
-    setPlans(prev => prev.map(p => p.id === planId ? { ...p, ...updates } : p));
-  };
 
   const updateFilter = <K extends keyof PropertyFilterState>(key: K, value: PropertyFilterState[K]) => {
     setFilters(prev => ({ ...prev, [key]: value }));
@@ -206,122 +277,79 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setFilters(DEFAULT_FILTER);
   };
 
-  const isStaff = user?.role === 'admin' || user?.role === 'owner';
-
   const filteredProperties = useMemo(() => {
     return properties.filter(prop => {
-      // If not staff, only show verified properties OR the properties owned by this user
-      if (!isStaff) {
-        const isOwnerOfProp = user && (prop.owner.id === user.id || prop.owner.email.toLowerCase() === user.email.toLowerCase());
-        if (!prop.isVerified && !isOwnerOfProp) {
-          return false;
-        }
-      }
+      if (activeListingType !== 'all' && prop.listingType !== activeListingType) return false;
+      if (filters.listingType !== 'all' && prop.listingType !== filters.listingType) return false;
+      if (filters.propertyType !== 'all' && prop.propertyType !== filters.propertyType) return false;
+      if (filters.city !== 'all' && prop.city.toLowerCase() !== filters.city.toLowerCase()) return false;
+      if (filters.subcity !== 'all' && prop.subcity.toLowerCase() !== filters.subcity.toLowerCase()) return false;
+      if (prop.price < filters.minPrice || prop.price > filters.maxPrice) return false;
 
-      // Search query in title, desc, neighborhood, subcity, city
-      if (filters.searchQuery.trim()) {
-        const query = filters.searchQuery.toLowerCase().trim();
-        const matchesTitle = prop.title.toLowerCase().includes(query);
-        const matchesTitleAm = prop.titleAm.toLowerCase().includes(query);
-        const matchesDesc = prop.description.toLowerCase().includes(query);
-        const matchesNeighbor = prop.neighborhood.toLowerCase().includes(query);
-        const matchesSubcity = prop.subcity.toLowerCase().includes(query);
-        const matchesCity = prop.city.toLowerCase().includes(query);
-        if (!matchesTitle && !matchesTitleAm && !matchesDesc && !matchesNeighbor && !matchesSubcity && !matchesCity) {
-          return false;
-        }
-      }
-
-      // Listing Type (Rent vs Sale)
-      const effectiveType = filters.listingType !== 'all' ? filters.listingType : activeListingType !== 'all' ? activeListingType : 'all';
-      if (effectiveType !== 'all' && prop.listingType !== effectiveType) {
-        return false;
-      }
-
-      // Property Type
-      if (filters.propertyType !== 'all' && prop.propertyType !== filters.propertyType) {
-        return false;
-      }
-
-      // City
-      if (filters.city !== 'all' && prop.city !== filters.city) {
-        return false;
-      }
-
-      // Subcity
-      if (filters.subcity !== 'all' && prop.subcity !== filters.subcity) {
-        return false;
-      }
-
-      // Price Range
-      if (filters.minPrice > 0 && prop.price < filters.minPrice) {
-        return false;
-      }
-      if (filters.maxPrice < 2000000 && prop.price > filters.maxPrice) {
-        return false;
-      }
-
-      // Bedrooms
       if (filters.minBedrooms !== 'all') {
-        const minBeds = Number(filters.minBedrooms);
-        if (prop.bedrooms < minBeds) {
-          return false;
-        }
+        const minBeds = typeof filters.minBedrooms === 'number' ? filters.minBedrooms : parseInt(filters.minBedrooms);
+        if (prop.bedrooms < minBeds) return false;
       }
 
-      // Bathrooms
       if (filters.minBathrooms !== 'all') {
-        const minBaths = Number(filters.minBathrooms);
-        if (prop.bathrooms < minBaths) {
-          return false;
-        }
+        const minBaths = typeof filters.minBathrooms === 'number' ? filters.minBathrooms : parseInt(filters.minBathrooms);
+        if (prop.bathrooms < minBaths) return false;
       }
 
-      // Verified only
-      if (filters.verifiedOnly && !prop.isVerified) {
-        return false;
-      }
+      if (filters.isFurnished !== undefined && prop.isFurnished !== filters.isFurnished) return false;
+      if (filters.verifiedOnly && !prop.isVerified) return false;
 
-      // Amenities filter
       if (filters.selectedAmenities.length > 0) {
-        const hasAllSelected = filters.selectedAmenities.every(amenityId => 
-          prop.amenities.includes(amenityId)
-        );
-        if (!hasAllSelected) return false;
+        const hasAllAmenities = filters.selectedAmenities.every(a => prop.amenities.includes(a));
+        if (!hasAllAmenities) return false;
+      }
+
+      if (filters.searchQuery.trim()) {
+        const q = filters.searchQuery.toLowerCase();
+        const matchTitle = prop.title.toLowerCase().includes(q) || prop.titleAm.toLowerCase().includes(q);
+        const matchDesc = prop.description.toLowerCase().includes(q) || prop.descriptionAm.toLowerCase().includes(q);
+        const matchLoc = prop.city.toLowerCase().includes(q) || prop.subcity.toLowerCase().includes(q) || prop.neighborhood.toLowerCase().includes(q);
+        if (!matchTitle && !matchDesc && !matchLoc) return false;
       }
 
       return true;
     }).sort((a, b) => {
-      // VIP / Premium boosted properties prioritize on top
       if (a.isFeatured && !b.isFeatured) return -1;
       if (!a.isFeatured && b.isFeatured) return 1;
-      if (filters.sortBy === 'price-asc') return a.price - b.price;
-      if (filters.sortBy === 'price-desc') return b.price - a.price;
-      if (filters.sortBy === 'popular') return b.viewsCount - a.viewsCount;
-      if (filters.sortBy === 'area') return b.areaSqm - a.areaSqm;
-      return new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime();
+
+      switch (filters.sortBy) {
+        case 'newest':
+          return new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime();
+        case 'price-asc':
+          return a.price - b.price;
+        case 'price-desc':
+          return b.price - a.price;
+        case 'popular':
+          return b.viewsCount - a.viewsCount;
+        case 'area':
+          return b.areaSqm - a.areaSqm;
+        default:
+          return 0;
+      }
     });
-  }, [properties, filters, activeListingType, isStaff, user]);
+  }, [properties, filters, activeListingType]);
 
   const featuredProperties = useMemo(() => {
-    return properties.filter(p => p.isFeatured && (p.isVerified || isStaff));
-  }, [properties, isStaff]);
+    return properties.filter(p => p.isFeatured);
+  }, [properties]);
 
   const latestProperties = useMemo(() => {
-    return properties
-      .filter(p => p.isVerified || isStaff)
-      .sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime())
-      .slice(0, 4);
-  }, [properties, isStaff]);
+    return [...properties].sort((a, b) => new Date(b.postedDate).getTime() - new Date(a.postedDate).getTime()).slice(0, 6);
+  }, [properties]);
 
   const toggleFavorite = (propertyId: string) => {
     if (!user) return;
-    const isFav = user.savedPropertyIds.includes(propertyId);
-    const updatedIds = isFav
-      ? user.savedPropertyIds.filter(id => id !== propertyId)
-      : [...user.savedPropertyIds, propertyId];
+    const isFav = (user.savedPropertyIds || []).includes(propertyId);
+    const newSaved = isFav 
+      ? (user.savedPropertyIds || []).filter(id => id !== propertyId)
+      : [...(user.savedPropertyIds || []), propertyId];
 
-    updateUser({ savedPropertyIds: updatedIds });
+    updateUser({ savedPropertyIds: newSaved });
 
     setProperties(prev => prev.map(p => {
       if (p.id === propertyId) {
@@ -334,67 +362,122 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
   };
 
-  const isFavorite = (propertyId: string) => {
-    return user ? user.savedPropertyIds.includes(propertyId) : false;
+  const isFavorite = (propertyId: string): boolean => {
+    if (!user) return false;
+    return (user.savedPropertyIds || []).includes(propertyId);
   };
 
   const savedProperties = useMemo(() => {
     if (!user) return [];
-    return properties.filter(p => user.savedPropertyIds.includes(p.id));
+    return properties.filter(p => (user.savedPropertyIds || []).includes(p.id));
   }, [properties, user]);
 
   const userPostedProperties = useMemo(() => {
     if (!user) return [];
-    if (user.role === 'admin' || user.role === 'owner') return properties;
-    return properties.filter(p => p.owner.id === user.id || user.postedPropertyIds.includes(p.id) || p.owner.email.toLowerCase() === user.email.toLowerCase());
+    return properties.filter(p => p.owner.id === user.id || p.owner.email.toLowerCase() === user.email.toLowerCase());
   }, [properties, user]);
 
-  const addProperty = (data: Omit<Property, 'id' | 'postedDate' | 'viewsCount' | 'favoritesCount'>) => {
-    // When a regular person posts a house, isVerified will be false until verified by the owner!
-    const isUserStaff = user?.role === 'admin' || user?.role === 'owner';
-    const activePlan = user?.activePlan;
-    const activePlanObj = plans.find(p => p.id === activePlan);
+  // Add Property (Syncs to DB)
+  const addProperty = (propertyData: Omit<Property, 'id' | 'postedDate' | 'viewsCount' | 'favoritesCount'>): Property => {
+    const isVipOrPremium = user?.activePlan === 'vip' || user?.activePlan === 'premium';
+    const planName = user?.activePlan === 'vip' ? 'VIP Spotlight Plan' : (user?.activePlan === 'premium' ? 'Premium 24hr Auto-Renew' : 'Basic Listing');
 
-    const newProp: Property = {
-      ...data,
+    const newProperty: Property = {
+      ...propertyData,
       id: `prop-${Date.now()}`,
       postedDate: new Date().toISOString().split('T')[0],
       viewsCount: 1,
       favoritesCount: 0,
-      isVerified: isUserStaff ? (data.isVerified ?? true) : false,
-      isFeatured: isUserStaff ? (data.isFeatured ?? false) : (activePlan === 'vip' || activePlan === 'premium'),
-      payPlan: activePlan === 'basic' || activePlan === 'premium' || activePlan === 'vip' ? activePlan : undefined,
-      payPlanName: activePlanObj?.name || (activePlan ? `${activePlan.toUpperCase()} Plan` : undefined)
+      isVerified: user?.role === 'owner' || user?.role === 'admin' || isVipOrPremium,
+      isFeatured: isVipOrPremium || propertyData.isFeatured || false,
+      payPlan: (user?.activePlan as any) || 'basic',
+      payPlanName: planName
     };
 
-    setProperties(prev => [newProp, ...prev]);
+    setProperties(prev => [newProperty, ...prev]);
+
+    // Push to backend database
+    fetch('/api/properties', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newProperty)
+    }).catch(console.error);
 
     if (user) {
       updateUser({
-        postedPropertyIds: [...user.postedPropertyIds, newProp.id]
+        postedPropertyIds: [...(user.postedPropertyIds || []), newProperty.id]
       });
     }
 
-    return newProp;
+    return newProperty;
   };
 
+  // Delete Property (Syncs to DB)
   const deleteProperty = (propertyId: string) => {
     setProperties(prev => prev.filter(p => p.id !== propertyId));
     if (selectedProperty?.id === propertyId) {
       setSelectedProperty(null);
-      setCurrentView('properties');
     }
+    fetch(`/api/properties/${propertyId}`, { method: 'DELETE' }).catch(console.error);
   };
 
+  // Update Property (Syncs to DB)
   const updateProperty = (propertyId: string, updates: Partial<Property>) => {
-    setProperties(prev => prev.map(p => p.id === propertyId ? { ...p, ...updates } : p));
+    let updatedObj: Property | null = null;
+    setProperties(prev => prev.map(p => {
+      if (p.id === propertyId) {
+        updatedObj = { ...p, ...updates };
+        return updatedObj;
+      }
+      return p;
+    }));
+
     if (selectedProperty?.id === propertyId) {
       setSelectedProperty(prev => prev ? { ...prev, ...updates } : null);
+    }
+
+    if (updatedObj) {
+      fetch('/api/properties', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedObj)
+      }).catch(console.error);
     }
   };
 
   const verifyProperty = (propertyId: string, isVerified: boolean) => {
     updateProperty(propertyId, { isVerified });
+  };
+
+  const updatePlanPrice = (planId: string, newPrice: number) => {
+    setPlans(prev => prev.map(p => {
+      if (p.id === planId) {
+        return { ...p, price: newPrice };
+      }
+      return p;
+    }));
+  };
+
+  const updatePlan = (planId: string, updates: Partial<ListingPlan>) => {
+    setPlans(prev => prev.map(p => {
+      if (p.id === planId) {
+        return { ...p, ...updates };
+      }
+      return p;
+    }));
+  };
+
+  const updateTelebirrSettings = (accountNumber: string, accountName: string) => {
+    const updated = {
+      accountNumber: accountNumber.trim(),
+      accountName: accountName.trim()
+    };
+    setTelebirrSettings(updated);
+    fetch('/api/db/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telebirrSettings: updated })
+    }).catch(console.error);
   };
 
   const boostProperty = (propertyId: string) => {
@@ -418,13 +501,13 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     updateUser({
-      toursBooked: [newBooking, ...user.toursBooked]
+      toursBooked: [newBooking, ...(user.toursBooked || [])]
     });
 
     return true;
   };
 
-  // Submit payment request (Sends directly to Owner)
+  // Submit payment request (Syncs to DB)
   const submitPaymentRequest = (data: {
     userName: string;
     userPhone: string;
@@ -451,10 +534,17 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     };
 
     setPaymentRequests(prev => [newReq, ...prev]);
+
+    fetch('/api/payments', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newReq)
+    }).catch(console.error);
+
     return newReq;
   };
 
-  // Approve payment request (Owner accepts -> user gets package + instruction)
+  // Approve payment request (Syncs to DB)
   const approvePaymentRequest = (requestId: string) => {
     const req = paymentRequests.find(r => r.id === requestId);
     if (!req) return;
@@ -477,7 +567,6 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const resolvedPlanId = req.planId === 'boost' ? 'premium' : req.planId;
 
-    // If target user is the active logged in user, activate their plan
     if (user && (user.id === req.userId || user.email.toLowerCase() === req.userEmail.toLowerCase())) {
       updateUser({
         activePlan: resolvedPlanId as any,
@@ -486,7 +575,6 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       });
     }
 
-    // Attach pay plan to the properties posted by this user and auto-verify + boost!
     setProperties(prev => prev.map(p => {
       if (p.owner.email.toLowerCase() === req.userEmail.toLowerCase() || (user && p.owner.id === req.userId)) {
         return {
@@ -499,9 +587,21 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       return p;
     }));
+
+    fetch('/api/payments/approve', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        requestId,
+        durationMonths: req.durationMonths,
+        planId: req.planId,
+        planName: req.planName,
+        userEmail: req.userEmail
+      })
+    }).catch(console.error);
   };
 
-  // Reject payment request (Owner writes reason)
+  // Reject payment request (Syncs to DB)
   const rejectPaymentRequest = (requestId: string, reason: string) => {
     setPaymentRequests(prev => prev.map(r => {
       if (r.id === requestId) {
@@ -515,11 +615,18 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
       return r;
     }));
+
+    fetch('/api/payments/reject', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestId, reason })
+    }).catch(console.error);
   };
 
-  // Delete payment request/approval
+  // Delete payment request (Syncs to DB)
   const deletePaymentRequest = (requestId: string) => {
     setPaymentRequests(prev => prev.filter(r => r.id !== requestId));
+    fetch(`/api/payments/${requestId}`, { method: 'DELETE' }).catch(console.error);
   };
 
   const userPaymentRequests = useMemo(() => {
@@ -570,7 +677,11 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         approvePaymentRequest,
         rejectPaymentRequest,
         deletePaymentRequest,
-        userPaymentRequests
+        userPaymentRequests,
+        syncWithDatabase,
+        isDatabaseSyncing,
+        isNeonConnected,
+        lastDbSyncTimestamp
       }}
     >
       {children}
