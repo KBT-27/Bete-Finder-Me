@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Check, 
   Sparkles, 
@@ -8,7 +8,14 @@ import {
   Crown,
   Clock,
   TrendingUp,
-  Award
+  Award,
+  AlertTriangle,
+  Building2,
+  UserX,
+  ArrowRight,
+  PlusCircle,
+  X,
+  Info
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -22,13 +29,35 @@ export const PlansPricingView: React.FC = () => {
     telebirrSettings,
     setSelectedPlan, 
     setIsPaymentModalOpen, 
-    setPendingPaymentPurpose 
+    setPendingPaymentPurpose,
+    userPostedProperties,
+    setCurrentView
   } = useProperties();
   const { user, updateUser, setIsAuthModalOpen } = useAuth();
+
+  // Dialog states for restriction feedback
+  const [showTenantBlockedModal, setShowTenantBlockedModal] = useState(false);
+  const [showNoPropertyModal, setShowNoPropertyModal] = useState(false);
+
+  const isTenant = user?.role === 'tenant';
+  const hasPostedProperties = userPostedProperties.length > 0;
+  const isEligibleToPurchase = user && !isTenant && hasPostedProperties;
 
   const handleSelectPlan = (plan: ListingPlan) => {
     if (!user) {
       setIsAuthModalOpen(true);
+      return;
+    }
+
+    // Restriction 1: Tenant/Buyer role cannot get packages
+    if (isTenant) {
+      setShowTenantBlockedModal(true);
+      return;
+    }
+
+    // Restriction 2: Must post a property first to get packages
+    if (!hasPostedProperties) {
+      setShowNoPropertyModal(true);
       return;
     }
 
@@ -42,12 +71,18 @@ export const PlansPricingView: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
+  const handleSwitchToLandlordAndPost = () => {
+    updateUser({ role: 'landlord' });
+    setShowTenantBlockedModal(false);
+    setCurrentView('post');
+  };
+
   return (
     <div className="bg-slate-50 min-h-screen py-12 lg:py-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-14">
+        <div className="text-center max-w-3xl mx-auto mb-10">
           <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 text-xs font-extrabold mb-3">
             <Sparkles className="w-4 h-4 text-emerald-600" />
             <span>Telebirr Fast Mobile Checkout ({telebirrSettings.accountNumber})</span>
@@ -58,6 +93,36 @@ export const PlansPricingView: React.FC = () => {
           <p className="text-sm sm:text-base text-slate-500 mt-2">
             {t('pricingSubtitle')}
           </p>
+        </div>
+
+        {/* Informational Policy Banner: Plans require posted properties and Landlord role */}
+        <div className="max-w-4xl mx-auto mb-10 p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-500 text-slate-950 rounded-xl shrink-0 mt-0.5 sm:mt-0 font-black">
+              <Building2 className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="font-extrabold text-xs sm:text-sm text-slate-900">
+                {isAmharic ? 'የማስተዋወቂያ ፓኬጅ ደንብ (Package Eligibility Rule)' : 'Listing Package Eligibility Rule'}
+              </p>
+              <p className="text-xs text-slate-700 mt-0.5">
+                {isAmharic 
+                  ? 'የቪአይፒ (VIP) እና ፕሪሚየም ፓኬጆች ለንብረት ባለቤቶች (Landlords) ብቻ የተዘጋጁ ናቸው። ፓኬጅ ለመግዛት ወይም ለማግበር ቢያንስ አንድ ቤት/ንብረት መለጠፍ ግዴታ ነው። ተከራይ/ገዢ (Tenant) መለያ ያላቸው ተጠቃሚዎች ፓኬጅ መግዛት አይችሉም።'
+                  : 'Promotion packages (VIP, Premium, Basic) are exclusively for Landlords with active property listings. Users must post at least one property before activating a package. Tenant/Buyer accounts cannot purchase listing packages.'
+                }
+              </p>
+            </div>
+          </div>
+
+          {user && !hasPostedProperties && (
+            <button
+              onClick={() => setCurrentView('post')}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 shrink-0 cursor-pointer transition-all self-end sm:self-auto"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>{isAmharic ? 'ንብረት ይለጥፉ' : 'Post Property First'}</span>
+            </button>
+          )}
         </div>
 
         {/* Pricing Cards Grid */}
@@ -172,7 +237,7 @@ export const PlansPricingView: React.FC = () => {
                   </ul>
                 </div>
 
-                  {/* Plan Action CTA */}
+                {/* Plan Action CTA */}
                 <div>
                   {isCurrent ? (
                     <div className="w-full py-3.5 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-bold text-center text-sm flex items-center justify-center gap-2">
@@ -191,7 +256,14 @@ export const PlansPricingView: React.FC = () => {
                       }`}
                     >
                       {plan.price > 0 && <Send className="w-4 h-4" />}
-                      <span>{plan.price === 0 ? t('pricingChoosePlan') : t('pricingPayTelebirr')}</span>
+                      <span>
+                        {user && isTenant 
+                          ? (isAmharic ? 'የባለቤት ፓኬጅ (Landlords Only)' : 'Landlords Only (Tenant Info)')
+                          : user && !hasPostedProperties
+                          ? (isAmharic ? 'መጀመሪያ ንብረት ይለጥፉ' : 'Post Property First')
+                          : (plan.price === 0 ? t('pricingChoosePlan') : t('pricingPayTelebirr'))
+                        }
+                      </span>
                     </button>
                   )}
                 </div>
@@ -202,6 +274,136 @@ export const PlansPricingView: React.FC = () => {
         </div>
 
       </div>
+
+      {/* ============================================================== */}
+      {/* RESTRICTION MODAL 1: Tenant / Buyer cannot get packages */}
+      {/* ============================================================== */}
+      {showTenantBlockedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowTenantBlockedModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto mb-3">
+                <UserX className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">
+                {isAmharic ? 'ተከራይ/ገዢ ፓኬጅ መግዛት አይችልም' : 'Tenant / Buyer Accounts Cannot Get Packages'}
+              </h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                {isAmharic
+                  ? 'የማስተዋወቂያ ፓኬጆች (VIP & Premium) የተዘጋጁት ለንብረት አከራይና ሻጮች (Landlords) ብቻ ነው። እንደ ተከራይ/ገዢ ሁሉንም ቤቶች በነጻ መጎብኘትና ባለቤቶችን በቀጥታ መደወል ይችላሉ።'
+                  : 'Listing and Promotion packages (Basic, Premium, VIP) are designed specifically for Property Owners and Landlords to spotlight listings. As a Tenant/Buyer, browsing and contacting verified owners is always 100% free!'
+                }
+              </p>
+            </div>
+
+            <div className="my-5 p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 space-y-2">
+              <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-emerald-600" />
+                <span>{isAmharic ? 'የሚከራይ ወይም የሚሸጥ ቤት አለዎት?' : 'Do you have a property to rent or sell?'}</span>
+              </p>
+              <p className="text-slate-600">
+                {isAmharic 
+                  ? 'መለያዎን ወደ «አከራይ/ባለቤት (Landlord)» በመቀየር ንብረትዎን ከለጠፉ በኋላ ፓኬጆችን ማግኘት ይችላሉ።'
+                  : 'You can switch your account type to "Landlord / Owner" and post your property listing to activate promotion packages.'
+                }
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={handleSwitchToLandlordAndPost}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{isAmharic ? 'መለያዬን ወደ አከራይ ቀይረህ ንብረት አስገባ' : 'Switch to Landlord & Post Property'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowTenantBlockedModal(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                {isAmharic ? 'ዝጋ (Close)' : 'I Understand, Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* RESTRICTION MODAL 2: Must post at least 1 property first */}
+      {/* ============================================================== */}
+      {showNoPropertyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative animate-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setShowNoPropertyModal(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                <Building2 className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-black text-slate-900">
+                {isAmharic ? 'መጀመሪያ ንብረትዎን ይለጥፉ' : 'Post a Property to Activate Packages'}
+              </h3>
+              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
+                {isAmharic
+                  ? 'የማስተዋወቂያ ፓኬጅ (VIP & Premium) ከመግዛትዎ በፊት ቢያንስ አንድ ቤት፣ ቪላ ወይም አፓርታማ መለጠፍ ያስፈልግዎታል። ንብረትዎን ከለጠፉ በኋላ ፓኬጁ በቀጥታ ይተገበራል።'
+                  : 'You cannot acquire a package without posting a property first. Promotion packages are linked directly to your property listings to provide VIP ranking, gold aura, and verified owner spotlight.'
+                }
+              </p>
+            </div>
+
+            <div className="my-5 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xs text-emerald-950 space-y-1.5">
+              <p className="font-bold flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                <span>{isAmharic ? 'ንብረት ከለጠፉ በኋላ የሚገኝ ጥቅም' : 'Benefits applied once property is posted:'}</span>
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-[11px] text-emerald-900">
+                <li>{isAmharic ? 'የመጀመሪያ ደረጃ ፍለጋ (Top #1 Ranking)' : 'Top #1 Search Ranking in Addis Ababa'}</li>
+                <li>{isAmharic ? 'የተረጋገጠ አርማ እና የወርቅ ኦውራ' : 'Priority Verified Gold Badge & Aura'}</li>
+                <li>{isAmharic ? 'የቴሌብር ፈጣን ክፍያ ማረጋገጫ' : 'Fast Telebirr Direct Approval'}</li>
+              </ul>
+            </div>
+
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowNoPropertyModal(false);
+                  setCurrentView('post');
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{isAmharic ? 'አሁን ንብረት ይለጥፉ (Post Property Now)' : 'Post Property Listing Now'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowNoPropertyModal(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                {isAmharic ? 'ተመለስ (Back)' : 'Cancel & Go Back'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
+

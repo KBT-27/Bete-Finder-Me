@@ -25,6 +25,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onSelect }
   const { toggleFavorite, isFavorite, setSelectedProperty, setCurrentView } = useProperties();
 
   const isFav = isFavorite(property.id);
+  const isVip = property.payPlan === 'vip';
 
   const handleClick = () => {
     if (onSelect) {
@@ -43,7 +44,11 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onSelect }
   return (
     <div 
       id={`property-card-${property.id}`}
-      className="group bg-white rounded-2xl border border-slate-200/90 overflow-hidden shadow-xs hover:shadow-xl hover:border-emerald-500/40 transition-all duration-300 flex flex-col justify-between"
+      className={`group bg-white rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between ${
+        isVip 
+          ? 'border-2 border-amber-400 shadow-md ring-2 ring-amber-400/20 hover:shadow-2xl hover:border-amber-500' 
+          : 'border border-slate-200/90 shadow-xs hover:shadow-xl hover:border-emerald-500/40'
+      }`}
     >
       <div>
         {/* Image Container with Badges */}

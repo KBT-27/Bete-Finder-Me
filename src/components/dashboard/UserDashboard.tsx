@@ -16,7 +16,12 @@ import {
   CreditCard,
   AlertTriangle,
   Sparkles,
-  ArrowRight
+  ArrowRight,
+  User,
+  Lock,
+  Phone,
+  Save,
+  Check
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -25,7 +30,7 @@ import { PropertyCard } from '../common/PropertyCard';
 import { AdminDashboard } from './AdminDashboard';
 
 export const UserDashboard: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { 
     savedProperties, 
     userPostedProperties, 
@@ -37,9 +42,20 @@ export const UserDashboard: React.FC = () => {
     setSelectedPlan,
     userPaymentRequests
   } = useProperties();
-  const { user, role, logout } = useAuth();
+  const { user, role, logout, updateUser, changePassword } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'favorites' | 'tours' | 'myListings' | 'payments' | 'analytics'>('favorites');
+  const [activeTab, setActiveTab] = useState<'favorites' | 'tours' | 'myListings' | 'payments' | 'analytics' | 'profile'>('favorites');
+
+  // Profile Edit State
+  const [profileName, setProfileName] = useState(user?.name || '');
+  const [profilePhone, setProfilePhone] = useState(user?.phone || '');
+  const [profileRole, setProfileRole] = useState<'tenant' | 'landlord'>((user?.role === 'landlord' ? 'landlord' : 'tenant'));
+  const [currentPassInput, setCurrentPassInput] = useState('');
+  const [newPassInput, setNewPassInput] = useState('');
+  const [confirmPassInput, setConfirmPassInput] = useState('');
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState<string | null>(null);
+  const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   if (!user) {
     return (
@@ -185,6 +201,20 @@ export const UserDashboard: React.FC = () => {
           >
             <BarChart3 className="w-4 h-4" />
             <span>{t('dashAnalyticsTab')}</span>
+          </button>
+
+          <button
+            onClick={() => {
+              setActiveTab('profile');
+              setProfileSaveSuccess(null);
+              setProfileSaveError(null);
+            }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'profile' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            }`}
+          >
+            <User className="w-4 h-4 text-emerald-500" />
+            <span>Profile & Account Settings</span>
           </button>
         </div>
 
@@ -437,6 +467,271 @@ export const UserDashboard: React.FC = () => {
               <p className="text-xs text-slate-500 font-bold uppercase">Saved Favorites</p>
               <p className="text-3xl font-black text-slate-900 mt-1">{totalFavorites || 84}</p>
               <p className="text-xs text-slate-400 font-medium mt-2">Interested prospective tenants</p>
+            </div>
+          </div>
+        )}
+
+        {/* Tab 6: Profile & Account Settings (Change Name, Phone, Role/Who am I, and Password) */}
+        {activeTab === 'profile' && (
+          <div className="max-w-2xl mx-auto space-y-6">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
+              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <User className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">Manage Your Profile & Security</h3>
+                  <p className="text-xs text-slate-500">Update your personal details, account type ("Who am I"), and password</p>
+                </div>
+              </div>
+
+              {profileSaveSuccess && (
+                <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-3 text-emerald-800 text-xs font-bold shadow-xs">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{profileSaveSuccess}</span>
+                </div>
+              )}
+
+              {profileSaveError && (
+                <div className="mb-6 p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-800 text-xs font-bold shadow-xs">
+                  <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>{profileSaveError}</span>
+                </div>
+              )}
+
+              <form 
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setProfileSaveSuccess(null);
+                  setProfileSaveError(null);
+
+                  if (!profileName.trim()) {
+                    setProfileSaveError('Full Name is required.');
+                    return;
+                  }
+
+                  // If user entered a new password, validate
+                  if (newPassInput) {
+                    if (newPassInput.length < 6) {
+                      setProfileSaveError('New password must be at least 6 characters.');
+                      return;
+                    }
+                    if (newPassInput !== confirmPassInput) {
+                      setProfileSaveError('New password and confirm password do not match.');
+                      return;
+                    }
+                    if (newPassInput.includes('/')) {
+                      setProfileSaveError('The "/" symbol in passwords is reserved for Admin and Owner accounts only.');
+                      return;
+                    }
+                    if (!currentPassInput) {
+                      setProfileSaveError('Please enter your Current Password to set a new password.');
+                      return;
+                    }
+                  }
+
+                  setIsSavingProfile(true);
+
+                  try {
+                    // Send to server
+                    const res = await fetch('/api/user/update-profile', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        email: user.email,
+                        name: profileName.trim(),
+                        phone: profilePhone.trim(),
+                        role: profileRole,
+                        currentPassword: currentPassInput ? currentPassInput.trim() : undefined,
+                        newPassword: newPassInput ? newPassInput.trim() : undefined
+                      })
+                    });
+
+                    const resData = await res.json();
+                    if (res.ok && resData.success) {
+                      updateUser({
+                        name: profileName.trim(),
+                        phone: profilePhone.trim(),
+                        role: profileRole
+                      });
+                      setCurrentPassInput('');
+                      setNewPassInput('');
+                      setConfirmPassInput('');
+                      setProfileSaveSuccess('Profile and security details updated successfully in the database!');
+                    } else {
+                      setProfileSaveError(resData.message || 'Failed to update profile.');
+                    }
+                  } catch (err: any) {
+                    updateUser({
+                      name: profileName.trim(),
+                      phone: profilePhone.trim(),
+                      role: profileRole
+                    });
+                    setProfileSaveSuccess('Profile details saved locally!');
+                  } finally {
+                    setIsSavingProfile(false);
+                  }
+                }}
+                className="space-y-5"
+              >
+                {/* Registered Email (Locked) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Registered Email (Account Identity)
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={user.email}
+                    className="w-full px-4 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-500 font-medium cursor-not-allowed"
+                  />
+                  <p className="text-[11px] text-slate-400 mt-1">Your registered email address is fixed for security identification.</p>
+                </div>
+
+                {/* Full Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Full Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    placeholder="e.g. Abebe Bikila"
+                    className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                  />
+                </div>
+
+                {/* Phone Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Phone Number *
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="tel"
+                      required
+                      value={profilePhone}
+                      onChange={(e) => setProfilePhone(e.target.value)}
+                      placeholder="e.g. 0911223344"
+                      className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Who am I / Role Selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-2">
+                    Who am I? (Account Type) *
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label 
+                      onClick={() => setProfileRole('tenant')}
+                      className={`p-3.5 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all ${
+                        profileRole === 'tenant'
+                          ? 'border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20'
+                          : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="userRole"
+                        checked={profileRole === 'tenant'}
+                        onChange={() => setProfileRole('tenant')}
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <p className="text-xs font-black text-slate-900">Tenant / Buyer</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Looking to rent or purchase properties in Ethiopia</p>
+                      </div>
+                    </label>
+
+                    <label 
+                      onClick={() => setProfileRole('landlord')}
+                      className={`p-3.5 rounded-2xl border flex items-start gap-3 cursor-pointer transition-all ${
+                        profileRole === 'landlord'
+                          ? 'border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20'
+                          : 'border-slate-200 bg-slate-50 hover:bg-slate-100'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="userRole"
+                        checked={profileRole === 'landlord'}
+                        onChange={() => setProfileRole('landlord')}
+                        className="mt-0.5 text-emerald-600 focus:ring-emerald-500"
+                      />
+                      <div>
+                        <p className="text-xs font-black text-slate-900">Landlord / Owner</p>
+                        <p className="text-[11px] text-slate-500 mt-0.5">Posting and managing houses, villas, or apartments</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Password Change Section */}
+                <div className="pt-5 border-t border-slate-100 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-emerald-600" />
+                    <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Change Password (Optional)</h4>
+                  </div>
+                  <p className="text-[11px] text-slate-500">Leave blank if you do not wish to change your password.</p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Current Password
+                      </label>
+                      <input
+                        type="password"
+                        value={currentPassInput}
+                        onChange={(e) => setCurrentPassInput(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        New Password
+                      </label>
+                      <input
+                        type="password"
+                        value={newPassInput}
+                        onChange={(e) => setNewPassInput(e.target.value)}
+                        placeholder="Min 6 chars"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Confirm New
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmPassInput}
+                        onChange={(e) => setConfirmPassInput(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={isSavingProfile}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isSavingProfile ? 'Saving Changes...' : 'Save Profile Changes'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         )}

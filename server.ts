@@ -46,7 +46,21 @@ function readDbFromFile(): any {
   try {
     if (fs.existsSync(DB_FILE_PATH)) {
       const content = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-      return JSON.parse(content);
+      const parsed = JSON.parse(content);
+      // Migrate admin password if still set to placeholder
+      if (parsed.adminCredentials?.password === '1234567890admin' || !parsed.adminCredentials?.password) {
+        parsed.adminCredentials = {
+          ...parsed.adminCredentials,
+          password: 'Kaleb5873'
+        };
+      }
+      if (parsed.ownerCredentials?.password === '1234567890owner' || !parsed.ownerCredentials?.password) {
+        parsed.ownerCredentials = {
+          ...parsed.ownerCredentials,
+          password: 'Kaleb5873'
+        };
+      }
+      return parsed;
     }
   } catch (e) {
     console.error('[DB File Read Error]:', e);
@@ -57,7 +71,7 @@ function readDbFromFile(): any {
     users: [],
     adminCredentials: {
       email: 'kalebbereket49@gmail.com/admin',
-      password: '1234567890admin',
+      password: 'Kaleb5873',
       name: 'Admin (Kaleb Bereket)',
       phone: '+251995406697'
     },
@@ -375,6 +389,241 @@ app.post('/api/users', async (req, res) => {
   }
 });
 
+// User Delete Endpoint (Owner Only)
+app.delete('/api/users/:emailOrId', async (req, res) => {
+  try {
+    const { emailOrId } = req.params;
+    const target = decodeURIComponent(emailOrId).trim().toLowerCase();
+    const currentData = await fetchMasterData();
+    const beforeCount = (currentData.users || []).length;
+    currentData.users = (currentData.users || []).filter((u: any) => 
+      u.id !== emailOrId && u.email.toLowerCase() !== target
+    );
+    await persistMasterData(currentData);
+    res.json({ 
+      success: true, 
+      message: `User ${emailOrId} deleted from database.`, 
+      deletedCount: beforeCount - (currentData.users || []).length,
+      totalUsers: (currentData.users || []).length 
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Stop / Cancel User Paid Plan Endpoint
+app.post('/api/users/stop-plan', async (req, res) => {
+  try {
+    const { userEmail } = req.body;
+    if (!userEmail) {
+      return res.status(400).json({ success: false, message: 'User email is required.' });
+    }
+    const targetEmail = userEmail.trim().toLowerCase();
+    const currentData = await fetchMasterData();
+
+    // 1. Update user
+    currentData.users = (currentData.users || []).map((u: any) => {
+      if (u.email.toLowerCase() === targetEmail) {
+        return {
+          ...u,
+          activePlan: 'free',
+          planExpiresAt: null,
+          planStartedAt: null
+        };
+      }
+      return u;
+    });
+
+    // 2. Downgrade properties
+    currentData.properties = (currentData.properties || []).map((p: any) => {
+      if (p.owner && p.owner.email && p.owner.email.toLowerCase() === targetEmail) {
+        return {
+          ...p,
+          payPlan: 'basic',
+          payPlanName: 'Free Listing',
+          isFeatured: false
+        };
+      }
+      return p;
+    });
+
+    // 3. Mark payment requests as cancelled / expired
+    currentData.paymentRequests = (currentData.paymentRequests || []).map((r: any) => {
+      if (r.userEmail && r.userEmail.toLowerCase() === targetEmail && r.status === 'approved') {
+        return {
+          ...r,
+          status: 'rejected',
+          rejectionReason: 'Plan stopped / cancelled by Administrator'
+        };
+      }
+      return r;
+    });
+
+    await persistMasterData(currentData);
+    res.json({ success: true, message: `Active plan stopped for ${targetEmail}.` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Set User or Property Pay Plan Tier (Free, Basic, Premium, VIP)
+app.post('/api/users/set-plan', async (req, res) => {
+  try {
+    const { userEmail, propertyId, plan } = req.body;
+    const currentData = await fetchMasterData();
+    const targetPlan = plan || 'basic';
+    const isVip = targetPlan === 'vip';
+    const isPremium = targetPlan === 'premium';
+    const isBasic = targetPlan === 'basic';
+
+    const planName = isVip 
+      ? 'VIP Package (VIP TOP+)' 
+      : isPremium 
+      ? 'Premium Package' 
+      : isBasic 
+      ? 'Basic Package' 
+      : 'Free Plan';
+
+    const durationDays = isVip || isPremium ? 30 : 0;
+    const expiresAt = durationDays > 0 ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString() : null;
+
+    if (userEmail) {
+      const targetEmail = userEmail.trim().toLowerCase();
+      currentData.users = (currentData.users || []).map((u: any) => {
+        if (u.email.toLowerCase() === targetEmail) {
+          return {
+            ...u,
+            activePlan: targetPlan,
+            planExpiresAt: expiresAt,
+            planStartedAt: expiresAt ? new Date().toISOString() : null
+          };
+        }
+        return u;
+      });
+
+      // Update user properties
+      currentData.properties = (currentData.properties || []).map((p: any) => {
+        if (p.owner && p.owner.email && p.owner.email.toLowerCase() === targetEmail) {
+          return {
+            ...p,
+            payPlan: targetPlan,
+            payPlanName: planName,
+            isVerified: isVip || isPremium ? true : p.isVerified,
+            isFeatured: isVip || isPremium
+          };
+        }
+        return p;
+      });
+    }
+
+    if (propertyId) {
+      currentData.properties = (currentData.properties || []).map((p: any) => {
+        if (p.id === propertyId) {
+          return {
+            ...p,
+            payPlan: targetPlan,
+            payPlanName: planName,
+            isVerified: isVip ? true : p.isVerified,
+            isFeatured: isVip || isPremium
+          };
+        }
+        return p;
+      });
+    }
+
+    await persistMasterData(currentData);
+    res.json({ success: true, message: `Plan tier updated to ${planName}.`, plan: targetPlan });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Update Admin Profile Endpoint (Used by Owner)
+app.post('/api/admin/update-profile', async (req, res) => {
+  try {
+    const { name, email, phone, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Email and password are required for Admin profile.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPass = password.trim();
+
+    if (!cleanEmail.endsWith('/admin') && cleanEmail !== 'kalebbereket49@gmail.com/admin') {
+      return res.status(400).json({ success: false, message: 'Admin email must end with /admin.' });
+    }
+
+    const currentData = await fetchMasterData();
+    currentData.adminCredentials = {
+      email: cleanEmail,
+      password: cleanPass,
+      name: name?.trim() || currentData.adminCredentials?.name || 'Admin (Kaleb Bereket)',
+      phone: phone?.trim() || currentData.adminCredentials?.phone || '+251995406697'
+    };
+
+    await persistMasterData(currentData);
+    res.json({ success: true, message: 'Admin profile and credentials updated successfully by Owner.', adminCredentials: currentData.adminCredentials });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// User Self Profile Update Endpoint (Name, Phone, Role, Password)
+app.post('/api/user/update-profile', async (req, res) => {
+  try {
+    const { email, name, phone, role, currentPassword, newPassword } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Email is required.' });
+    }
+
+    const targetEmail = email.trim().toLowerCase();
+    const currentData = await fetchMasterData();
+    const users = currentData.users || [];
+    const index = users.findIndex((u: any) => u.email.toLowerCase() === targetEmail);
+
+    if (index === 0 || index > 0) {
+      const user = users[index];
+      if (newPassword && newPassword.trim()) {
+        if (user.password && currentPassword && user.password !== currentPassword.trim()) {
+          return res.status(400).json({ success: false, message: 'Current password does not match.' });
+        }
+        if (newPassword.trim().length < 6) {
+          return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
+        }
+        user.password = newPassword.trim();
+      }
+
+      if (name) user.name = name.trim();
+      if (phone) user.phone = phone.trim();
+      if (role && (role === 'tenant' || role === 'landlord')) user.role = role;
+
+      users[index] = user;
+      currentData.users = users;
+      await persistMasterData(currentData);
+
+      return res.json({ success: true, message: 'Profile updated successfully!', user });
+    } else {
+      // Create user
+      const newUser = {
+        id: `user-${Date.now()}`,
+        name: name?.trim() || targetEmail.split('@')[0],
+        email: targetEmail,
+        phone: phone?.trim() || '+251995406697',
+        role: role === 'landlord' ? 'landlord' : 'tenant',
+        password: newPassword?.trim() || '123456',
+        savedPropertyIds: [],
+        postedPropertyIds: [],
+        toursBooked: []
+      };
+      currentData.users = [newUser, ...users];
+      await persistMasterData(currentData);
+      return res.json({ success: true, message: 'Profile saved to database!', user: newUser });
+    }
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
 // Payment Request Submission
 app.post('/api/payments', async (req, res) => {
   try {
@@ -571,7 +820,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     }
 
     // 2. Check Admin account
-    const adminCreds = currentData.adminCredentials || { email: 'kalebbereket49@gmail.com/admin', password: '1234567890admin' };
+    const adminCreds = currentData.adminCredentials || { email: 'kalebbereket49@gmail.com/admin', password: 'Kaleb5873' };
     if (inputEmail === adminCreds.email.toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/admin') {
       if (inputCurrent !== adminCreds.password) {
         return res.status(400).json({ success: false, message: 'Current password is incorrect for Admin account.' });

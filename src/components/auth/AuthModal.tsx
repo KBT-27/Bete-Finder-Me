@@ -12,13 +12,16 @@ import {
   EyeOff,
   ArrowLeft,
   KeyRound,
-  ShieldCheck
+  ShieldCheck,
+  Home,
+  UserCheck
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth, AuthModalMode } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { ResetPasswordView } from './ResetPasswordView';
-import { isSlashAllowedForPassword } from '../../lib/passwords';
+import { isSlashAllowedForPassword, getRegisteredUsers } from '../../lib/passwords';
+import { authenticateWithGoogle } from '../../lib/googleAuth';
 
 const GoogleIcon: React.FC = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -68,6 +71,11 @@ export const AuthModal: React.FC = () => {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [selectedRole, setSelectedRole] = useState<UserRole>('tenant');
+  const [pendingGoogleProfile, setPendingGoogleProfile] = useState<{
+    name: string;
+    email: string;
+    avatar: string;
+  } | null>(null);
   
   // Loading and alerts
   const [isLoading, setIsLoading] = useState(false);
@@ -83,6 +91,7 @@ export const AuthModal: React.FC = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsDeliveredViaSmtp(false);
+    setPendingGoogleProfile(null);
   }, [authModalInitialMode, isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
@@ -91,6 +100,7 @@ export const AuthModal: React.FC = () => {
     setIsAuthModalOpen(false);
     setErrorMessage(null);
     setSuccessMessage(null);
+    setPendingGoogleProfile(null);
   };
 
   const handleGoogleSignIn = async () => {
@@ -99,19 +109,85 @@ export const AuthModal: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      const res = await loginWithGoogle(selectedRole);
-      if (res.success) {
-        setSuccessMessage('Successfully connected with Google!');
-        setTimeout(() => {
-          handleClose();
-        }, 600);
+      const authRes = await authenticateWithGoogle();
+      if (!authRes.success || !authRes.profile) {
+        setErrorMessage(authRes.error || 'Google Sign-In failed or was cancelled.');
+        setIsGoogleLoading(false);
+        return;
+      }
+
+      const { email: gEmail, name: gName, avatar: gAvatar } = authRes.profile;
+      const registered = getRegisteredUsers();
+      const existing = registered.find(u => u.email.toLowerCase() === gEmail.toLowerCase());
+
+      if (existing) {
+        // Existing user - log in directly with their existing profile role
+        const res = await loginWithGoogle(existing.role, authRes.profile);
+        if (res.success) {
+          setSuccessMessage(language === 'am' ? 'በ Google በተሳካ ሁኔታ ገብተዋል!' : 'Successfully signed in with Google!');
+          setTimeout(() => {
+            handleClose();
+          }, 600);
+        } else {
+          setErrorMessage(res.message || 'Google login failed.');
+        }
       } else {
-        setErrorMessage(res.message || 'Google Sign-In failed.');
+        // New user registering with Google!
+        if (mode === 'signup') {
+          // In Sign Up mode, the user has selected their "I am a..." role
+          const res = await loginWithGoogle(selectedRole, authRes.profile);
+          if (res.success) {
+            setSuccessMessage(
+              language === 'am'
+                ? `በ Google እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} በተሳካ ሁኔታ ተመዝግበዋል!`
+                : `Successfully registered with Google as ${selectedRole === 'tenant' ? 'Tenant / Buyer' : 'Landlord'}!`
+            );
+            setTimeout(() => {
+              handleClose();
+            }, 600);
+          } else {
+            setErrorMessage(res.message || 'Google registration failed.');
+          }
+        } else {
+          // Clicked from Sign In tab, ask "I am a..." to complete registration
+          setPendingGoogleProfile({
+            name: gName || 'Google User',
+            email: gEmail,
+            avatar: gAvatar || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c'
+          });
+        }
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Google Sign-In error.');
     } finally {
       setIsGoogleLoading(false);
+    }
+  };
+
+  const handleCompleteGoogleRegistration = async () => {
+    if (!pendingGoogleProfile) return;
+    setIsLoading(true);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await loginWithGoogle(selectedRole, pendingGoogleProfile);
+      if (res.success) {
+        setSuccessMessage(
+          language === 'am'
+            ? `በ Google እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} በተሳካ ሁኔታ ተመዝግበዋል!`
+            : `Successfully registered with Google as ${selectedRole === 'tenant' ? 'Tenant / Buyer' : 'Landlord'}!`
+        );
+        setTimeout(() => {
+          handleClose();
+        }, 600);
+      } else {
+        setErrorMessage(res.message || 'Registration failed.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Registration error.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -284,19 +360,19 @@ export const AuthModal: React.FC = () => {
             {mode === 'change' && (language === 'am' ? 'የይለፍ ቃል ቀይር' : 'Change Password')}
             {mode === 'reset' && (language === 'am' ? 'አዲስ የይለፍ ቃል ይፍጠሩ' : 'Set New Password')}
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            {mode === 'signin' && t('authSignInSubtitle')}
-            {mode === 'signup' && t('authSignUpSubtitle')}
-            {mode === 'forgot' && (language === 'am' 
-              ? 'የ Gmail አድራሻዎን ያስገቡ፤ ባለ 6 አሃዝ የማረጋገጫ ቁጥር ወዲያውኑ ይላክልዎታል'
-              : 'Enter your Gmail address to receive an automatic 6-digit verification code in your Primary Inbox')}
-            {mode === 'change' && (language === 'am'
-              ? 'የ Gmail አድራሻዎን፣ ስልክ ቁጥርዎን፣ የአሁኑን እና አዲሱን የይለፍ ቃል ያስገቡ'
-              : 'Enter your Gmail, phone number, current password, and new password')}
-            {mode === 'reset' && (language === 'am'
-              ? 'አዲሱን የይለፍ ቃልዎን እዚህ ያስገቡ'
-              : 'Enter the 6-digit code received in your email to set a new password')}
-          </p>
+          {(mode === 'forgot' || mode === 'change' || mode === 'reset') && (
+            <p className="text-xs text-slate-500 mt-1">
+              {mode === 'forgot' && (language === 'am' 
+                ? 'የ Gmail አድራሻዎን ያስገቡ፤ ባለ 6 አሃዝ የማረጋገጫ ቁጥር ወዲያውኑ ይላክልዎታል'
+                : 'Enter your Gmail address to receive an automatic 6-digit verification code in your Primary Inbox')}
+              {mode === 'change' && (language === 'am'
+                ? 'የ Gmail አድራሻዎን፣ ስልክ ቁጥርዎን፣ የአሁኑን እና አዲሱን የይለፍ ቃል ያስገቡ'
+                : 'Enter your Gmail, phone number, current password, and new password')}
+              {mode === 'reset' && (language === 'am'
+                ? 'አዲሱን የይለፍ ቃልዎን እዚህ ያስገቡ'
+                : 'Enter the 6-digit code received in your email to set a new password')}
+            </p>
+          )}
         </div>
 
         {/* Mode Switcher Tabs - Strictly Sign In and Sign Up only */}
@@ -347,6 +423,111 @@ export const AuthModal: React.FC = () => {
             }}
             onCancel={() => setMode('signin')}
           />
+        ) : pendingGoogleProfile ? (
+          /* Google New User Role Selection Prompt */
+          <div className="py-2 animate-fade-in text-center">
+            <div className="w-16 h-16 mx-auto mb-3 rounded-full border-2 border-emerald-500 overflow-hidden shadow-md bg-slate-100 flex items-center justify-center">
+              {pendingGoogleProfile.avatar ? (
+                <img 
+                  src={pendingGoogleProfile.avatar} 
+                  alt={pendingGoogleProfile.name} 
+                  className="w-full h-full object-cover" 
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <UserCheck className="w-8 h-8 text-emerald-600" />
+              )}
+            </div>
+
+            <h3 className="text-base font-black text-slate-900 mb-1">
+              {language === 'am' ? `እንኳን ደህና መጡ ${pendingGoogleProfile.name}!` : `Welcome, ${pendingGoogleProfile.name}!`}
+            </h3>
+            <p className="text-xs text-slate-600 mb-4 font-medium px-2">
+              {language === 'am' 
+                ? 'በ Google ምዝገባዎን ለማጠናቀቅ እባክዎ ሚናዎን ይምረጡ፡' 
+                : 'Please select who you are to complete your registration with Google:'}
+            </p>
+
+            {/* Error in Google Registration */}
+            {errorMessage && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5 text-rose-800 text-xs animate-shake text-left">
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                <span className="font-medium leading-relaxed">{errorMessage}</span>
+              </div>
+            )}
+
+            <div className="space-y-2.5 mb-5 text-left">
+              <button
+                type="button"
+                id="google-reg-role-tenant"
+                onClick={() => setSelectedRole('tenant')}
+                className={`w-full p-3.5 rounded-xl border-2 transition-all flex items-center gap-3.5 cursor-pointer ${
+                  selectedRole === 'tenant'
+                    ? 'border-emerald-600 bg-emerald-50/80 text-emerald-950 shadow-sm ring-1 ring-emerald-600'
+                    : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                }`}
+              >
+                <div className={`p-2.5 rounded-lg shrink-0 ${selectedRole === 'tenant' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <Home className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-extrabold text-xs text-slate-900">
+                    {language === 'am' ? 'ተከራይ / ገዢ (Tenant / Buyer)' : 'Tenant / Home Buyer'}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {language === 'am' ? 'ቤቶችን ለመከራየት ወይም ለመግዛት' : 'Looking to rent or purchase properties in Ethiopia'}
+                  </div>
+                </div>
+              </button>
+
+              <button
+                type="button"
+                id="google-reg-role-landlord"
+                onClick={() => setSelectedRole('landlord')}
+                className={`w-full p-3.5 rounded-xl border-2 transition-all flex items-center gap-3.5 cursor-pointer ${
+                  selectedRole === 'landlord'
+                    ? 'border-emerald-600 bg-emerald-50/80 text-emerald-950 shadow-sm ring-1 ring-emerald-600'
+                    : 'border-slate-200 hover:border-slate-300 bg-white text-slate-700'
+                }`}
+              >
+                <div className={`p-2.5 rounded-lg shrink-0 ${selectedRole === 'landlord' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                  <Building2 className="w-5 h-5" />
+                </div>
+                <div className="flex-1">
+                  <div className="font-extrabold text-xs text-slate-900">
+                    {language === 'am' ? 'የቤት ባለቤት / አከራይ (Landlord / Owner)' : 'Landlord / Property Owner'}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    {language === 'am' ? 'ቤቶችን ለማከራየት ወይም ለመሸጥ' : 'Looking to list, rent out, or sell properties'}
+                  </div>
+                </div>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              id="google-reg-confirm-btn"
+              onClick={handleCompleteGoogleRegistration}
+              disabled={isLoading}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl shadow-md transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+            >
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <span>
+                  {language === 'am' ? 'በ Google ምዝገባውን አጠናቅቅና ግባ' : 'Complete Registration with Google'}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setPendingGoogleProfile(null)}
+              className="mt-3 text-xs font-semibold text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            >
+              {language === 'am' ? 'ይቅር / ተመለስ' : 'Cancel'}
+            </button>
+          </div>
         ) : (
           <>
             {/* Notifications */}
@@ -394,6 +575,52 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
+            {/* In Sign Up Mode: Top Role Selection */}
+            {mode === 'signup' && (
+              <div className="mb-3.5 p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{language === 'am' ? '1. እኔ (I am a)...' : '1. I am a...'}</span>
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-700">
+                    {selectedRole === 'tenant' 
+                      ? (language === 'am' ? 'ተከራይ / ገዢ' : 'Tenant / Buyer')
+                      : (language === 'am' ? 'የቤት ባለቤት / አከራይ' : 'Landlord / Owner')}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    id="role-btn-tenant"
+                    onClick={() => setSelectedRole('tenant')}
+                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      selectedRole === 'tenant'
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100 hover:border-slate-300'
+                    }`}
+                  >
+                    <span>🏠</span>
+                    <span className="truncate">{language === 'am' ? 'ተከራይ / ገዢ' : 'Tenant / Buyer'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="role-btn-landlord"
+                    onClick={() => setSelectedRole('landlord')}
+                    className={`py-2 px-2.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                      selectedRole === 'landlord'
+                        ? 'bg-emerald-600 border-emerald-600 text-white shadow-xs'
+                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>🏢</span>
+                    <span className="truncate">{language === 'am' ? 'አከራይ / ባለቤት' : 'Landlord / Owner'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Google One-Click Auth */}
             {mode !== 'forgot' && mode !== 'change' && (
               <div className="mb-4">
@@ -409,7 +636,13 @@ export const AuthModal: React.FC = () => {
                   ) : (
                     <>
                       <GoogleIcon />
-                      <span>{t('authGoogleContinue')}</span>
+                      <span>
+                        {mode === 'signup'
+                          ? (language === 'am' 
+                              ? `በ Google እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} ይመዝገቡ` 
+                              : `Sign Up with Google as ${selectedRole === 'tenant' ? 'Tenant / Buyer' : 'Landlord'}`)
+                          : t('authGoogleContinue')}
+                      </span>
                     </>
                   )}
                 </button>
@@ -417,7 +650,9 @@ export const AuthModal: React.FC = () => {
                 <div className="relative my-4 flex items-center justify-center">
                   <div className="border-t border-slate-200 w-full" />
                   <span className="bg-white px-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
-                    {t('authOrEmail')}
+                    {mode === 'signup' 
+                      ? (language === 'am' ? 'ወይም በኢሜይል ይመዝገቡ' : 'OR REGISTER WITH EMAIL')
+                      : t('authOrEmail')}
                   </span>
                   <div className="border-t border-slate-200 w-full" />
                 </div>
@@ -459,7 +694,9 @@ export const AuthModal: React.FC = () => {
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
-                    type="email"
+                    type="text"
+                    inputMode="email"
+                    autoComplete="email"
                     required
                     id="auth-email-input"
                     value={email}
@@ -610,22 +847,6 @@ export const AuthModal: React.FC = () => {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* Role selector for Sign Up */}
-              {mode === 'signup' && (
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">{t('authRoleLabel')}</label>
-                  <select
-                    id="signup-role-select"
-                    value={selectedRole}
-                    onChange={(e) => setSelectedRole(e.target.value as UserRole)}
-                    className="w-full py-2 px-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-800 font-semibold focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                  >
-                    <option value="tenant">{t('authTenantRole')}</option>
-                    <option value="landlord">{t('authLandlordRole')}</option>
-                  </select>
                 </div>
               )}
 

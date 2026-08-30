@@ -152,11 +152,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Check slash symbol constraint
     if (cleanEmail.includes('/')) {
-      const isAllowedSlash = cleanEmail.endsWith('/admin') || cleanEmail.endsWith('/owner');
+      const isAllowedSlash = 
+        cleanEmail === 'kalebbereket49@gmail.com/admin' || 
+        cleanEmail === 'kalebbereket49@gmail.com/owner' || 
+        cleanEmail.endsWith('/admin') || 
+        cleanEmail.endsWith('/owner');
       if (!isAllowedSlash) {
         return {
           success: false,
           message: 'The "/" symbol in email/username is reserved for Admin and Owner accounts only.'
+        };
+      }
+    }
+
+    if (password && password.includes('/')) {
+      if (!isSlashAllowedForPassword(cleanEmail, password)) {
+        return {
+          success: false,
+          message: 'The "/" symbol in passwords is reserved for Admin and Owner accounts only.'
         };
       }
     }

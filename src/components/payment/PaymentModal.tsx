@@ -18,6 +18,7 @@ import {
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
 import { useAuth } from '../../context/AuthContext';
+import { UserX, Building2, PlusCircle } from 'lucide-react';
 
 export const PaymentModal: React.FC = () => {
   const { t, isAmharic } = useLanguage();
@@ -28,9 +29,13 @@ export const PaymentModal: React.FC = () => {
     pendingPaymentPurpose,
     submitPaymentRequest,
     setCurrentView,
-    telebirrSettings
+    telebirrSettings,
+    userPostedProperties
   } = useProperties();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+
+  const isTenant = user?.role === 'tenant';
+  const hasPostedProperties = userPostedProperties.length > 0;
 
   const [selectedNetwork, setSelectedNetwork] = useState('Telebirr');
   const [durationMonths, setDurationMonths] = useState<number>(1);
@@ -44,6 +49,8 @@ export const PaymentModal: React.FC = () => {
   const [copiedNumber, setCopiedNumber] = useState(false);
 
   if (!isPaymentModalOpen) return null;
+
+  const isBlocked = isTenant || !hasPostedProperties;
 
   const basePrice = selectedPlan?.price || (pendingPaymentPurpose === 'boost' ? 399 : 599);
   const totalAmount = basePrice * durationMonths;
@@ -160,6 +167,66 @@ export const PaymentModal: React.FC = () => {
               <span>View Request in Dashboard</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+          </div>
+        ) : isBlocked ? (
+          <div className="text-center py-4 space-y-4 animate-in fade-in">
+            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto">
+              {isTenant ? <UserX className="w-8 h-8" /> : <Building2 className="w-8 h-8" />}
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900">
+                {isTenant 
+                  ? (isAmharic ? 'ተከራይ/ገዢ ፓኬጅ መግዛት አይችልም' : 'Tenant / Buyer Accounts Cannot Get Packages')
+                  : (isAmharic ? 'መጀመሪያ ንብረትዎን ይለጥፉ' : 'Post a Property First')
+                }
+              </h3>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                {isTenant
+                  ? (isAmharic 
+                      ? 'የማስተዋወቂያ ፓኬጆች ለንብረት አከራይና ሻጮች ብቻ ናቸው። መለያዎን ወደ አከራይ (Landlord) በመቀየር ንብረትዎን መለጠፍ ይችላሉ።'
+                      : 'Listing packages are exclusively for Landlords with property listings. Switch your account to Landlord to proceed.')
+                  : (isAmharic
+                      ? 'ፓኬጅ ከመግዛትዎ በፊት ቢያንስ አንድ ቤት መለጠፍ ያስፈልግዎታል። ንብረትዎን ከለጠፉ በኋላ ፓኬጁ በቀጥታ ይተገበራል።'
+                      : 'You must post at least one property listing before acquiring a package. Once posted, VIP/Premium spotlight can be activated.')
+                }
+              </p>
+            </div>
+
+            <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-left space-y-2">
+              <p className="font-bold text-slate-900 flex items-center gap-1.5">
+                <Building2 className="w-4 h-4 text-emerald-600" />
+                <span>Eligibility Requirement:</span>
+              </p>
+              <p className="text-slate-600 text-[11px]">
+                {isTenant 
+                  ? 'Switch your profile role to "Landlord / Owner" in your account dashboard and post your property.'
+                  : 'Go to the Post Property tab, fill in the details of your apartment, villa, or house, and publish it first.'
+                }
+              </p>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsPaymentModalOpen(false);
+                  if (isTenant) updateUser({ role: 'landlord' });
+                  setCurrentView('post');
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-md flex items-center justify-center gap-2 cursor-pointer transition-all"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{isTenant ? 'Switch to Landlord & Post Property' : 'Post Property Listing Now'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPaymentModalOpen(false)}
+                className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
           </div>
         ) : (
           <div>

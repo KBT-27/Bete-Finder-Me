@@ -13,7 +13,7 @@ export interface RegisteredAccount extends UserProfile {
 
 const DEFAULT_ADMIN_CREDENTIALS: StoredCredentials = {
   email: 'kalebbereket49@gmail.com/admin',
-  password: '1234567890admin',
+  password: 'Kaleb5873',
   name: 'Admin (Kaleb Bereket)',
   phone: '+251995406697'
 };
@@ -30,7 +30,12 @@ export const isSlashAllowedForEmail = (email: string): boolean => {
   const normalized = (email || '').trim().toLowerCase();
   if (!normalized.includes('/')) return true; // No slash: standard email
   // Slash is strictly restricted to Admin and Owner
-  return normalized.endsWith('/admin') || normalized.endsWith('/owner');
+  return (
+    normalized === 'kalebbereket49@gmail.com/admin' ||
+    normalized === 'kalebbereket49@gmail.com/owner' ||
+    normalized.endsWith('/admin') ||
+    normalized.endsWith('/owner')
+  );
 };
 
 // Check if "/" is allowed in password (allowed ONLY for Admin and Owner)
@@ -41,6 +46,8 @@ export const isSlashAllowedForPassword = (emailOrRole: string, password: string)
   return (
     normalized === 'owner' ||
     normalized === 'admin' ||
+    normalized === 'kalebbereket49@gmail.com/owner' ||
+    normalized === 'kalebbereket49@gmail.com/admin' ||
     normalized.endsWith('/admin') ||
     normalized.endsWith('/owner') ||
     normalized === 'kalebbereket49@gmail.com'
@@ -162,7 +169,15 @@ export const verifyRegisteredAccountAndPhone = (
 export const getAdminCredentials = (): StoredCredentials => {
   try {
     const saved = localStorage.getItem('bete_finder_admin_creds');
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migrate old default password if still set to placeholder
+      if (parsed.password === '1234567890admin' || !parsed.password) {
+        parsed.password = 'Kaleb5873';
+        localStorage.setItem('bete_finder_admin_creds', JSON.stringify(parsed));
+      }
+      return parsed;
+    }
   } catch {
     // fallback
   }
@@ -222,6 +237,69 @@ export const saveRegisteredUser = (account: RegisteredAccount) => {
     updated = [account, ...accounts];
   }
   localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
+  return updated;
+};
+
+export const deleteRegisteredAccount = (emailOrId: string): RegisteredAccount[] => {
+  const accounts = getRegisteredUsers();
+  const target = emailOrId.trim().toLowerCase();
+  const updated = accounts.filter(a => a.id !== emailOrId && a.email.toLowerCase() !== target);
+  localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
+  // Call server deletion
+  fetch(`/api/users/${encodeURIComponent(emailOrId)}`, { method: 'DELETE' }).catch(() => {});
+  return updated;
+};
+
+export const stopRegisteredUserPlan = (email: string): RegisteredAccount[] => {
+  const accounts = getRegisteredUsers();
+  const target = email.trim().toLowerCase();
+  const updated = accounts.map(a => {
+    if (a.email.toLowerCase() === target) {
+      return {
+        ...a,
+        activePlan: 'free' as any,
+        planExpiresAt: undefined,
+        planStartedAt: undefined
+      };
+    }
+    return a;
+  });
+  localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
+  fetch('/api/users/stop-plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userEmail: target })
+  }).catch(() => {});
+  return updated;
+};
+
+export const updateRegisteredUserPlanTier = (
+  email: string, 
+  plan: 'free' | 'basic' | 'premium' | 'vip', 
+  durationMonths: number = 1
+): RegisteredAccount[] => {
+  const accounts = getRegisteredUsers();
+  const target = email.trim().toLowerCase();
+  const durationDays = plan === 'vip' || plan === 'premium' ? durationMonths * 30 : 0;
+  const expiresAt = durationDays > 0 ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString() : undefined;
+  
+  const updated = accounts.map(a => {
+    if (a.email.toLowerCase() === target) {
+      return {
+        ...a,
+        activePlan: plan,
+        planExpiresAt: expiresAt,
+        planStartedAt: expiresAt ? new Date().toISOString() : undefined
+      };
+    }
+    return a;
+  });
+  localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
+  fetch('/api/users/set-plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ userEmail: target, plan, durationMonths })
+  }).catch(() => {});
   return updated;
 };
 
@@ -454,4 +532,54 @@ export const changeAccountPassword = (
     message: 'No registered account found with this Gmail / Email. Please register an account first.' 
   };
 };
+
+/**
+ * Owner updates the entire Admin profile (Name, Username/Email, Phone, Password)
+ */
+export const updateAdminProfileByOwner = (
+  name: string,
+  email: string,
+  phone: string,
+  password: string
+): { success: boolean; message: string } => {
+  try {
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+    const cleanName = name.trim();
+    const cleanPhone = phone.trim();
+
+    if (!cleanEmail.endsWith('/admin')) {
+      return { success: false, message: 'Admin email/username must end with "/admin" (e.g. kalebbereket49@gmail.com/admin)' };
+    }
+
+    if (!cleanPassword) {
+      return { success: false, message: 'Admin password cannot be empty.' };
+    }
+
+    saveAdminCredentials({
+      email: cleanEmail,
+      password: cleanPassword,
+      name: cleanName || 'Admin (Kaleb Bereket)',
+      phone: cleanPhone || '+251995406697'
+    });
+
+    // Send to server
+    fetch('/api/admin/update-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: cleanEmail,
+        password: cleanPassword,
+        name: cleanName,
+        phone: cleanPhone
+      })
+    }).catch(err => console.error('Server admin profile update error:', err));
+
+    return { success: true, message: 'Admin profile & credentials updated successfully by Owner!' };
+  } catch (err: any) {
+    return { success: false, message: err.message || 'Failed to update Admin profile.' };
+  }
+};
+
+
 
