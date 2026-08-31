@@ -1,3 +1,5 @@
+import { safeFetchJson } from './apiHelper';
+
 // Google OAuth & Google Identity Services (GSI) Client Helper
 
 export interface GoogleUserProfile {
@@ -32,11 +34,10 @@ let cachedServerClientId: string | null = null;
 
 // Attempt to fetch server-configured Google Client ID
 if (typeof window !== 'undefined') {
-  fetch('/api/auth/google-config')
-    .then((res) => res.json())
-    .then((data) => {
-      if (data?.clientId && typeof data.clientId === 'string' && data.clientId.trim() !== '') {
-        cachedServerClientId = data.clientId.trim();
+  safeFetchJson<{ clientId?: string }>('/api/auth/google-config')
+    .then((result) => {
+      if (result.isJson && result.data?.clientId && typeof result.data.clientId === 'string' && result.data.clientId.trim() !== '') {
+        cachedServerClientId = result.data.clientId.trim();
         console.log('[Google Auth] Loaded Client ID from server configuration:', cachedServerClientId.substring(0, 15) + '...');
       }
     })

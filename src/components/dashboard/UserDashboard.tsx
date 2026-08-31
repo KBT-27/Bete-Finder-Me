@@ -28,6 +28,7 @@ import { useProperties } from '../../context/PropertyContext';
 import { useAuth } from '../../context/AuthContext';
 import { PropertyCard } from '../common/PropertyCard';
 import { AdminDashboard } from './AdminDashboard';
+import { safeFetchJson } from '../../lib/apiHelper';
 
 export const UserDashboard: React.FC = () => {
   const { t, language } = useLanguage();
@@ -705,8 +706,8 @@ export const UserDashboard: React.FC = () => {
                   setIsSavingProfile(true);
 
                   try {
-                    // Send to server
-                    const res = await fetch('/api/user/update-profile', {
+                    // Send to server safely
+                    const result = await safeFetchJson<any>('/api/user/update-profile', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -719,8 +720,7 @@ export const UserDashboard: React.FC = () => {
                       })
                     });
 
-                    const resData = await res.json();
-                    if (res.ok && resData.success) {
+                    if (result.isJson && result.data && result.data.success) {
                       updateUser({
                         name: profileName.trim(),
                         phone: profilePhone.trim(),
@@ -730,8 +730,15 @@ export const UserDashboard: React.FC = () => {
                       setNewPassInput('');
                       setConfirmPassInput('');
                       setProfileSaveSuccess('Profile and security details updated successfully in the database!');
+                    } else if (result.isJson && result.data && !result.data.success) {
+                      setProfileSaveError(result.data.message || 'Failed to update profile.');
                     } else {
-                      setProfileSaveError(resData.message || 'Failed to update profile.');
+                      updateUser({
+                        name: profileName.trim(),
+                        phone: profilePhone.trim(),
+                        role: profileRole
+                      });
+                      setProfileSaveSuccess('Profile details saved locally!');
                     }
                   } catch (err: any) {
                     updateUser({

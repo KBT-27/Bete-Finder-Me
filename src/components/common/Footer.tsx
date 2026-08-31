@@ -210,6 +210,11 @@ export const Footer: React.FC = () => {
                 </button>
               </li>
               <li>
+                <button onClick={() => handleTypeClick('Floor House')} className="hover:text-emerald-400 transition-colors">
+                  {t('catFloorHouse')}
+                </button>
+              </li>
+              <li>
                 <button onClick={() => handleTypeClick('Condominium')} className="hover:text-emerald-400 transition-colors">
                   {t('catCondominium')}
                 </button>

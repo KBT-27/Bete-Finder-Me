@@ -19,7 +19,9 @@ import {
   Check, 
   Sparkles,
   Info,
-  CheckCircle2
+  CheckCircle2,
+  Layers,
+  Building2
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -162,8 +164,22 @@ export const PropertyDetailsView: React.FC = () => {
                   </span>
                 )}
                 <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-lg">
-                  {selectedProperty.propertyType}
+                  {selectedProperty.propertyType === 'Floor House' ? (isAmharic ? 'ፎቅ ቤት' : 'Floor House') : selectedProperty.propertyType}
                 </span>
+                {selectedProperty.floorSize && (
+                  <span className="text-xs font-extrabold text-violet-700 bg-violet-50 border border-violet-200 px-2.5 py-1 rounded-lg">
+                    {selectedProperty.floorSize}
+                  </span>
+                )}
+                {selectedProperty.finishingStatus && (
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                    selectedProperty.finishingStatus === 'finished'
+                      ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      : 'bg-amber-50 text-amber-700 border border-amber-200'
+                  }`}>
+                    {selectedProperty.finishingStatus === 'finished' ? (isAmharic ? 'ያለቀለት ቤት (Finished)' : 'Finished House') : (isAmharic ? 'ያልተጠናቀቀ ቤት (Unfinished)' : 'Unfinished House')}
+                  </span>
+                )}
               </div>
 
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-slate-900 tracking-tight">
@@ -262,6 +278,40 @@ export const PropertyDetailsView: React.FC = () => {
                   <p className="text-base font-extrabold text-slate-900">{selectedProperty.isFurnished ? 'Furnished' : 'Unfurnished'}</p>
                 </div>
               </div>
+
+              {/* Extra specs for Floor House */}
+              {(selectedProperty.floorSize || selectedProperty.finishingStatus) && (
+                <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {selectedProperty.floorSize && (
+                    <div className="flex items-center gap-3 p-3 rounded-2xl bg-violet-50/80 border border-violet-100">
+                      <Layers className="w-5 h-5 text-violet-600 shrink-0" />
+                      <div>
+                        <p className="text-[11px] font-bold text-violet-600 uppercase tracking-wider">{isAmharic ? 'የፎቅ መጠን' : 'Floor Structure'}</p>
+                        <p className="text-sm font-extrabold text-violet-950">{selectedProperty.floorSize}</p>
+                      </div>
+                    </div>
+                  )}
+                  {selectedProperty.finishingStatus && (
+                    <div className={`flex items-center gap-3 p-3 rounded-2xl border ${
+                      selectedProperty.finishingStatus === 'finished'
+                        ? 'bg-emerald-50/80 border-emerald-100 text-emerald-950'
+                        : 'bg-amber-50/80 border-amber-100 text-amber-950'
+                    }`}>
+                      <Building2 className={`w-5 h-5 shrink-0 ${
+                        selectedProperty.finishingStatus === 'finished' ? 'text-emerald-600' : 'text-amber-600'
+                      }`} />
+                      <div>
+                        <p className="text-[11px] font-bold uppercase tracking-wider opacity-80">{isAmharic ? 'የቤቱ አጨራረስ' : 'Finishing Status'}</p>
+                        <p className="text-sm font-extrabold">
+                          {selectedProperty.finishingStatus === 'finished' 
+                            ? (isAmharic ? 'የተጠናቀቀ / ያለቀለት (Finished)' : 'Fully Finished') 
+                            : (isAmharic ? 'ያልተጠናቀቀ / ከፊል ያለቀ (Unfinished)' : 'Unfinished / Semi-Finished')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Description */}

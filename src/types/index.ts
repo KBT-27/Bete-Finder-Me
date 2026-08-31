@@ -2,6 +2,7 @@ export type PropertyType =
   | 'Apartment'
   | 'Villa'
   | 'Condominium'
+  | 'Floor House'
   | 'Studio'
   | 'Commercial'
   | 'Townhouse'
@@ -30,6 +31,8 @@ export interface Property {
   currency: 'ETB' | 'USD';
   listingType: ListingType;
   propertyType: PropertyType;
+  floorSize?: string; // e.g. G+1, G+2, G+3, G+4, G+5, G+6+
+  finishingStatus?: 'finished' | 'unfinished'; // Finished or Unfinished
   city: string;
   subcity: string;
   neighborhood: string;

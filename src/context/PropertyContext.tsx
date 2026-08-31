@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useMemo, useEffect, useCall
 import { Property, PropertyFilterState, ListingPlan, PaymentRequest, TelebirrSettings } from '../types';
 import { INITIAL_PROPERTIES, LISTING_PLANS } from '../data/initialProperties';
 import { useAuth } from './AuthContext';
+import { safeFetchJson } from '../lib/apiHelper';
 
 const DEFAULT_FILTER: PropertyFilterState = {
   searchQuery: '',
@@ -186,14 +187,12 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const syncWithDatabase = useCallback(async (): Promise<{ success: boolean; message: string; connectedNeon: boolean }> => {
     setIsDatabaseSyncing(true);
     try {
-      // 1. Fetch current server DB state
-      const res = await fetch('/api/db/sync');
-      if (!res.ok) throw new Error('Database server responded with error');
-      const json = await res.json();
+      // 1. Fetch current server DB state safely
+      const result = await safeFetchJson<any>('/api/db/sync');
 
-      if (json.success && json.data) {
-        const remote = json.data;
-        setIsNeonConnected(Boolean(json.connectedNeon));
+      if (result.isJson && result.data && result.data.success && result.data.data) {
+        const remote = result.data.data;
+        setIsNeonConnected(Boolean(result.data.connectedNeon));
         setLastDbSyncTimestamp(Date.now());
 
         // Update properties (reflects additions and deletions across all devices)
@@ -217,15 +216,19 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setIsDatabaseSyncing(false);
         return {
           success: true,
-          message: json.connectedNeon 
+          message: result.data.connectedNeon 
             ? 'Synced successfully with Neon Database & Server Store.' 
             : 'Synced successfully with Persistent Server Database.',
-          connectedNeon: Boolean(json.connectedNeon)
+          connectedNeon: Boolean(result.data.connectedNeon)
         };
       }
 
       setIsDatabaseSyncing(false);
-      return { success: false, message: 'Sync failed: invalid payload.', connectedNeon: false };
+      return {
+        success: false,
+        message: result.message || 'Database sync standby.',
+        connectedNeon: false
+      };
     } catch (err: any) {
       setIsDatabaseSyncing(false);
       return { success: false, message: err?.message || 'Database connection error.', connectedNeon: false };

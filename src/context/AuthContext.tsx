@@ -21,6 +21,7 @@ import {
   isSlashAllowedForPassword
 } from '../lib/passwords';
 import { authenticateWithGoogle } from '../lib/googleAuth';
+import { safeFetchJson } from '../lib/apiHelper';
 
 export type AuthModalMode = 'signin' | 'signup' | 'forgot' | 'reset' | 'change';
 
@@ -80,20 +81,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync auth state and registered accounts with server database
   const syncAuthWithDatabase = useCallback(async () => {
     try {
-      const res = await fetch('/api/db/sync');
-      if (!res.ok) return;
-      const json = await res.json();
-      if (json.success && json.data) {
-        if (json.data.users && Array.isArray(json.data.users)) {
-          localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(json.data.users));
+      const result = await safeFetchJson<any>('/api/db/sync');
+      if (result.isJson && result.data && result.data.success && result.data.data) {
+        const d = result.data.data;
+        if (d.users && Array.isArray(d.users)) {
+          localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(d.users));
         }
-        if (json.data.adminCredentials) {
-          setAdminCreds(json.data.adminCredentials);
-          localStorage.setItem('bete_finder_admin_creds', JSON.stringify(json.data.adminCredentials));
+        if (d.adminCredentials) {
+          setAdminCreds(d.adminCredentials);
+          localStorage.setItem('bete_finder_admin_creds', JSON.stringify(d.adminCredentials));
         }
-        if (json.data.ownerCredentials) {
-          setOwnerCreds(json.data.ownerCredentials);
-          localStorage.setItem('bete_finder_owner_creds', JSON.stringify(json.data.ownerCredentials));
+        if (d.ownerCredentials) {
+          setOwnerCreds(d.ownerCredentials);
+          localStorage.setItem('bete_finder_owner_creds', JSON.stringify(d.ownerCredentials));
         }
       }
     } catch {
@@ -458,7 +458,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const resetUrl = `${window.location.origin}${window.location.pathname}?token=${resetReq.code}`;
 
     try {
-      const res = await fetch('/api/auth/send-reset-email', {
+      const result = await safeFetchJson<any>('/api/auth/send-reset-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -469,21 +469,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }),
       });
 
-      const data = await res.json();
-      if (!res.ok) {
+      if (result.isJson && result.data && result.success) {
+        return {
+          success: true,
+          message: result.data.message || `6-digit verification code sent to ${destinationEmail} (Gmail Primary Inbox).`,
+          resetToken: resetReq.token,
+          resetCode: resetReq.code,
+          resetUrl,
+          delivered: result.data.delivered
+        };
+      }
+
+      if (result.isJson && result.data && !result.success) {
         return {
           success: false,
-          message: data.message || 'Failed to dispatch verification email.'
+          message: result.data.message || 'Failed to dispatch verification email.'
         };
       }
 
       return {
         success: true,
-        message: data.message || `6-digit verification code sent to ${destinationEmail} (Gmail Primary Inbox).`,
+        message: `6-digit verification code generated for ${destinationEmail}.`,
         resetToken: resetReq.token,
         resetCode: resetReq.code,
         resetUrl,
-        delivered: data.delivered
+        delivered: false
       };
     } catch {
       return {
@@ -511,7 +521,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Call server API for global synchronization
     try {
-      const res = await fetch('/api/auth/reset-password', {
+      const result = await safeFetchJson<any>('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -520,12 +530,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           newPassword: newPassword.trim()
         })
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      if (result.isJson && result.data && result.data.success) {
         markTokenAsUsed(cleanToken);
         setActiveResetToken(null);
         syncAuthWithDatabase();
-        return { success: true, message: data.message || 'Password reset successfully!' };
+        return { success: true, message: result.data.message || 'Password reset successfully!' };
       }
     } catch {
       // fallback
@@ -579,7 +588,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 1. Send change request to Server DB
     try {
-      const res = await fetch('/api/auth/change-password', {
+      const result = await safeFetchJson<any>('/api/auth/change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -589,20 +598,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           newPassword: newPassword.trim()
         })
       });
-      const resData = await res.json();
-      if (res.ok && resData.success) {
+      if (result.isJson && result.data && result.data.success) {
         // Also update local storage and state
         changeAccountPassword(cleanEmail, phone || '', currentPassword, newPassword);
         syncAuthWithDatabase();
-        return { success: true, message: resData.message || 'Password changed successfully in the database!' };
-      } else {
-        return { success: false, message: resData.message || 'Failed to change password.' };
+        return { success: true, message: result.data.message || 'Password changed successfully in the database!' };
+      } else if (result.isJson && result.data && !result.data.success) {
+        return { success: false, message: result.data.message || 'Failed to change password.' };
       }
     } catch {
       // Local fallback
-      const localResult = changeAccountPassword(cleanEmail, phone || '', currentPassword, newPassword);
-      return localResult;
     }
+
+    // Local fallback
+    const localResult = changeAccountPassword(cleanEmail, phone || '', currentPassword, newPassword);
+    return localResult;
   };
 
   const logout = () => {

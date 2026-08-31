@@ -8,7 +8,7 @@ import { PropertyType } from '../../types';
 export const FeaturedProperties: React.FC = () => {
   const { t } = useLanguage();
   const { featuredProperties, setCurrentView, resetFilters, updateFilter } = useProperties();
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'Apartment' | 'Villa' | 'Condominium' | 'Studio'>('all');
+  const [selectedFilter, setSelectedFilter] = useState<'all' | 'Apartment' | 'Villa' | 'Floor House' | 'Condominium' | 'Studio'>('all');
 
   const filteredListings = featuredProperties.filter(prop => {
     if (selectedFilter === 'all') return true;
@@ -43,7 +43,7 @@ export const FeaturedProperties: React.FC = () => {
 
           {/* Quick Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-            {(['all', 'Apartment', 'Villa', 'Condominium', 'Studio'] as const).map(filterKey => (
+            {(['all', 'Apartment', 'Villa', 'Floor House', 'Condominium', 'Studio'] as const).map(filterKey => (
               <button
                 key={filterKey}
                 onClick={() => setSelectedFilter(filterKey)}

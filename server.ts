@@ -18,7 +18,9 @@ const PORT = 3000;
 app.use(express.json({ limit: '50mb' }));
 
 // Database JSON File Path
-const DB_FILE_PATH = path.join(process.cwd(), 'data', 'bete_finder_db.json');
+const DB_FILE_PATH = process.env.VERCEL 
+  ? path.join('/tmp', 'bete_finder_db.json')
+  : path.join(process.cwd(), 'data', 'bete_finder_db.json');
 
 // Memory store for active password reset codes
 interface ServerResetRequest {
@@ -34,9 +36,13 @@ const activeResetCodes: Map<string, ServerResetRequest> = new Map();
 
 // Helper to ensure data directory exists
 function ensureDataDirectory() {
-  const dataDir = path.join(process.cwd(), 'data');
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+  try {
+    const dataDir = process.env.VERCEL ? '/tmp' : path.join(process.cwd(), 'data');
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+  } catch (e) {
+    // Ignore in read-only environments
   }
 }
 
@@ -1680,7 +1686,7 @@ app.get('/api/auth/google-config', (req, res) => {
 });
 
 // Start the server with Vite middleware in dev or static serving in prod
-async function startServer() {
+export async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1700,4 +1706,9 @@ async function startServer() {
   });
 }
 
-startServer();
+export { app };
+export default app;
+
+if (!process.env.VERCEL) {
+  startServer();
+}

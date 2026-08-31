@@ -152,9 +152,25 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onSelect }
                 <span className="text-xs text-slate-500 font-medium">{t('cardPerMonth')}</span>
               )}
             </div>
-            <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
-              {property.propertyType}
-            </span>
+            <div className="flex items-center gap-1">
+              {property.floorSize && (
+                <span className="text-[11px] font-extrabold text-violet-700 bg-violet-50 border border-violet-200 px-2 py-0.5 rounded-md">
+                  {property.floorSize}
+                </span>
+              )}
+              {property.finishingStatus && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md ${
+                  property.finishingStatus === 'finished'
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  {property.finishingStatus === 'finished' ? (isAmharic ? 'ያለቀለት' : 'Finished') : (isAmharic ? 'ያልተጠናቀቀ' : 'Unfinished')}
+                </span>
+              )}
+              <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                {property.propertyType === 'Floor House' ? (isAmharic ? 'ፎቅ ቤት' : 'Floor House') : property.propertyType}
+              </span>
+            </div>
           </div>
 
           {/* Title */}

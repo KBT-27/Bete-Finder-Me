@@ -72,6 +72,7 @@ import {
 import { PaymentRequest, Property } from '../../types';
 import { AdminControllerTab } from './AdminControllerTab';
 import { getAdminControllerConfig, logAdminActivity } from '../../lib/adminController';
+import { safeFetchJson } from '../../lib/apiHelper';
 
 export const AdminDashboard: React.FC = () => {
   const { t, language } = useLanguage();
@@ -237,12 +238,11 @@ export const AdminDashboard: React.FC = () => {
   // Fetch live connection info on mount / tab visit
   const loadConnectionInfo = async () => {
     try {
-      const res = await fetch('/api/db/connection-info');
-      const data = await res.json();
-      if (data.success) {
-        setActiveDbInfo(data);
-        if (data.rawUrl && !connectionStringInput) {
-          setConnectionStringInput(data.rawUrl);
+      const result = await safeFetchJson<any>('/api/db/connection-info');
+      if (result.isJson && result.data && result.data.success) {
+        setActiveDbInfo(result.data);
+        if (result.data.rawUrl && !connectionStringInput) {
+          setConnectionStringInput(result.data.rawUrl);
         }
       }
     } catch (e) {
@@ -265,15 +265,21 @@ export const AdminDashboard: React.FC = () => {
     setIsTestingConnection(true);
     setConnectionTestResult(null);
     try {
-      const res = await fetch('/api/db/test-connection', {
+      const result = await safeFetchJson<any>('/api/db/test-connection', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ connectionString: connectionStringInput.trim() })
       });
-      const data = await res.json();
-      setConnectionTestResult(data);
-      if (data.success) {
-        showToast(`Connection Verified! Latency: ${data.latencyMs}ms`);
+      if (result.isJson && result.data) {
+        setConnectionTestResult(result.data);
+        if (result.data.success) {
+          showToast(`Connection Verified! Latency: ${result.data.latencyMs}ms`);
+        }
+      } else {
+        setConnectionTestResult({
+          success: false,
+          message: result.message || 'Connection test could not reach database server.'
+        });
       }
     } catch (err: any) {
       setConnectionTestResult({
@@ -292,18 +298,17 @@ export const AdminDashboard: React.FC = () => {
     }
     setIsUpdatingConnection(true);
     try {
-      const res = await fetch('/api/db/update-connection-string', {
+      const result = await safeFetchJson<any>('/api/db/update-connection-string', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ connectionString: connectionStringInput.trim() })
       });
-      const data = await res.json();
-      if (data.success) {
+      if (result.isJson && result.data && result.data.success) {
         showToast('Database connection string updated and dataset migrated successfully!');
         loadConnectionInfo();
         handleManualSync();
       } else {
-        showToast(data.message || 'Failed to update database connection string.');
+        showToast(result.data?.message || result.message || 'Failed to update database connection string.');
       }
     } catch (err: any) {
       showToast(err?.message || 'Error updating connection string.');
@@ -315,13 +320,14 @@ export const AdminDashboard: React.FC = () => {
   const handleResetConnectionString = async () => {
     if (!window.confirm('Reset database connection to internal persistent storage?')) return;
     try {
-      const res = await fetch('/api/db/reset-connection', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
+      const result = await safeFetchJson<any>('/api/db/reset-connection', { method: 'POST' });
+      if (result.isJson && result.data && result.data.success) {
         setConnectionStringInput('');
         loadConnectionInfo();
         handleManualSync();
         showToast('Database reset to internal persistent storage.');
+      } else {
+        showToast(result.data?.message || result.message || 'Reset complete.');
       }
     } catch (e: any) {
       showToast(e?.message || 'Failed to reset connection.');
@@ -331,11 +337,12 @@ export const AdminDashboard: React.FC = () => {
   const handleRunBenchmark = async () => {
     setIsBenchmarking(true);
     try {
-      const res = await fetch('/api/db/benchmark', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setBenchmarkResult(data);
-        showToast(`Benchmark completed: ${data.totalRoundTripMs}ms roundtrip`);
+      const result = await safeFetchJson<any>('/api/db/benchmark', { method: 'POST' });
+      if (result.isJson && result.data && result.data.success) {
+        setBenchmarkResult(result.data);
+        showToast(`Benchmark completed: ${result.data.totalRoundTripMs}ms roundtrip`);
+      } else {
+        showToast(result.data?.message || result.message || 'Benchmark standby.');
       }
     } catch (e: any) {
       showToast(e?.message || 'Benchmark test failed.');
@@ -347,12 +354,13 @@ export const AdminDashboard: React.FC = () => {
   const handleRunDbRepair = async () => {
     setIsRepairing(true);
     try {
-      const res = await fetch('/api/db/repair', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        setRepairResult(data);
-        showToast(data.message);
+      const result = await safeFetchJson<any>('/api/db/repair', { method: 'POST' });
+      if (result.isJson && result.data && result.data.success) {
+        setRepairResult(result.data);
+        showToast(result.data.message);
         handleManualSync();
+      } else {
+        showToast(result.data?.message || result.message || 'Repair completed.');
       }
     } catch (e: any) {
       showToast(e?.message || 'Database repair failed.');
@@ -365,10 +373,9 @@ export const AdminDashboard: React.FC = () => {
     setSelectedInspectTable(tableName);
     setIsLoadingInspectRecords(true);
     try {
-      const res = await fetch(`/api/db/table-records/${tableName}`);
-      const data = await res.json();
-      if (data.success) {
-        setInspectRecords(data.records || []);
+      const result = await safeFetchJson<any>(`/api/db/table-records/${tableName}`);
+      if (result.isJson && result.data && result.data.success) {
+        setInspectRecords(result.data.records || []);
       }
     } catch (e) {
       console.error(e);
@@ -390,18 +397,17 @@ export const AdminDashboard: React.FC = () => {
       try {
         const text = e.target?.result as string;
         const parsed = JSON.parse(text);
-        const res = await fetch('/api/db/import-backup', {
+        const result = await safeFetchJson<any>('/api/db/import-backup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ backupData: parsed })
         });
-        const data = await res.json();
-        if (data.success) {
-          setImportBackupSuccess(data.message);
+        if (result.isJson && result.data && result.data.success) {
+          setImportBackupSuccess(result.data.message);
           showToast('Database backup successfully restored!');
           handleManualSync();
         } else {
-          setImportBackupError(data.message || 'Failed to restore backup file.');
+          setImportBackupError(result.data?.message || result.message || 'Failed to restore backup file.');
         }
       } catch (err: any) {
         setImportBackupError('Invalid JSON file format. Please upload a valid Bete Finder backup.');

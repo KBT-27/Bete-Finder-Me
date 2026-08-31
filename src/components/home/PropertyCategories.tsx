@@ -1,6 +1,7 @@
 import React from 'react';
 import { 
   Building, 
+  Building2,
   Home, 
   Layers, 
   SquareAsterisk, 
@@ -28,6 +29,12 @@ export const PropertyCategories: React.FC = () => {
       titleKey: 'catVilla',
       icon: <Castle className="w-6 h-6" />,
       color: 'bg-amber-50 text-amber-600 border-amber-200'
+    },
+    {
+      type: 'Floor House',
+      titleKey: 'catFloorHouse',
+      icon: <Building2 className="w-6 h-6" />,
+      color: 'bg-violet-50 text-violet-600 border-violet-200'
     },
     {
       type: 'Condominium',

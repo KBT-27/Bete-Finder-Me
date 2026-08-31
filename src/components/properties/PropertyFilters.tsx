@@ -34,6 +34,7 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({ onCloseMobile 
   const propertyTypes: PropertyType[] = [
     'Apartment',
     'Villa',
+    'Floor House',
     'Condominium',
     'Studio',
     'Commercial',

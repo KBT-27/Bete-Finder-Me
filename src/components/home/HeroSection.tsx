@@ -44,6 +44,7 @@ export const HeroSection: React.FC = () => {
   const propertyTypes: PropertyType[] = [
     'Apartment',
     'Villa',
+    'Floor House',
     'Condominium',
     'Studio',
     'Commercial',
