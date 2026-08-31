@@ -170,3 +170,44 @@ export interface PaymentRequest {
   reviewedBy?: string;
   expiresAt?: string;
 }
+
+export interface AdminPermissions {
+  isSuspended: boolean;
+  canApprovePayments: boolean;
+  canDeleteProperties: boolean;
+  canVerifyProperties: boolean;
+  canViewUserDatabase: boolean;
+  canExportBackups: boolean;
+  canBroadcastNotices: boolean;
+}
+
+export interface SubAdmin {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  password?: string;
+  role: 'full_admin' | 'payment_officer' | 'listing_moderator' | 'regional_inspector';
+  assignedSubcity: string;
+  permissions: AdminPermissions;
+  status: 'active' | 'suspended';
+  createdAt: string;
+  lastLogin?: string;
+}
+
+export interface AdminAuditLog {
+  id: string;
+  timestamp: string;
+  actor: string;
+  action: string;
+  details: string;
+  category: 'payment' | 'property' | 'user' | 'security' | 'system';
+  severity: 'info' | 'warning' | 'success' | 'danger';
+}
+
+export interface AdminControllerConfig {
+  adminPermissions: AdminPermissions;
+  adminBroadcastNotice: string;
+  subAdmins: SubAdmin[];
+  auditLogs: AdminAuditLog[];
+}

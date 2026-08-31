@@ -196,14 +196,14 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setIsNeonConnected(Boolean(json.connectedNeon));
         setLastDbSyncTimestamp(Date.now());
 
-        // Update properties
-        if (remote.properties && Array.isArray(remote.properties) && remote.properties.length > 0) {
+        // Update properties (reflects additions and deletions across all devices)
+        if (Array.isArray(remote.properties)) {
           setProperties(remote.properties);
           localStorage.setItem('bete_finder_properties', JSON.stringify(remote.properties));
         }
 
         // Update payment requests
-        if (remote.paymentRequests && Array.isArray(remote.paymentRequests)) {
+        if (Array.isArray(remote.paymentRequests)) {
           setPaymentRequests(remote.paymentRequests);
           localStorage.setItem('bete_finder_payment_requests', JSON.stringify(remote.paymentRequests));
         }
@@ -232,19 +232,27 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, []);
 
-  // Initial Sync and Periodic Poll (every 10s and on window focus)
+  // Initial Sync and Real-Time Multi-Device Periodic Poll (every 3.5s and on window focus/visibility)
   useEffect(() => {
     syncWithDatabase();
 
-    const handleFocus = () => {
+    const handleSyncTrigger = () => {
       syncWithDatabase();
     };
 
-    window.addEventListener('focus', handleFocus);
-    const interval = setInterval(syncWithDatabase, 12000);
+    window.addEventListener('focus', handleSyncTrigger);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        syncWithDatabase();
+      }
+    });
+    window.addEventListener('online', handleSyncTrigger);
+
+    const interval = setInterval(syncWithDatabase, 3500);
 
     return () => {
-      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('focus', handleSyncTrigger);
+      window.removeEventListener('online', handleSyncTrigger);
       clearInterval(interval);
     };
   }, [syncWithDatabase]);
@@ -314,6 +322,14 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       return true;
     }).sort((a, b) => {
+      // 1. Plan Priority Boost (VIP = 3, Premium = 2, Basic = 1, Free = 0)
+      const aPlanScore = a.payPlan === 'vip' ? 3 : a.payPlan === 'premium' ? 2 : a.payPlan === 'basic' ? 1 : 0;
+      const bPlanScore = b.payPlan === 'vip' ? 3 : b.payPlan === 'premium' ? 2 : b.payPlan === 'basic' ? 1 : 0;
+      if (aPlanScore !== bPlanScore) {
+        return bPlanScore - aPlanScore;
+      }
+
+      // 2. Featured spots
       if (a.isFeatured && !b.isFeatured) return -1;
       if (!a.isFeatured && b.isFeatured) return 1;
 
@@ -566,10 +582,13 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }));
 
     const resolvedPlanId = req.planId === 'boost' ? 'premium' : req.planId;
+    const isVip = resolvedPlanId === 'vip';
+    const isPremium = resolvedPlanId === 'premium';
+    const isBasic = resolvedPlanId === 'basic';
 
     if (user && (user.id === req.userId || user.email.toLowerCase() === req.userEmail.toLowerCase())) {
       updateUser({
-        activePlan: resolvedPlanId as any,
+        activePlan: (isVip ? 'vip' : isPremium ? 'premium' : 'basic') as any,
         planExpiresAt: expiresAt,
         planStartedAt: new Date().toISOString()
       });
@@ -580,9 +599,9 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         return {
           ...p,
           isVerified: true,
-          isFeatured: req.planId === 'vip' || req.planId === 'premium' || req.planId === 'boost',
-          payPlan: (resolvedPlanId === 'basic' || resolvedPlanId === 'premium' || resolvedPlanId === 'vip') ? resolvedPlanId : 'premium',
-          payPlanName: req.planName
+          isFeatured: isVip || isPremium,
+          payPlan: (isVip ? 'vip' : isPremium ? 'premium' : 'basic') as any,
+          payPlanName: req.planName || (isVip ? 'VIP TOP+ Package' : isPremium ? 'Premium Package' : 'Basic Package')
         };
       }
       return p;

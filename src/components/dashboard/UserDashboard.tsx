@@ -117,13 +117,13 @@ export const UserDashboard: React.FC = () => {
                       ? 'bg-blue-100 text-blue-900 border-blue-300'
                       : 'bg-slate-100 text-slate-700 border-slate-200'
                   }`}>
-                    {user.activePlan || 'Free Plan'}
+                    {user.activePlan === 'vip' ? '👑 VIP TOP+ Package' : user.activePlan === 'premium' ? '⭐ Premium Package' : user.activePlan === 'basic' ? '⚡ Basic Package' : 'Free Basic Plan'}
                   </span>
 
                   {daysRemaining !== null && daysRemaining > 0 && (
                     <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      <span>{daysRemaining} day{daysRemaining > 1 ? 's' : ''} left</span>
+                      <span>{daysRemaining} day{daysRemaining > 1 ? 's' : ''} remaining</span>
                     </span>
                   )}
                 </div>
@@ -131,13 +131,13 @@ export const UserDashboard: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-auto">
-              {!user.activePlan && (
+              {(!user.activePlan || user.activePlan === 'free') && (
                 <button
                   onClick={() => setCurrentView('pricing')}
                   className="px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Sparkles className="w-4 h-4" />
-                  <span>Upgrade Plan</span>
+                  <span>Activate Listing Package</span>
                 </button>
               )}
               <button
@@ -150,6 +150,178 @@ export const UserDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+
+        {/* System Package Automation & Instructions Card (Active when user has Basic, Premium, or VIP package) */}
+        {user.activePlan && user.activePlan !== 'free' && (
+          <div className="bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-800 mb-8 relative overflow-hidden">
+            <div className={`absolute top-0 right-0 w-80 h-80 rounded-full blur-3xl pointer-events-none -mr-16 -mt-16 ${
+              user.activePlan === 'vip' ? 'bg-amber-500/15' : user.activePlan === 'premium' ? 'bg-purple-500/15' : 'bg-blue-500/15'
+            }`}></div>
+
+            <div className="relative z-10">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black ${
+                    user.activePlan === 'vip' ? 'bg-amber-500 text-slate-950' : user.activePlan === 'premium' ? 'bg-purple-600 text-white' : 'bg-blue-600 text-white'
+                  }`}>
+                    {user.activePlan === 'vip' ? <Crown className="w-5 h-5" /> : user.activePlan === 'premium' ? <Sparkles className="w-5 h-5" /> : <Zap className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-400">
+                      Automated System Service Status
+                    </span>
+                    <h2 className="text-lg sm:text-xl font-black text-white">
+                      Active By The System : {user.activePlan === 'vip' ? 'VIP TOP+ Maximum Exposure' : user.activePlan === 'premium' ? 'Premium 5x Priority Package' : 'Basic 2x Accelerated Package'}
+                    </h2>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>100% Accepted by Owner & System Active</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Instructions & System Automation List */}
+              <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/60">
+                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-amber-400 mb-3 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>System Automated Instructions & Perks:</span>
+                  </h3>
+                  
+                  <ul className="space-y-2 text-xs text-slate-200">
+                    {user.activePlan === 'basic' && (
+                      <>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Up to 2 times more clients</strong> for your ads</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Promotion in search results and categories</strong> with priority ranking</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Auto-renew of ads every 48 hours</strong> to keep listings on top</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Direct call & Telegram inquiries</strong> enabled for fast client reach</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Standard photo gallery</strong> with high resolution display</span>
+                        </li>
+                      </>
+                    )}
+
+                    {user.activePlan === 'premium' && (
+                      <>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Up to 5 times more clients</strong> for your ads</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Promotion in search results and categories</strong> ahead of standard ads</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Auto-renew ads every 24 hours</strong> daily fresh boost</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>5 TOP+ featured listing spots</strong> on category pages</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Priority customer inquiries badge</strong> for trusted landlords</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span><strong>Telebirr instant payment activation</strong> with direct proof receipt</span>
+                        </li>
+                      </>
+                    )}
+
+                    {user.activePlan === 'vip' && (
+                      <>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span><strong>Up to 7 times more clients</strong> for ads (Maximum reach)</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span><strong>Promotion in search results and categories</strong> at the absolute top</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span><strong>Auto-renew ads every 12 hours</strong> twice daily continuous freshness</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span><strong>10 VIP TOP+ maximum exposure spots</strong> across the platform</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span><strong>100% Verified by the Owner badge</strong> official golden crown shield</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span><strong>Top homepage banner & carousel spotlight</strong> high visibility</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                          <span><strong>Direct Telegram & Phone VIP concierge</strong> priority client inquiries</span>
+                        </li>
+                      </>
+                    )}
+                  </ul>
+                </div>
+
+                <div className="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/60 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-300 mb-2">
+                      Live Listing Optimization Status:
+                    </h3>
+                    <div className="space-y-2.5 text-xs text-slate-300">
+                      <div className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-xl border border-slate-700/40">
+                        <span className="text-slate-400">Auto-Renewal Frequency:</span>
+                        <strong className="text-emerald-400 font-mono font-black">
+                          {user.activePlan === 'vip' ? 'Every 12 Hours' : user.activePlan === 'premium' ? 'Every 24 Hours' : 'Every 48 Hours'}
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-xl border border-slate-700/40">
+                        <span className="text-slate-400">Search Promotion Multiplier:</span>
+                        <strong className="text-amber-400 font-mono font-black">
+                          {user.activePlan === 'vip' ? '7x Priority Reach' : user.activePlan === 'premium' ? '5x Priority Reach' : '2x Priority Reach'}
+                        </strong>
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-xl border border-slate-700/40">
+                        <span className="text-slate-400">Total Landlord Listings:</span>
+                        <strong className="text-white font-bold">{userPostedProperties.length} Properties Active</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-700/40 flex items-center justify-between text-xs">
+                    <span className="text-slate-400">Need more spots or custom upgrades?</span>
+                    <button
+                      onClick={() => setCurrentView('pricing')}
+                      className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>Change Plan</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Dashboard Tabs Bar */}
         <div className="flex items-center gap-2 border-b border-slate-200 pb-3 mb-8 overflow-x-auto scrollbar-none">

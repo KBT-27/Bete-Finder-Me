@@ -47,7 +47,15 @@ import {
   MapPin,
   CheckCheck,
   TrendingUp,
-  FileText
+  FileText,
+  Key,
+  Upload,
+  Wrench,
+  Cpu,
+  Terminal,
+  Radio,
+  Share2,
+  HelpCircle
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -62,6 +70,8 @@ import {
   getOwnerCredentials
 } from '../../lib/passwords';
 import { PaymentRequest, Property } from '../../types';
+import { AdminControllerTab } from './AdminControllerTab';
+import { getAdminControllerConfig, logAdminActivity } from '../../lib/adminController';
 
 export const AdminDashboard: React.FC = () => {
   const { t, language } = useLanguage();
@@ -98,9 +108,16 @@ export const AdminDashboard: React.FC = () => {
 
   const isOwner = role === 'owner';
 
+  // Controller config for live permissions, suspension check and owner broadcast notice
+  const [controllerConfig, setControllerConfig] = useState(getAdminControllerConfig());
+
+  useEffect(() => {
+    setControllerConfig(getAdminControllerConfig());
+  }, [lastDbSyncTimestamp]);
+
   // Navigation tab state
   const [activeAdminTab, setActiveAdminTab] = useState<
-    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'pricing_settings' | 'security' | 'sync'
+    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'admin_controller' | 'pricing_settings' | 'security' | 'sync'
   >('payments');
 
   // Search states for all modules
@@ -167,9 +184,232 @@ export const AdminDashboard: React.FC = () => {
   const [vipPrice, setVipPrice] = useState(plans.find(p => p.id === 'vip')?.price ?? 1199);
   const [pricingSaveSuccess, setPricingSaveSuccess] = useState(false);
 
+  // Database Connection String & Advanced Management State
+  const [copiedHealthReport, setCopiedHealthReport] = useState(false);
+  const [connectionStringInput, setConnectionStringInput] = useState('');
+  const [showConnInputPassword, setShowConnInputPassword] = useState(false);
+  const [isTestingConnection, setIsTestingConnection] = useState(false);
+  const [connectionTestResult, setConnectionTestResult] = useState<{ success: boolean; message: string; latencyMs?: number; pgVersion?: string } | null>(null);
+  const [isUpdatingConnection, setIsUpdatingConnection] = useState(false);
+  const [activeDbInfo, setActiveDbInfo] = useState<{
+    isConnected: boolean;
+    maskedUrl: string;
+    rawUrl?: string;
+    engineType: string;
+    storageLocation: string;
+  } | null>(null);
+
+  // Database Benchmark & Diagnostics State
+  const [isBenchmarking, setIsBenchmarking] = useState(false);
+  const [benchmarkResult, setBenchmarkResult] = useState<{
+    totalRoundTripMs: number;
+    readLatencyMs: number;
+    writeLatencyMs: number;
+    status: string;
+    engine: string;
+  } | null>(null);
+
+  // Database Self-Healing Repair State
+  const [isRepairing, setIsRepairing] = useState(false);
+  const [repairResult, setRepairResult] = useState<{
+    message: string;
+    fixedItemsCount: number;
+    repairLog: string[];
+    timestamp: number;
+  } | null>(null);
+
+  // Table Records Inspector State
+  const [selectedInspectTable, setSelectedInspectTable] = useState<string>('properties');
+  const [inspectRecords, setInspectRecords] = useState<any[]>([]);
+  const [isLoadingInspectRecords, setIsLoadingInspectRecords] = useState(false);
+  const [inspectSearchQuery, setInspectSearchQuery] = useState('');
+
+  // Backup Import State
+  const [isImportingBackup, setIsImportingBackup] = useState(false);
+  const [importBackupError, setImportBackupError] = useState<string | null>(null);
+  const [importBackupSuccess, setImportBackupSuccess] = useState<string | null>(null);
+
   const showToast = (msg: string) => {
     setActionSuccessToast(msg);
     setTimeout(() => setActionSuccessToast(null), 4500);
+  };
+
+  // Fetch live connection info on mount / tab visit
+  const loadConnectionInfo = async () => {
+    try {
+      const res = await fetch('/api/db/connection-info');
+      const data = await res.json();
+      if (data.success) {
+        setActiveDbInfo(data);
+        if (data.rawUrl && !connectionStringInput) {
+          setConnectionStringInput(data.rawUrl);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load DB connection info', e);
+    }
+  };
+
+  useEffect(() => {
+    loadConnectionInfo();
+  }, []);
+
+  const handleTestConnection = async () => {
+    if (!connectionStringInput.trim()) {
+      setConnectionTestResult({
+        success: false,
+        message: 'Please type or paste a valid PostgreSQL / Neon connection string.'
+      });
+      return;
+    }
+    setIsTestingConnection(true);
+    setConnectionTestResult(null);
+    try {
+      const res = await fetch('/api/db/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionString: connectionStringInput.trim() })
+      });
+      const data = await res.json();
+      setConnectionTestResult(data);
+      if (data.success) {
+        showToast(`Connection Verified! Latency: ${data.latencyMs}ms`);
+      }
+    } catch (err: any) {
+      setConnectionTestResult({
+        success: false,
+        message: err?.message || 'Connection test timed out or failed.'
+      });
+    } finally {
+      setIsTestingConnection(false);
+    }
+  };
+
+  const handleApplyConnectionString = async () => {
+    if (!connectionStringInput.trim()) {
+      showToast('Please enter a PostgreSQL connection string.');
+      return;
+    }
+    setIsUpdatingConnection(true);
+    try {
+      const res = await fetch('/api/db/update-connection-string', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ connectionString: connectionStringInput.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast('Database connection string updated and dataset migrated successfully!');
+        loadConnectionInfo();
+        handleManualSync();
+      } else {
+        showToast(data.message || 'Failed to update database connection string.');
+      }
+    } catch (err: any) {
+      showToast(err?.message || 'Error updating connection string.');
+    } finally {
+      setIsUpdatingConnection(false);
+    }
+  };
+
+  const handleResetConnectionString = async () => {
+    if (!window.confirm('Reset database connection to internal persistent storage?')) return;
+    try {
+      const res = await fetch('/api/db/reset-connection', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setConnectionStringInput('');
+        loadConnectionInfo();
+        handleManualSync();
+        showToast('Database reset to internal persistent storage.');
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Failed to reset connection.');
+    }
+  };
+
+  const handleRunBenchmark = async () => {
+    setIsBenchmarking(true);
+    try {
+      const res = await fetch('/api/db/benchmark', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setBenchmarkResult(data);
+        showToast(`Benchmark completed: ${data.totalRoundTripMs}ms roundtrip`);
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Benchmark test failed.');
+    } finally {
+      setIsBenchmarking(false);
+    }
+  };
+
+  const handleRunDbRepair = async () => {
+    setIsRepairing(true);
+    try {
+      const res = await fetch('/api/db/repair', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        setRepairResult(data);
+        showToast(data.message);
+        handleManualSync();
+      }
+    } catch (e: any) {
+      showToast(e?.message || 'Database repair failed.');
+    } finally {
+      setIsRepairing(false);
+    }
+  };
+
+  const handleLoadInspectRecords = async (tableName: string) => {
+    setSelectedInspectTable(tableName);
+    setIsLoadingInspectRecords(true);
+    try {
+      const res = await fetch(`/api/db/table-records/${tableName}`);
+      const data = await res.json();
+      if (data.success) {
+        setInspectRecords(data.records || []);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoadingInspectRecords(false);
+    }
+  };
+
+  const handleImportBackupFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImportBackupError(null);
+    setImportBackupSuccess(null);
+    setIsImportingBackup(true);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const text = e.target?.result as string;
+        const parsed = JSON.parse(text);
+        const res = await fetch('/api/db/import-backup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ backupData: parsed })
+        });
+        const data = await res.json();
+        if (data.success) {
+          setImportBackupSuccess(data.message);
+          showToast('Database backup successfully restored!');
+          handleManualSync();
+        } else {
+          setImportBackupError(data.message || 'Failed to restore backup file.');
+        }
+      } catch (err: any) {
+        setImportBackupError('Invalid JSON file format. Please upload a valid Bete Finder backup.');
+      } finally {
+        setIsImportingBackup(false);
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleManualSync = async () => {
@@ -225,6 +465,7 @@ export const AdminDashboard: React.FC = () => {
       `=== BETE FINDER SYSTEM & DATABASE DIAGNOSTICS ===`,
       `Timestamp: ${new Date().toISOString()}`,
       `Database Engine: ${isNeonConnected ? 'Neon PostgreSQL (Production Live)' : 'Server Persistent Storage'}`,
+      `Connection Target: ${activeDbInfo?.maskedUrl || 'Server Persistent Storage'}`,
       `Sync Status: Active & Operational`,
       `Last Sync Time: ${new Date(lastDbSyncTimestamp).toLocaleTimeString()}`,
       `Total Properties: ${properties.length} (${properties.filter(p => p.isVerified).length} Verified, ${properties.filter(p => !p.isVerified).length} Pending)`,
@@ -236,8 +477,26 @@ export const AdminDashboard: React.FC = () => {
       `=================================================`
     ].join('\n');
 
-    navigator.clipboard?.writeText(diagnostics);
-    showToast('Database diagnostics summary copied to clipboard!');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(diagnostics);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = diagnostics;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+    } catch (e) {
+      console.warn('Clipboard write fallback', e);
+    }
+
+    setCopiedHealthReport(true);
+    showToast('Copied! System and Database Diagnostics copied to clipboard.');
+    setTimeout(() => {
+      setCopiedHealthReport(false);
+    }, 3000);
   };
 
   // -------------------------------------------------------------
@@ -418,11 +677,30 @@ export const AdminDashboard: React.FC = () => {
   // Property Actions & Plan Tier Change Handler
   // -------------------------------------------------------------
   const handleToggleVerified = (id: string, current: boolean) => {
+    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
+    if (!isOwner && !controllerConfig.adminPermissions.canVerifyProperties) {
+      showToast('❌ Permission denied: You do not have authority to verify listings.');
+      return;
+    }
     verifyProperty(id, !current);
+    logAdminActivity(
+      isOwner ? 'Owner (Kaleb Bereket)' : 'Admin',
+      !current ? 'Listing Verified' : 'Listing Unverified',
+      `Property ID ${id} verification status changed to ${!current}`,
+      'property',
+      'info'
+    );
     showToast(!current ? 'Property verified and published!' : 'Property marked as unverified.');
   };
 
   const handleToggleFeatured = (id: string, current: boolean) => {
+    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
     updateProperty(id, { isFeatured: !current });
     showToast(!current ? 'Property marked as Featured!' : 'Featured status removed.');
   };
@@ -432,6 +710,10 @@ export const AdminDashboard: React.FC = () => {
     newPlan: 'free' | 'basic' | 'premium' | 'vip',
     ownerEmail: string
   ) => {
+    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
     const isVip = newPlan === 'vip';
     const isPremium = newPlan === 'premium';
     const isBasic = newPlan === 'basic';
@@ -450,6 +732,14 @@ export const AdminDashboard: React.FC = () => {
       reloadUsers();
     }
 
+    logAdminActivity(
+      isOwner ? 'Owner (Kaleb Bereket)' : 'Admin',
+      'Plan Tier Changed',
+      `Property ID ${propId} upgraded/modified to ${newPlan.toUpperCase()} tier`,
+      'property',
+      'success'
+    );
+
     if (isVip) {
       showToast('👑 VIP TOP+ Package assigned! Property received Priority 1 ranking, glowing aura, and Direct Owner Unlock.');
     } else if (isPremium) {
@@ -465,6 +755,10 @@ export const AdminDashboard: React.FC = () => {
   // Stop/Cancel Paid User Plan Handler
   // -------------------------------------------------------------
   const handleStopUserPlan = async (userEmail: string, userName: string) => {
+    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
     if (window.confirm(`Are you sure you want to stop and cancel the active plan for ${userName} (${userEmail})? This will revert their listings and account to Free.`)) {
       stopRegisteredUserPlan(userEmail);
 
@@ -479,6 +773,13 @@ export const AdminDashboard: React.FC = () => {
       });
 
       reloadUsers();
+      logAdminActivity(
+        isOwner ? 'Owner (Kaleb Bereket)' : 'Admin',
+        'Plan Cancelled',
+        `Cancelled active subscription plan for ${userName} (${userEmail})`,
+        'user',
+        'warning'
+      );
       showToast(`Active plan for ${userName} has been stopped and cancelled.`);
       handleManualSync();
     }
@@ -495,6 +796,13 @@ export const AdminDashboard: React.FC = () => {
     deleteRegisteredAccount(email);
     setUserToDelete(null);
     reloadUsers();
+    logAdminActivity(
+      'Owner (Kaleb Bereket)',
+      'User Deleted',
+      `Permanently deleted registered account ${name} (${email}) from database`,
+      'user',
+      'danger'
+    );
     showToast(`User account "${name}" (${email}) was permanently deleted from the database.`);
     handleManualSync();
   };
@@ -503,19 +811,53 @@ export const AdminDashboard: React.FC = () => {
   // Payment Request Handlers
   // -------------------------------------------------------------
   const handleApprove = (requestId: string) => {
+    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
+    if (!isOwner && !controllerConfig.adminPermissions.canApprovePayments) {
+      showToast('❌ Permission denied: You do not have authority to approve payments.');
+      return;
+    }
     approvePaymentRequest(requestId);
     reloadUsers();
+    logAdminActivity(
+      isOwner ? 'Owner (Kaleb Bereket)' : 'Admin',
+      'Payment Approved',
+      `Approved Telebirr payment transaction for request ID ${requestId}`,
+      'payment',
+      'success'
+    );
     showToast('Payment approved and subscription activated!');
   };
 
   const handleDeletePayment = (requestId: string) => {
+    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
     if (window.confirm('Are you sure you want to delete this payment record?')) {
       deletePaymentRequest(requestId);
+      logAdminActivity(
+        isOwner ? 'Owner (Kaleb Bereket)' : 'Admin',
+        'Payment Record Deleted',
+        `Deleted payment record ID ${requestId}`,
+        'payment',
+        'warning'
+      );
       showToast('Payment record deleted.');
     }
   };
 
   const handleOpenRejectModal = (requestId: string) => {
+    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
+    if (!isOwner && !controllerConfig.adminPermissions.canApprovePayments) {
+      showToast('❌ Permission denied: You do not have authority to reject payments.');
+      return;
+    }
     setRejectingRequestId(requestId);
     setRejectionReasonInput('');
   };
@@ -523,9 +865,14 @@ export const AdminDashboard: React.FC = () => {
   const handleConfirmReject = (e: React.FormEvent) => {
     e.preventDefault();
     if (!rejectingRequestId) return;
-    rejectPaymentRequest(
-      rejectingRequestId, 
-      rejectionReasonInput.trim() || `Telebirr transaction ID could not be confirmed on account ${telebirrSettings.accountNumber}.`
+    const reasonText = rejectionReasonInput.trim() || `Telebirr transaction ID could not be confirmed on account ${telebirrSettings.accountNumber}.`;
+    rejectPaymentRequest(rejectingRequestId, reasonText);
+    logAdminActivity(
+      isOwner ? 'Owner (Kaleb Bereket)' : 'Admin',
+      'Payment Rejected',
+      `Rejected payment request ID ${rejectingRequestId}. Reason: "${reasonText}"`,
+      'payment',
+      'warning'
     );
     setRejectingRequestId(null);
     setRejectionReasonInput('');
@@ -670,6 +1017,41 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Secondary Admin Suspension Emergency Alert (Visible to Admin when suspended by Owner) */}
+        {!isOwner && controllerConfig.adminPermissions.isSuspended && (
+          <div className="mb-8 p-5 bg-rose-500 text-white rounded-3xl shadow-xl flex items-start gap-4 animate-in slide-in-from-top-4 border-2 border-rose-600">
+            <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-6 h-6 text-white" />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-black text-sm sm:text-base">Administrative Access Temporarily Suspended by Owner</h3>
+              <p className="text-xs text-rose-100 leading-relaxed">
+                Owner Kaleb Bereket has engaged the emergency administrative lock. Operational privileges (Approvals, Property Deletion, Verification modifications) are suspended until re-authorized.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Owner Broadcast Directive Banner */}
+        {controllerConfig.adminBroadcastNotice && (
+          <div className="mb-8 p-4 sm:p-5 bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 rounded-3xl shadow-md flex items-center gap-3 border border-amber-600/30 animate-in fade-in">
+            <div className="w-10 h-10 rounded-2xl bg-slate-950 text-amber-400 flex items-center justify-center shrink-0 shadow-xs font-black">
+              📢
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider bg-slate-950 text-amber-300 px-2 py-0.5 rounded-md">
+                  Owner Directive
+                </span>
+                <span className="text-[11px] font-bold text-slate-900 font-mono">From: Kaleb Bereket</span>
+              </div>
+              <p className="text-xs sm:text-sm font-black text-slate-950 mt-1">
+                "{controllerConfig.adminBroadcastNotice}"
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Key Metrics */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
@@ -765,6 +1147,19 @@ export const AdminDashboard: React.FC = () => {
             >
               <Database className="w-4 h-4 text-slate-950" />
               <span>Database Registered Users ({usersList.length})</span>
+            </button>
+          )}
+
+          {/* Tab: Admin Controller Suite (Owner only) */}
+          {isOwner && (
+            <button
+              onClick={() => setActiveAdminTab('admin_controller')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'admin_controller' ? 'bg-purple-700 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+              }`}
+            >
+              <Sliders className="w-4 h-4 text-purple-300" />
+              <span>Admin Controller</span>
             </button>
           )}
 
@@ -1948,6 +2343,16 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ============================================================== */}
+        {/* TAB: Owner Admin Controller Suite (Sub-Admins, Authorities, Audits) */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'admin_controller' && isOwner && (
+          <AdminControllerTab
+            onShowToast={showToast}
+            adminCredentials={adminCredentials}
+          />
+        )}
+
+        {/* ============================================================== */}
         {/* TAB 7: Database & Multi-Device Cross Sync (Master Analytics & Details) */}
         {/* ============================================================== */}
         {activeAdminTab === 'sync' && (() => {
@@ -2075,11 +2480,365 @@ export const AdminDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleCopyDiagnostics}
-                      className="px-5 py-2 bg-slate-800/80 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl border border-slate-700/80 flex items-center justify-center gap-2 cursor-pointer transition-all"
+                      className={`px-5 py-2 font-bold text-xs rounded-xl border flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                        copiedHealthReport
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-400 shadow-md shadow-emerald-500/20'
+                          : 'bg-slate-800/80 hover:bg-slate-700 text-slate-300 border-slate-700/80'
+                      }`}
                     >
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Copy Health Report</span>
+                      {copiedHealthReport ? (
+                        <>
+                          <CheckCheck className="w-4 h-4 text-slate-950 font-bold animate-bounce" />
+                          <span className="font-black text-slate-950">Copied!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-400" />
+                          <span>Copy Health Report</span>
+                        </>
+                      )}
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* ============================================================== */}
+              {/* Advanced Database Connection & Engine Configuration Panel */}
+              {/* ============================================================== */}
+              <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-slate-900 text-emerald-400 flex items-center justify-center">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="font-black text-base text-slate-900">PostgreSQL / Neon Connection String Manager</h3>
+                      <p className="text-xs text-slate-500">Configure or switch the live cloud database connection string across all devices</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold ${
+                      activeDbInfo?.isConnected 
+                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                        : 'bg-amber-100 text-amber-800 border border-amber-300'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${activeDbInfo?.isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`}></span>
+                      <span>{activeDbInfo?.engineType || 'Server Persistent Storage'}</span>
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        PostgreSQL Connection String (URI):
+                      </label>
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        Format: postgresql://[user]:[password]@[host]:[port]/[database]?sslmode=require
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type={showConnInputPassword ? 'text' : 'password'}
+                          value={connectionStringInput}
+                          onChange={(e) => setConnectionStringInput(e.target.value)}
+                          placeholder="postgresql://username:password@ep-example-123.eu-central-1.aws.neon.tech/neondb?sslmode=require"
+                          className="w-full pl-3 pr-24 py-2.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConnInputPassword(!showConnInputPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 text-[10px] font-bold rounded-md cursor-pointer transition-colors"
+                        >
+                          {showConnInputPassword ? 'Hide' : 'Reveal'}
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          type="button"
+                          onClick={handleTestConnection}
+                          disabled={isTestingConnection || !connectionStringInput.trim()}
+                          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                        >
+                          <Radio className={`w-3.5 h-3.5 text-slate-600 ${isTestingConnection ? 'animate-spin' : ''}`} />
+                          <span>{isTestingConnection ? 'Testing...' : 'Test Connection'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleApplyConnectionString}
+                          disabled={isUpdatingConnection || !connectionStringInput.trim()}
+                          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors disabled:opacity-50"
+                        >
+                          <Save className={`w-3.5 h-3.5 ${isUpdatingConnection ? 'animate-spin' : ''}`} />
+                          <span>{isUpdatingConnection ? 'Connecting...' : 'Save & Connect'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleResetConnectionString}
+                          className="px-3 py-2.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 text-slate-600 font-bold text-xs rounded-xl border border-slate-200 cursor-pointer transition-colors"
+                          title="Reset to local internal storage"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Test Connection Output Feedback */}
+                  {connectionTestResult && (
+                    <div className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                      connectionTestResult.success 
+                        ? 'bg-emerald-50 text-emerald-900 border-emerald-200' 
+                        : 'bg-rose-50 text-rose-900 border-rose-200'
+                    }`}>
+                      {connectionTestResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <p className="font-bold">{connectionTestResult.message}</p>
+                        {connectionTestResult.pgVersion && (
+                          <p className="text-[11px] text-slate-600 mt-0.5 font-mono">
+                            Engine: {connectionTestResult.pgVersion}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Active Target Banner */}
+                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <HardDrive className="w-4 h-4 text-slate-500" />
+                      <span className="text-slate-500 font-medium">Active Database Target:</span>
+                      <code className="bg-white px-2 py-0.5 rounded border border-slate-200 font-bold text-slate-800">
+                        {activeDbInfo?.maskedUrl || 'Internal Server JSON Engine'}
+                      </code>
+                    </div>
+                    <span className="text-slate-400 text-[11px]">
+                      Storage: {activeDbInfo?.storageLocation || 'Persistent Server Storage'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ============================================================== */}
+              {/* Database Self-Healing, Benchmarks, & Backup Restoration Suite */}
+              {/* ============================================================== */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                
+                {/* Tool 1: Real-Time Latency Benchmark */}
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Cpu className="w-4 h-4 text-emerald-600" />
+                      <h4 className="font-black text-sm text-slate-900">Live Latency Benchmark</h4>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Measures roundtrip edge query execution, write replication speed, and network latency.
+                    </p>
+
+                    {benchmarkResult && (
+                      <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Roundtrip Latency:</span>
+                          <strong className="text-emerald-700 font-mono font-bold">{benchmarkResult.totalRoundTripMs} ms</strong>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Read SELECT:</span>
+                          <span className="font-mono text-slate-800">{benchmarkResult.readLatencyMs} ms</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Write UPSERT:</span>
+                          <span className="font-mono text-slate-800">{benchmarkResult.writeLatencyMs} ms</span>
+                        </div>
+                        <div className="flex justify-between pt-1 border-t border-slate-200 text-[11px]">
+                          <span className="text-slate-500">Rating:</span>
+                          <span className="font-black text-emerald-600">{benchmarkResult.status}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRunBenchmark}
+                    disabled={isBenchmarking}
+                    className="w-full py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
+                  >
+                    <Activity className={`w-3.5 h-3.5 text-emerald-400 ${isBenchmarking ? 'animate-spin' : ''}`} />
+                    <span>{isBenchmarking ? 'Running Tests...' : 'Run Latency Benchmark'}</span>
+                  </button>
+                </div>
+
+                {/* Tool 2: Database Self-Healing & Schema Audit */}
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Wrench className="w-4 h-4 text-purple-600" />
+                      <h4 className="font-black text-sm text-slate-900">Self-Healing & Auto-Repair</h4>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Scans tables, cleans duplicate IDs, ensures Owner security credentials, and repairs integrity.
+                    </p>
+
+                    {repairResult && (
+                      <div className="mt-3 p-3 bg-purple-50 rounded-xl border border-purple-200 text-xs space-y-1">
+                        <p className="font-bold text-purple-950">{repairResult.message}</p>
+                        {repairResult.repairLog.length > 0 && (
+                          <ul className="text-[11px] text-purple-800 list-disc list-inside mt-1">
+                            {repairResult.repairLog.map((log, idx) => (
+                              <li key={idx} className="truncate">{log}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleRunDbRepair}
+                    disabled={isRepairing}
+                    className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
+                  >
+                    <ShieldCheck className={`w-3.5 h-3.5 ${isRepairing ? 'animate-spin' : ''}`} />
+                    <span>{isRepairing ? 'Repairing Database...' : 'Run Auto-Repair & Schema Audit'}</span>
+                  </button>
+                </div>
+
+                {/* Tool 3: Restore Backup (.JSON) */}
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Upload className="w-4 h-4 text-amber-600" />
+                      <h4 className="font-black text-sm text-slate-900">Restore Backup File (.JSON)</h4>
+                    </div>
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      Upload a previously exported Bete Finder master JSON backup to restore all tables.
+                    </p>
+
+                    {importBackupSuccess && (
+                      <div className="mt-3 p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-900 font-bold">
+                        {importBackupSuccess}
+                      </div>
+                    )}
+
+                    {importBackupError && (
+                      <div className="mt-3 p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 font-bold">
+                        {importBackupError}
+                      </div>
+                    )}
+                  </div>
+
+                  <label className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors text-center">
+                    <Upload className={`w-3.5 h-3.5 ${isImportingBackup ? 'animate-spin' : ''}`} />
+                    <span>{isImportingBackup ? 'Restoring Backup...' : 'Upload & Restore Backup'}</span>
+                    <input
+                      type="file"
+                      accept=".json"
+                      onChange={handleImportBackupFile}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+              </div>
+
+              {/* ============================================================== */}
+              {/* Live Database Table Records Inspector */}
+              {/* ============================================================== */}
+              <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-5 h-5 text-slate-900" />
+                    <div>
+                      <h3 className="font-black text-base text-slate-900">Live Database Table Records Inspector</h3>
+                      <p className="text-xs text-slate-500">Query and inspect live JSON and relational records in real-time</p>
+                    </div>
+                  </div>
+
+                  {/* Table Selectors */}
+                  <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+                    {[
+                      { id: 'properties', label: 'Properties' },
+                      { id: 'registered_users', label: 'Users' },
+                      { id: 'payment_requests', label: 'Payments' },
+                      { id: 'telebirr_settings', label: 'Telebirr' },
+                      { id: 'plans_config', label: 'Plans' },
+                      { id: 'admin_security', label: 'Security' }
+                    ].map((tItem) => (
+                      <button
+                        key={tItem.id}
+                        type="button"
+                        onClick={() => handleLoadInspectRecords(tItem.id)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer whitespace-nowrap ${
+                          selectedInspectTable === tItem.id
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                      >
+                        {tItem.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Search and Records Viewer */}
+                <div>
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div className="relative flex-1 max-w-sm">
+                      <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                      <input
+                        type="text"
+                        value={inspectSearchQuery}
+                        onChange={(e) => setInspectSearchQuery(e.target.value)}
+                        placeholder={`Filter ${selectedInspectTable} records...`}
+                        className="w-full pl-8 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:border-emerald-500"
+                      />
+                    </div>
+                    <span className="text-xs text-slate-500 font-bold">
+                      {inspectRecords.length > 0 ? `${inspectRecords.length} records loaded` : 'Click table button to inspect records'}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-950 text-slate-200 rounded-2xl p-4 font-mono text-xs max-h-72 overflow-y-auto border border-slate-800">
+                    {isLoadingInspectRecords ? (
+                      <div className="flex items-center justify-center py-8 text-slate-400 gap-2">
+                        <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
+                        <span>Fetching records from database...</span>
+                      </div>
+                    ) : inspectRecords.length > 0 ? (
+                      <pre className="text-[11px] leading-relaxed whitespace-pre-wrap">
+                        {JSON.stringify(
+                          inspectRecords.filter(r => {
+                            if (!inspectSearchQuery.trim()) return true;
+                            return JSON.stringify(r).toLowerCase().includes(inspectSearchQuery.toLowerCase().trim());
+                          }),
+                          null,
+                          2
+                        )}
+                      </pre>
+                    ) : (
+                      <div className="text-center py-8 text-slate-500">
+                        <p>Select any table above (e.g. Properties, Users, Payments) to load live records.</p>
+                        <button
+                          type="button"
+                          onClick={() => handleLoadInspectRecords(selectedInspectTable)}
+                          className="mt-2 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-sans font-bold cursor-pointer"
+                        >
+                          Load {selectedInspectTable} Records
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>

@@ -101,11 +101,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // Sync on mount and periodically
+  // Sync on mount, visibility change, and periodically across devices
   useEffect(() => {
     syncAuthWithDatabase();
-    const interval = setInterval(syncAuthWithDatabase, 15000);
-    return () => clearInterval(interval);
+
+    const handleSyncTrigger = () => {
+      syncAuthWithDatabase();
+    };
+
+    window.addEventListener('focus', handleSyncTrigger);
+    window.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        syncAuthWithDatabase();
+      }
+    });
+
+    const interval = setInterval(syncAuthWithDatabase, 4000);
+    return () => {
+      window.removeEventListener('focus', handleSyncTrigger);
+      clearInterval(interval);
+    };
   }, [syncAuthWithDatabase]);
 
   // Check URL query parameters for reset token or code

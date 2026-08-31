@@ -103,30 +103,66 @@ function writeDbToFile(data: any): boolean {
 }
 
 // PostgreSQL / Neon DB Pool
+let customDbUrl: string | null = null;
 let pgPool: pg.Pool | null = null;
 let isPgConnected = false;
 
+function getDbUrl(): string | null {
+  return customDbUrl || process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL || null;
+}
+
+function maskDbUrl(url: string | null): string {
+  if (!url) return 'Not Configured (Using Server Persistent Store)';
+  try {
+    const parsed = new URL(url);
+    if (parsed.password) {
+      parsed.password = '••••••••';
+    }
+    return parsed.toString();
+  } catch (e) {
+    return url.replace(/:\/\/[^:]+:([^@]+)@/, '://user:••••••••@');
+  }
+}
+
 function getPgPool(): pg.Pool | null {
-  const dbUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL;
+  const dbUrl = getDbUrl();
   if (!dbUrl) return null;
   if (!pgPool) {
     try {
       pgPool = new pg.Pool({
         connectionString: dbUrl,
         ssl: { rejectUnauthorized: false },
-        connectionTimeoutMillis: 5000
+        connectionTimeoutMillis: 7000
       });
     } catch (e) {
-      console.error('[Neon Pool Init Error]:', e);
+      console.error('[Postgres Pool Init Error]:', e);
     }
   }
   return pgPool;
 }
 
+// Reset or change PG Pool
+async function switchPgPool(newUrl: string | null) {
+  if (pgPool) {
+    try {
+      await pgPool.end();
+    } catch (e) {
+      // ignore
+    }
+    pgPool = null;
+  }
+  customDbUrl = newUrl;
+  isPgConnected = false;
+  if (newUrl) {
+    return await initNeonDb();
+  }
+  return true;
+}
+
 // Initialize PostgreSQL / Neon table
 async function initNeonDb() {
   const pool = getPgPool();
-  if (!pool) return;
+  if (!pool) return false;
   try {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS bete_finder_store (
@@ -136,9 +172,9 @@ async function initNeonDb() {
       );
     `);
     isPgConnected = true;
-    console.log('[Neon DB] Successfully connected and verified bete_finder_store table.');
+    console.log('[PostgreSQL DB] Successfully connected and verified bete_finder_store table.');
 
-    // Seed initial master document if empty in Neon
+    // Seed initial master document if empty in Postgres
     const checkRes = await pool.query(`SELECT key FROM bete_finder_store WHERE key = 'master_db' LIMIT 1;`);
     if (checkRes.rows.length === 0) {
       const localData = readDbFromFile();
@@ -146,11 +182,13 @@ async function initNeonDb() {
         `INSERT INTO bete_finder_store (key, data, updated_at) VALUES ('master_db', $1, NOW()) ON CONFLICT (key) DO NOTHING;`,
         [JSON.stringify(localData)]
       );
-      console.log('[Neon DB] Seeded master data into Neon database from local store.');
+      console.log('[PostgreSQL DB] Seeded master data into database from local store.');
     }
+    return true;
   } catch (err: any) {
     isPgConnected = false;
-    console.warn('[Neon DB] Connection notice (proceeding with persistent server storage):', err?.message || err);
+    console.warn('[PostgreSQL DB] Connection notice (proceeding with persistent server storage):', err?.message || err);
+    return false;
   }
 }
 
@@ -167,13 +205,13 @@ async function persistMasterData(dbData: any): Promise<boolean> {
       );
       isPgConnected = true;
     } catch (err: any) {
-      console.error('[Neon DB Sync Error]:', err?.message || err);
+      console.error('[PostgreSQL DB Sync Error]:', err?.message || err);
     }
   }
   return fileOk;
 }
 
-// Load complete master data with Neon priority and file fallback
+// Load complete master data with Postgres priority and file fallback
 async function fetchMasterData(): Promise<any> {
   const pool = getPgPool();
   if (pool) {
@@ -182,12 +220,12 @@ async function fetchMasterData(): Promise<any> {
       if (res.rows.length > 0 && res.rows[0].data) {
         isPgConnected = true;
         const neonData = res.rows[0].data;
-        // Also keep local file in sync with Neon
+        // Also keep local file in sync with Postgres
         writeDbToFile(neonData);
         return neonData;
       }
     } catch (err: any) {
-      console.error('[Neon DB Fetch Error]:', err?.message || err);
+      console.error('[PostgreSQL DB Fetch Error]:', err?.message || err);
     }
   }
   return readDbFromFile();
@@ -240,7 +278,8 @@ app.get('/api/db/status', async (req, res) => {
     const data = await fetchMasterData();
     res.json({
       connectedNeon: isPgConnected && Boolean(getPgPool()),
-      hasNeonConfigured: Boolean(process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL),
+      hasNeonConfigured: Boolean(getDbUrl()),
+      currentMaskedUrl: maskDbUrl(getDbUrl()),
       totalProperties: data.properties?.length || 0,
       totalUsers: data.users?.length || 0,
       totalPayments: data.paymentRequests?.length || 0,
@@ -248,6 +287,348 @@ app.get('/api/db/status', async (req, res) => {
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: error?.message });
+  }
+});
+
+// Database Connection Info Endpoint
+app.get('/api/db/connection-info', async (req, res) => {
+  try {
+    const activeUrl = getDbUrl();
+    res.json({
+      success: true,
+      isConnected: isPgConnected && Boolean(getPgPool()),
+      hasConfiguredUrl: Boolean(activeUrl),
+      maskedUrl: maskDbUrl(activeUrl),
+      rawUrl: activeUrl || '',
+      engineType: activeUrl ? (activeUrl.includes('neon.tech') ? 'Neon Serverless Cloud' : 'PostgreSQL Cloud') : 'Server Persistent Storage',
+      storageLocation: activeUrl ? 'Cloud Database Store (Cross-Device Live)' : 'Local Persistent JSON Storage (data/bete_finder_db.json)'
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Test Connection String without saving
+app.post('/api/db/test-connection', async (req, res) => {
+  try {
+    const { connectionString } = req.body;
+    if (!connectionString || typeof connectionString !== 'string') {
+      return res.status(400).json({ success: false, message: 'Please provide a valid PostgreSQL connection string.' });
+    }
+
+    const testStartTime = Date.now();
+    const tempPool = new pg.Pool({
+      connectionString: connectionString.trim(),
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 6000
+    });
+
+    const testRes = await tempPool.query('SELECT NOW() as server_time, version() as pg_version;');
+    const latencyMs = Date.now() - testStartTime;
+    await tempPool.end();
+
+    const pgVersion = testRes.rows[0]?.pg_version || 'PostgreSQL 15+';
+    const serverTime = testRes.rows[0]?.server_time;
+
+    res.json({
+      success: true,
+      message: `Connection successful! Latency: ${latencyMs}ms. Database engine: ${pgVersion.split(' ')[0]} ${pgVersion.split(' ')[1]}`,
+      latencyMs,
+      serverTime,
+      pgVersion
+    });
+  } catch (error: any) {
+    res.status(400).json({
+      success: false,
+      message: `Connection test failed: ${error?.message || 'Unable to connect to database host.'}`
+    });
+  }
+});
+
+// Update & Apply new connection string
+app.post('/api/db/update-connection-string', async (req, res) => {
+  try {
+    const { connectionString } = req.body;
+    if (!connectionString || typeof connectionString !== 'string') {
+      return res.status(400).json({ success: false, message: 'Connection string is required.' });
+    }
+
+    const cleanedUrl = connectionString.trim();
+    // Test pool first
+    const testPool = new pg.Pool({
+      connectionString: cleanedUrl,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 7000
+    });
+    await testPool.query('SELECT 1;');
+    await testPool.end();
+
+    // Switch pool
+    await switchPgPool(cleanedUrl);
+
+    // Sync current master data to new database
+    const currentData = readDbFromFile();
+    await persistMasterData(currentData);
+
+    res.json({
+      success: true,
+      message: 'PostgreSQL database connected and master dataset migrated successfully!',
+      maskedUrl: maskDbUrl(cleanedUrl),
+      isConnected: true
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      message: `Failed to apply connection string: ${error?.message || 'Database error'}`
+    });
+  }
+});
+
+// Reset connection string back to default server store
+app.post('/api/db/reset-connection', async (req, res) => {
+  try {
+    await switchPgPool(null);
+    res.json({
+      success: true,
+      message: 'Database connection reset to internal persistent storage engine.',
+      isConnected: false
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Database Latency & Health Benchmark
+app.post('/api/db/benchmark', async (req, res) => {
+  try {
+    const pool = getPgPool();
+    const startTime = Date.now();
+
+    let readLatencyMs = 0;
+    let writeLatencyMs = 0;
+
+    if (pool && isPgConnected) {
+      // Pass 1: Ping / SELECT
+      const t1 = Date.now();
+      await pool.query('SELECT 1;');
+      readLatencyMs = Date.now() - t1;
+
+      // Pass 2: Write benchmark
+      const t2 = Date.now();
+      await pool.query(
+        `INSERT INTO bete_finder_store (key, data, updated_at) VALUES ('_benchmark_ping', $1, NOW())
+         ON CONFLICT (key) DO UPDATE SET data = EXCLUDED.data, updated_at = NOW();`,
+        [JSON.stringify({ ping: Date.now() })]
+      );
+      writeLatencyMs = Date.now() - t2;
+    } else {
+      // Local store benchmark
+      const t1 = Date.now();
+      readDbFromFile();
+      readLatencyMs = Date.now() - t1;
+
+      const t2 = Date.now();
+      writeDbToFile(readDbFromFile());
+      writeLatencyMs = Date.now() - t2;
+    }
+
+    const totalRoundTripMs = Date.now() - startTime;
+
+    res.json({
+      success: true,
+      totalRoundTripMs,
+      readLatencyMs,
+      writeLatencyMs,
+      status: totalRoundTripMs < 100 ? 'Ultra-Fast (Optimal)' : totalRoundTripMs < 300 ? 'Good' : 'Acceptable',
+      engine: isPgConnected ? 'Neon PostgreSQL (Cloud)' : 'Local Fast NVMe Store'
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Database Self-Healing & Diagnostics Utility
+app.post('/api/db/repair', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    let fixedItemsCount = 0;
+    const repairLog: string[] = [];
+
+    // 1. Ensure required arrays exist
+    if (!Array.isArray(currentData.properties)) {
+      currentData.properties = [];
+      fixedItemsCount++;
+      repairLog.push('Initialized empty properties collection');
+    }
+    if (!Array.isArray(currentData.users)) {
+      currentData.users = [];
+      fixedItemsCount++;
+      repairLog.push('Initialized empty users collection');
+    }
+    if (!Array.isArray(currentData.paymentRequests)) {
+      currentData.paymentRequests = [];
+      fixedItemsCount++;
+      repairLog.push('Initialized empty payment requests collection');
+    }
+
+    // 2. Ensure default Telebirr settings
+    if (!currentData.telebirrSettings || !currentData.telebirrSettings.accountNumber) {
+      currentData.telebirrSettings = {
+        accountNumber: '0912345678',
+        accountName: 'Kaleb Bereket'
+      };
+      fixedItemsCount++;
+      repairLog.push('Restored default Telebirr merchant settings');
+    }
+
+    // 3. Ensure Owner credentials are in users array
+    const ownerEmail = 'kaleb.bereket@betefinder.et';
+    const hasOwnerInUsers = currentData.users.some((u: any) => u.email?.toLowerCase() === ownerEmail);
+    if (!hasOwnerInUsers) {
+      currentData.users.unshift({
+        id: 'usr-owner-master',
+        name: 'Kaleb Bereket (Owner)',
+        email: ownerEmail,
+        phone: '+251912345678',
+        role: 'owner',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+        savedPropertyIds: [],
+        postedPropertyIds: [],
+        toursBooked: [],
+        activePlan: 'vip',
+        planExpiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+      });
+      fixedItemsCount++;
+      repairLog.push('Registered Master Owner account in users table');
+    }
+
+    // 4. Clean duplicate property IDs
+    const seenPropIds = new Set<string>();
+    const uniqueProps: any[] = [];
+    for (const p of currentData.properties) {
+      if (p.id && !seenPropIds.has(p.id)) {
+        seenPropIds.add(p.id);
+        uniqueProps.push(p);
+      } else if (p.id) {
+        fixedItemsCount++;
+        repairLog.push(`Removed duplicate property ID: ${p.id}`);
+      }
+    }
+    currentData.properties = uniqueProps;
+
+    // 5. Clean duplicate user emails
+    const seenEmails = new Set<string>();
+    const uniqueUsers: any[] = [];
+    for (const u of currentData.users) {
+      const emailLower = (u.email || '').toLowerCase().trim();
+      if (emailLower && !seenEmails.has(emailLower)) {
+        seenEmails.add(emailLower);
+        uniqueUsers.push(u);
+      } else if (emailLower) {
+        fixedItemsCount++;
+        repairLog.push(`De-duplicated user account: ${emailLower}`);
+      }
+    }
+    currentData.users = uniqueUsers;
+
+    currentData.lastUpdated = Date.now();
+    await persistMasterData(currentData);
+
+    res.json({
+      success: true,
+      message: `Database self-healing complete! Verified schema, repaired ${fixedItemsCount} item(s).`,
+      fixedItemsCount,
+      repairLog,
+      timestamp: Date.now()
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Table Records Inspector Endpoint
+app.get('/api/db/table-records/:tableName', async (req, res) => {
+  try {
+    const { tableName } = req.params;
+    const masterData = await fetchMasterData();
+
+    let records: any = [];
+    switch (tableName) {
+      case 'properties':
+        records = masterData.properties || [];
+        break;
+      case 'registered_users':
+      case 'users':
+        records = (masterData.users || []).map((u: any) => ({
+          ...u,
+          password: u.password ? '[ENCRYPTED]' : undefined
+        }));
+        break;
+      case 'payment_requests':
+        records = masterData.paymentRequests || [];
+        break;
+      case 'telebirr_settings':
+        records = [masterData.telebirrSettings || {}];
+        break;
+      case 'plans_config':
+        records = masterData.plans || [];
+        break;
+      case 'admin_security':
+        records = [
+          { role: 'owner', email: masterData.ownerCredentials?.email || 'kaleb.bereket@betefinder.et', name: masterData.ownerCredentials?.name || 'Kaleb Bereket' },
+          { role: 'admin', email: masterData.adminCredentials?.email || 'admin@betefinder.et', name: masterData.adminCredentials?.name || 'Bete Finder Admin' }
+        ];
+        break;
+      default:
+        records = [];
+    }
+
+    res.json({
+      success: true,
+      tableName,
+      rowCount: Array.isArray(records) ? records.length : 1,
+      records
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Import Full Database Backup (.JSON)
+app.post('/api/db/import-backup', async (req, res) => {
+  try {
+    const { backupData } = req.body;
+    if (!backupData || typeof backupData !== 'object') {
+      return res.status(400).json({ success: false, message: 'Invalid backup file payload format.' });
+    }
+
+    // Extract tables from backup
+    const tables = backupData.databaseTables || backupData;
+    if (!tables.properties && !tables.users) {
+      return res.status(400).json({ success: false, message: 'The uploaded backup file does not contain valid Bete Finder database tables.' });
+    }
+
+    const currentMaster = await fetchMasterData();
+    const newMaster = {
+      ...currentMaster,
+      properties: Array.isArray(tables.properties) ? tables.properties : currentMaster.properties,
+      users: Array.isArray(tables.users) ? tables.users : Array.isArray(tables.registered_users) ? tables.registered_users : currentMaster.users,
+      paymentRequests: Array.isArray(tables.paymentRequests) ? tables.paymentRequests : Array.isArray(tables.payment_requests) ? tables.payment_requests : currentMaster.paymentRequests,
+      telebirrSettings: tables.telebirr_settings || tables.telebirrSettings || currentMaster.telebirrSettings,
+      plans: tables.plans || tables.plans_configuration || currentMaster.plans,
+      lastUpdated: Date.now()
+    };
+
+    await persistMasterData(newMaster);
+
+    res.json({
+      success: true,
+      message: `Database backup restored successfully! Loaded ${newMaster.properties.length} properties and ${newMaster.users.length} user accounts.`,
+      restoredProperties: newMaster.properties.length,
+      restoredUsers: newMaster.users.length
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
   }
 });
 
@@ -277,23 +658,23 @@ app.post('/api/db/sync', async (req, res) => {
 
     const currentData = await fetchMasterData();
 
-    // Merge properties
-    const propertyMap = new Map();
-    (currentData.properties || []).forEach((p: any) => propertyMap.set(p.id, p));
-    (incomingData.properties || []).forEach((p: any) => propertyMap.set(p.id, p));
-    const mergedProperties = Array.from(propertyMap.values());
+    // If explicit full overwrite is passed (e.g. from owner delete/reorder action)
+    let mergedProperties = currentData.properties || [];
+    if (Array.isArray(incomingData.properties)) {
+      mergedProperties = incomingData.properties;
+    }
 
-    // Merge registered users
-    const userMap = new Map();
-    (currentData.users || []).forEach((u: any) => userMap.set(u.email.toLowerCase(), u));
-    (incomingData.users || []).forEach((u: any) => userMap.set(u.email.toLowerCase(), u));
-    const mergedUsers = Array.from(userMap.values());
+    // Merge registered users or use updated list if passed
+    let mergedUsers = currentData.users || [];
+    if (Array.isArray(incomingData.users)) {
+      mergedUsers = incomingData.users;
+    }
 
-    // Merge payment requests
-    const paymentMap = new Map();
-    (currentData.paymentRequests || []).forEach((r: any) => paymentMap.set(r.id, r));
-    (incomingData.paymentRequests || []).forEach((r: any) => paymentMap.set(r.id, r));
-    const mergedPayments = Array.from(paymentMap.values());
+    // Merge payment requests or use updated list
+    let mergedPayments = currentData.paymentRequests || [];
+    if (Array.isArray(incomingData.paymentRequests)) {
+      mergedPayments = incomingData.paymentRequests;
+    }
 
     const updatedMaster = {
       ...currentData,
@@ -304,6 +685,7 @@ app.post('/api/db/sync', async (req, res) => {
       telebirrSettings: incomingData.telebirrSettings || currentData.telebirrSettings,
       adminCredentials: incomingData.adminCredentials || currentData.adminCredentials,
       ownerCredentials: incomingData.ownerCredentials || currentData.ownerCredentials,
+      adminControllerConfig: incomingData.adminControllerConfig || currentData.adminControllerConfig,
       lastUpdated: Date.now()
     };
 
@@ -318,6 +700,40 @@ app.post('/api/db/sync', async (req, res) => {
   } catch (error: any) {
     console.error('[Sync POST Error]:', error);
     res.status(500).json({ success: false, message: error?.message || 'Sync write failed.' });
+  }
+});
+
+// Admin Controller Configuration Endpoints
+app.get('/api/admin/controller-config', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    res.json({
+      success: true,
+      config: currentData.adminControllerConfig || null
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+app.post('/api/admin/controller-config', async (req, res) => {
+  try {
+    const config = req.body;
+    if (!config || typeof config !== 'object') {
+      return res.status(400).json({ success: false, message: 'Invalid controller config payload.' });
+    }
+
+    const currentData = await fetchMasterData();
+    currentData.adminControllerConfig = config;
+    await persistMasterData(currentData);
+
+    res.json({
+      success: true,
+      message: 'Admin Controller configuration saved and synced across all devices.',
+      config
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
   }
 });
 
@@ -674,7 +1090,7 @@ app.post('/api/payments/approve', async (req, res) => {
     // Update user active plan
     if (targetEmail) {
       currentData.users = (currentData.users || []).map((u: any) => {
-        if (u.email.toLowerCase() === targetEmail) {
+        if (u.email && u.email.toLowerCase() === targetEmail) {
           return {
             ...u,
             activePlan: resolvedPlan,
@@ -685,15 +1101,21 @@ app.post('/api/payments/approve', async (req, res) => {
         return u;
       });
 
-      // Update properties owned by this user
+      // Update properties owned by this user based on plan type
+      const isVip = resolvedPlan === 'vip';
+      const isPremium = resolvedPlan === 'premium';
+      const isBasic = resolvedPlan === 'basic';
+
       currentData.properties = (currentData.properties || []).map((p: any) => {
         if (p.owner && p.owner.email && p.owner.email.toLowerCase() === targetEmail) {
           return {
             ...p,
             isVerified: true,
-            isFeatured: true,
+            isFeatured: isVip || isPremium,
             payPlan: resolvedPlan,
-            payPlanName: planName || 'VIP Spotlight Plan'
+            payPlanName: planName || (isVip ? 'VIP TOP+ Package' : isPremium ? 'Premium Package' : 'Basic Package'),
+            autoRenewIntervalHours: isVip ? 12 : isPremium ? 24 : 48,
+            multiplierText: isVip ? 'Up to 7 times more clients for ads' : isPremium ? 'Up to 5 times more clients for your ads' : 'Up to 2 times more clients for ads'
           };
         }
         return p;
