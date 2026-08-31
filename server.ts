@@ -103,12 +103,13 @@ function writeDbToFile(data: any): boolean {
 }
 
 // PostgreSQL / Neon DB Pool
+const DEFAULT_NEON_DATABASE_URL = 'postgresql://neondb_owner:npg_OAc3LlE2SYKy@ep-shy-rice-zairhuhl-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require';
 let customDbUrl: string | null = null;
 let pgPool: pg.Pool | null = null;
 let isPgConnected = false;
 
 function getDbUrl(): string | null {
-  return customDbUrl || process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL || null;
+  return customDbUrl || process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL || DEFAULT_NEON_DATABASE_URL;
 }
 
 function maskDbUrl(url: string | null): string {
