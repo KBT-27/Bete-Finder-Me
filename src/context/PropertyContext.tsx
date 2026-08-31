@@ -20,40 +20,7 @@ const DEFAULT_FILTER: PropertyFilterState = {
   selectedAmenities: []
 };
 
-const INITIAL_PAYMENT_REQUESTS: PaymentRequest[] = [
-  {
-    id: 'pay-req-101',
-    userId: 'user-sample-1',
-    userName: 'Kassahun Bekele',
-    userEmail: 'kassahun.b@gmail.com',
-    userPhone: '0911223344',
-    planId: 'vip',
-    planName: 'VIP Package (30 Days Spotlight)',
-    durationMonths: 1,
-    totalAmount: 999,
-    transactionRef: 'TB9834219082',
-    screenshotUrl: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?auto=format&fit=crop&w=400&q=80',
-    submittedAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-    status: 'pending'
-  },
-  {
-    id: 'pay-req-102',
-    userId: 'user-sample-2',
-    userName: 'Genet Assefa',
-    userEmail: 'genet.assefa@gmail.com',
-    userPhone: '0922446688',
-    planId: 'premium',
-    planName: 'Premium Package (24hr Auto-Renew)',
-    durationMonths: 2,
-    totalAmount: 1198,
-    transactionRef: 'TB7712390441',
-    submittedAt: new Date(Date.now() - 86400000).toISOString(),
-    status: 'approved',
-    reviewedAt: new Date(Date.now() - 80000000).toISOString(),
-    reviewedBy: 'Owner (Kaleb Bereket)',
-    expiresAt: new Date(Date.now() + 86400000 * 59).toISOString()
-  }
-];
+const INITIAL_PAYMENT_REQUESTS: PaymentRequest[] = [];
 
 interface PropertyContextType {
   properties: Property[];

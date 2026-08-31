@@ -15,6 +15,19 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
+// Enable CORS for all origins, specifically including https://bete-finder-one.vercel.app
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  res.header('Access-Control-Allow-Origin', origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 
 // Database JSON File Path
@@ -109,10 +122,35 @@ function writeDbToFile(data: any): boolean {
 }
 
 // PostgreSQL / Neon DB Pool
-const DEFAULT_NEON_DATABASE_URL = 'postgresql://neondb_owner:npg_OAc3LlE2SYKy@ep-shy-rice-zairhuhl-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require';
+const DEFAULT_NEON_DATABASE_URL = 'postgresql://neondb_owner:npg_OAc3LlE2SYKy@ep-shy-rice-zairhuhl-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
 let customDbUrl: string | null = null;
 let pgPool: pg.Pool | null = null;
 let isPgConnected = false;
+
+function getCleanInitialState() {
+  return {
+    lastUpdated: Date.now(),
+    properties: [],
+    users: [],
+    adminCredentials: {
+      email: 'kalebbereket49@gmail.com/admin',
+      password: 'Kaleb5873',
+      name: 'Admin (Kaleb Bereket)',
+      phone: '+251995406697'
+    },
+    ownerCredentials: {
+      email: 'kalebbereket49@gmail.com/owner',
+      password: 'Kaleb5873',
+      name: 'Owner (Kaleb Bereket)',
+      phone: '+251995406697'
+    },
+    telebirrSettings: {
+      accountNumber: '0995406697',
+      accountName: 'Kaleb Bereket (Bete Finder Owner)'
+    },
+    paymentRequests: []
+  };
+}
 
 function getDbUrl(): string | null {
   return customDbUrl || process.env.DATABASE_URL || process.env.NEON_DATABASE_URL || process.env.POSTGRES_URL || DEFAULT_NEON_DATABASE_URL;
@@ -166,7 +204,7 @@ async function switchPgPool(newUrl: string | null) {
   return true;
 }
 
-// Initialize PostgreSQL / Neon table
+// Initialize PostgreSQL / Neon table and preserve or seed master state
 async function initNeonDb() {
   const pool = getPgPool();
   if (!pool) return false;
@@ -179,17 +217,25 @@ async function initNeonDb() {
       );
     `);
     isPgConnected = true;
-    console.log('[PostgreSQL DB] Successfully connected and verified bete_finder_store table.');
+    console.log('[PostgreSQL DB] Successfully connected to Neon PostgreSQL and verified bete_finder_store table.');
 
-    // Seed initial master document if empty in Postgres
-    const checkRes = await pool.query(`SELECT key FROM bete_finder_store WHERE key = 'master_db' LIMIT 1;`);
+    // Check if master record exists in Postgres
+    const checkRes = await pool.query(`SELECT data FROM bete_finder_store WHERE key = 'master_db' LIMIT 1;`);
     if (checkRes.rows.length === 0) {
-      const localData = readDbFromFile();
+      const cleanData = getCleanInitialState();
       await pool.query(
-        `INSERT INTO bete_finder_store (key, data, updated_at) VALUES ('master_db', $1, NOW()) ON CONFLICT (key) DO NOTHING;`,
-        [JSON.stringify(localData)]
+        `INSERT INTO bete_finder_store (key, data, updated_at) VALUES ('master_db', $1, NOW())
+         ON CONFLICT (key) DO NOTHING;`,
+        [JSON.stringify(cleanData)]
       );
-      console.log('[PostgreSQL DB] Seeded master data into database from local store.');
+      writeDbToFile(cleanData);
+      console.log('[PostgreSQL DB] Seeded fresh database master state in Neon PostgreSQL.');
+    } else {
+      const currentRemoteData = checkRes.rows[0].data;
+      if (currentRemoteData) {
+        writeDbToFile(currentRemoteData);
+        console.log('[PostgreSQL DB] Synced active database state from Neon PostgreSQL.');
+      }
     }
     return true;
   } catch (err: any) {
@@ -399,6 +445,21 @@ app.post('/api/db/reset-connection', async (req, res) => {
       success: true,
       message: 'Database connection reset to internal persistent storage engine.',
       isConnected: false
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Full Database Wipe / Reset Endpoint
+app.post('/api/db/wipe-all', async (req, res) => {
+  try {
+    const cleanData = getCleanInitialState();
+    await persistMasterData(cleanData);
+    res.json({
+      success: true,
+      message: 'All database tables and cached records wiped completely clean.',
+      data: cleanData
     });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error?.message });
@@ -1662,7 +1723,7 @@ app.post('/api/auth/reset-password', async (req, res) => {
           role: 'tenant',
           password: newPassword.trim(),
           provider: 'local',
-          savedPropertyIds: ['prop-1'],
+          savedPropertyIds: [],
           postedPropertyIds: [],
           toursBooked: []
         });

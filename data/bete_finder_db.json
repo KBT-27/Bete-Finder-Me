@@ -1,0 +1,22 @@
+{
+  "users": [],
+  "properties": [],
+  "lastUpdated": 1788201801171,
+  "paymentRequests": [],
+  "adminCredentials": {
+    "name": "Admin (Kaleb Bereket)",
+    "email": "kalebbereket49@gmail.com/admin",
+    "phone": "+251995406697",
+    "password": "Kaleb5873"
+  },
+  "ownerCredentials": {
+    "name": "Owner (Kaleb Bereket)",
+    "email": "kalebbereket49@gmail.com/owner",
+    "phone": "+251995406697",
+    "password": "Kaleb5873"
+  },
+  "telebirrSettings": {
+    "accountName": "Kaleb Bereket (Bete Finder Owner)",
+    "accountNumber": "0995406697"
+  }
+}

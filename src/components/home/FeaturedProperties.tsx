@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Sparkles, ArrowRight, PlusCircle, Building } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
 import { PropertyCard } from '../common/PropertyCard';
-import { PropertyType } from '../../types';
 
 export const FeaturedProperties: React.FC = () => {
   const { t } = useLanguage();
@@ -59,24 +58,50 @@ export const FeaturedProperties: React.FC = () => {
           </div>
         </div>
 
-        {/* Property Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7">
-          {filteredListings.slice(0, 6).map(prop => (
-            <PropertyCard key={prop.id} property={prop} />
-          ))}
-        </div>
+        {/* Property Grid or Empty State */}
+        {filteredListings.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-7">
+            {filteredListings.slice(0, 6).map(prop => (
+              <PropertyCard key={prop.id} property={prop} />
+            ))}
+          </div>
+        ) : (
+          <div className="bg-white rounded-2xl border border-slate-200/80 p-8 sm:p-12 text-center max-w-xl mx-auto shadow-xs">
+            <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+              <Building className="w-8 h-8" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-bold text-slate-900 mb-2">
+              No Featured Properties Yet
+            </h3>
+            <p className="text-sm text-slate-500 mb-6 leading-relaxed">
+              Be the first to post a verified home, apartment, floor house, or villa in Bete Finder!
+            </p>
+            <button
+              onClick={() => {
+                setCurrentView('post');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Post Your Property (ቤትዎን ያስተዋውቁ)</span>
+            </button>
+          </div>
+        )}
 
         {/* Bottom CTA */}
-        <div className="mt-12 text-center">
-          <button
-            id="featured-view-all-btn"
-            onClick={handleViewAll}
-            className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-100 text-slate-900 font-extrabold text-sm rounded-xl border border-slate-300 shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer"
-          >
-            <span>{t('featuredViewAll')}</span>
-            <ArrowRight className="w-4 h-4 text-emerald-600" />
-          </button>
-        </div>
+        {filteredListings.length > 0 && (
+          <div className="mt-12 text-center">
+            <button
+              id="featured-view-all-btn"
+              onClick={handleViewAll}
+              className="inline-flex items-center gap-2 px-6 py-3 bg-white hover:bg-slate-100 text-slate-900 font-extrabold text-sm rounded-xl border border-slate-300 shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer"
+            >
+              <span>{t('featuredViewAll')}</span>
+              <ArrowRight className="w-4 h-4 text-emerald-600" />
+            </button>
+          </div>
+        )}
 
       </div>
     </section>

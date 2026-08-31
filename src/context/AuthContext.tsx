@@ -206,7 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: 'owner',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
         savedPropertyIds: [],
-        postedPropertyIds: ['prop-1', 'prop-2', 'prop-3', 'prop-4', 'prop-5', 'prop-6', 'prop-7', 'prop-8'],
+        postedPropertyIds: [],
         toursBooked: []
       };
       setUser(ownerUser);
@@ -230,7 +230,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: 'admin',
         avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
         savedPropertyIds: [],
-        postedPropertyIds: ['prop-1', 'prop-2', 'prop-3', 'prop-4', 'prop-5', 'prop-6', 'prop-7', 'prop-8'],
+        postedPropertyIds: [],
         toursBooked: []
       };
       setUser(adminUser);
@@ -261,7 +261,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: inputPassword,
       provider: 'local',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      savedPropertyIds: ['prop-1'],
+      savedPropertyIds: [],
       postedPropertyIds: [],
       toursBooked: []
     };
@@ -331,7 +331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: data.password.trim(),
       provider: 'local',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      savedPropertyIds: ['prop-1'],
+      savedPropertyIds: [],
       postedPropertyIds: [],
       toursBooked: []
     };
@@ -390,7 +390,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password: 'google-oauth-auth',
         provider: 'google',
         avatar: googleAvatar || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
-        savedPropertyIds: ['prop-1', 'prop-3'],
+        savedPropertyIds: [],
         postedPropertyIds: [],
         toursBooked: []
       };
