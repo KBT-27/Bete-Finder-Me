@@ -40,8 +40,8 @@ interface AuthContextType {
   updateUser: (data: Partial<UserProfile>) => void;
   adminCredentials: StoredCredentials;
   ownerCredentials: StoredCredentials;
-  updateAdminSecurity: (newEmail: string, newPass: string, name?: string, phone?: string) => boolean;
-  updateOwnerSecurity: (newEmail: string, newPass: string, name?: string, phone?: string) => boolean;
+  updateAdminSecurity: (newEmail: string, newPass: string, name?: string, phone?: string, avatar?: string, bio?: string) => boolean;
+  updateOwnerSecurity: (newEmail: string, newPass: string, name?: string, phone?: string, avatar?: string, bio?: string) => boolean;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   authModalInitialMode: AuthModalMode;
@@ -191,20 +191,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 1. Owner Login Check
     const currentOwner = getOwnerCredentials();
+    const cleanOwnerEmail = (currentOwner.email || '').split('/')[0].toLowerCase();
     if (
       cleanEmail === currentOwner.email.toLowerCase() ||
-      cleanEmail === 'kalebbereket49@gmail.com/owner'
+      cleanEmail === cleanOwnerEmail ||
+      cleanEmail === `${cleanOwnerEmail}/owner` ||
+      cleanEmail === 'kalebbereket49@gmail.com/owner' ||
+      cleanEmail === 'kalebbereker49@gmail.com/owner' ||
+      cleanEmail === 'kalebbereker49@gmail.com' ||
+      cleanEmail === 'kalebbereket49@gmail.com'
     ) {
       if (password && cleanPass !== currentOwner.password) {
         return { success: false, message: 'Invalid password for Owner account.' };
       }
       const ownerUser: UserProfile = {
         id: 'owner-kaleb',
-        name: currentOwner.name || 'Kaleb Bereket (Owner)',
+        name: currentOwner.name || 'Kaleb Bereket',
         email: currentOwner.email,
-        phone: currentOwner.phone || '+251995406697',
+        phone: currentOwner.phone || '0995406697',
         role: 'owner',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        avatar: currentOwner.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        bio: currentOwner.bio || 'Platform Owner & Administrator',
         savedPropertyIds: [],
         postedPropertyIds: [],
         toursBooked: []
@@ -215,8 +222,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 2. Admin Login Check
     const currentAdmin = getAdminCredentials();
+    const cleanAdminEmail = (currentAdmin.email || '').split('/')[0].toLowerCase();
     if (
       cleanEmail === currentAdmin.email.toLowerCase() ||
+      cleanEmail === cleanAdminEmail ||
+      cleanEmail === `${cleanAdminEmail}/admin` ||
       cleanEmail === 'kalebbereket49@gmail.com/admin'
     ) {
       if (password && cleanPass !== currentAdmin.password) {
@@ -228,7 +238,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: currentAdmin.email,
         phone: currentAdmin.phone || '+251995406697',
         role: 'admin',
-        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+        avatar: currentAdmin.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+        bio: currentAdmin.bio || 'System Administrator',
         savedPropertyIds: [],
         postedPropertyIds: [],
         toursBooked: []
@@ -370,6 +381,55 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         googleEmail = authRes.profile.email.toLowerCase();
         googleName = authRes.profile.name;
         googleAvatar = authRes.profile.avatar;
+      }
+
+      // Check Owner Google match first
+      const currentOwner = getOwnerCredentials();
+      const cleanOwnerEmail = (currentOwner.email || '').split('/')[0].toLowerCase();
+      if (
+        googleEmail === cleanOwnerEmail ||
+        googleEmail === currentOwner.email.toLowerCase() ||
+        googleEmail === 'kalebbereket49@gmail.com' ||
+        googleEmail === 'kalebbereker49@gmail.com'
+      ) {
+        const ownerUser: UserProfile = {
+          id: 'owner-kaleb',
+          name: googleName || currentOwner.name || 'Kaleb Bereket',
+          email: currentOwner.email,
+          phone: currentOwner.phone || '0995406697',
+          role: 'owner',
+          avatar: googleAvatar || currentOwner.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+          bio: currentOwner.bio || 'Platform Owner & Administrator',
+          savedPropertyIds: [],
+          postedPropertyIds: [],
+          toursBooked: []
+        };
+        setUser(ownerUser);
+        return { success: true };
+      }
+
+      // Check Admin Google match
+      const currentAdmin = getAdminCredentials();
+      const cleanAdminEmail = (currentAdmin.email || '').split('/')[0].toLowerCase();
+      if (
+        googleEmail === cleanAdminEmail ||
+        googleEmail === currentAdmin.email.toLowerCase() ||
+        googleEmail === 'kalebbereket49@gmail.com/admin'
+      ) {
+        const adminUser: UserProfile = {
+          id: 'admin-kaleb',
+          name: googleName || currentAdmin.name || 'Kaleb Bereket (Admin)',
+          email: currentAdmin.email,
+          phone: currentAdmin.phone || '+251995406697',
+          role: 'admin',
+          avatar: googleAvatar || currentAdmin.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
+          bio: currentAdmin.bio || 'System Administrator',
+          savedPropertyIds: [],
+          postedPropertyIds: [],
+          toursBooked: []
+        };
+        setUser(adminUser);
+        return { success: true };
       }
 
       const registered = getRegisteredUsers();
@@ -640,12 +700,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const updateAdminSecurity = (newEmail: string, newPass: string, name?: string, phone?: string): boolean => {
+  const updateAdminSecurity = (newEmail: string, newPass: string, name?: string, phone?: string, avatar?: string, bio?: string): boolean => {
     const updated = saveAdminCredentials({
       email: newEmail.trim(),
       password: newPass.trim(),
       name: name?.trim() || adminCreds.name,
-      phone: phone?.trim() || adminCreds.phone
+      phone: phone?.trim() || adminCreds.phone,
+      avatar: avatar?.trim() || adminCreds.avatar,
+      bio: bio?.trim() || adminCreds.bio,
     });
     setAdminCreds(updated);
     if (user && user.role === 'admin') {
@@ -653,7 +715,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...prev,
         email: updated.email,
         name: updated.name,
-        phone: updated.phone
+        phone: updated.phone,
+        avatar: updated.avatar || prev.avatar,
+        bio: updated.bio
       } : null);
     }
     // Push update to server
@@ -665,12 +729,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  const updateOwnerSecurity = (newEmail: string, newPass: string, name?: string, phone?: string): boolean => {
+  const updateOwnerSecurity = (newEmail: string, newPass: string, name?: string, phone?: string, avatar?: string, bio?: string): boolean => {
     const updated = saveOwnerCredentials({
       email: newEmail.trim(),
       password: newPass.trim(),
       name: name?.trim() || ownerCreds.name,
-      phone: phone?.trim() || ownerCreds.phone
+      phone: phone?.trim() || ownerCreds.phone,
+      avatar: avatar?.trim() || ownerCreds.avatar,
+      bio: bio?.trim() || ownerCreds.bio,
     });
     setOwnerCreds(updated);
     if (user && user.role === 'owner') {
@@ -678,7 +744,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ...prev,
         email: updated.email,
         name: updated.name,
-        phone: updated.phone
+        phone: updated.phone,
+        avatar: updated.avatar || prev.avatar,
+        bio: updated.bio
       } : null);
     }
     // Push update to server

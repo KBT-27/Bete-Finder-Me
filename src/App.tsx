@@ -4,6 +4,7 @@ import { AuthProvider } from './context/AuthContext';
 import { PropertyProvider, useProperties } from './context/PropertyContext';
 import { Navbar } from './components/common/Navbar';
 import { Footer } from './components/common/Footer';
+import { SyncStatusBar } from './components/common/SyncStatusBar';
 import { HeroSection } from './components/home/HeroSection';
 import { PropertyCategories } from './components/home/PropertyCategories';
 import { FeaturedProperties } from './components/home/FeaturedProperties';
@@ -67,6 +68,7 @@ export default function App() {
       <AuthProvider>
         <PropertyProvider>
           <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-900 selection:bg-amber-500 selection:text-white">
+            <SyncStatusBar />
             <Navbar />
             <MainContent />
 

@@ -177,6 +177,48 @@ export const PropertyFilters: React.FC<PropertyFiltersProps> = ({ onCloseMobile 
         </select>
       </div>
 
+      {/* Finishing Status (Finished vs Unfinished) */}
+      <div>
+        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+          {isAmharic ? 'የቤቱ አጨራረስ (Finishing Status)' : 'Finishing Status'}
+        </label>
+        <div className="grid grid-cols-3 gap-1 p-1 bg-slate-100 rounded-xl">
+          <button
+            type="button"
+            onClick={() => updateFilter('finishingStatus', 'all')}
+            className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              !filters.finishingStatus || filters.finishingStatus === 'all'
+                ? 'bg-white text-slate-900 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {t('filterAll')}
+          </button>
+          <button
+            type="button"
+            onClick={() => updateFilter('finishingStatus', 'finished')}
+            className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              filters.finishingStatus === 'finished'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {isAmharic ? 'ያለቀለት' : 'Finished'}
+          </button>
+          <button
+            type="button"
+            onClick={() => updateFilter('finishingStatus', 'unfinished')}
+            className={`py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              filters.finishingStatus === 'unfinished'
+                ? 'bg-amber-600 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            {isAmharic ? 'ያልተጠናቀቀ' : 'Unfinished'}
+          </button>
+        </div>
+      </div>
+
       {/* Price Range */}
       <div>
         <div className="flex items-center justify-between mb-1.5">

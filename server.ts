@@ -5,7 +5,6 @@ import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import pg from 'pg';
-import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
@@ -97,12 +96,12 @@ function readDbFromFile(): any {
     ownerCredentials: {
       email: 'kalebbereket49@gmail.com/owner',
       password: 'Kaleb5873',
-      name: 'Owner (Kaleb Bereket)',
-      phone: '+251995406697'
+      name: 'Kaleb Bereket',
+      phone: '0995406697'
     },
     telebirrSettings: {
       accountNumber: '0995406697',
-      accountName: 'Kaleb Bereket (Bete Finder Owner)'
+      accountName: 'Kaleb Bereket (Owner)'
     },
     paymentRequests: []
   };
@@ -122,10 +121,27 @@ function writeDbToFile(data: any): boolean {
 }
 
 // PostgreSQL / Neon DB Pool
-const DEFAULT_NEON_DATABASE_URL = 'postgresql://neondb_owner:npg_OAc3LlE2SYKy@ep-shy-rice-zairhuhl-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const DEFAULT_NEON_DATABASE_URL = 'postgresql://neondb_owner:npg_OAc3LlE2SYKy@ep-shy-rice-zairhuhl-pooler.c-2.eu-west-2.aws.neon.tech/neondb?sslmode=require';
 let customDbUrl: string | null = null;
 let pgPool: pg.Pool | null = null;
 let isPgConnected = false;
+
+// Sanitize connection URL for node-postgres (strip unsupported libpq parameters like channel_binding)
+function sanitizePostgresUrl(rawUrl: string): string {
+  if (!rawUrl) return rawUrl;
+  try {
+    const parsed = new URL(rawUrl);
+    parsed.searchParams.delete('channel_binding');
+    if (!parsed.searchParams.has('sslmode')) {
+      parsed.searchParams.set('sslmode', 'require');
+    }
+    return parsed.toString();
+  } catch {
+    return rawUrl
+      .replace(/([&?])channel_binding=[^&]*(&|$)/g, '$1')
+      .replace(/[?&]$/, '');
+  }
+}
 
 function getCleanInitialState() {
   return {
@@ -174,10 +190,16 @@ function getPgPool(): pg.Pool | null {
   if (!dbUrl) return null;
   if (!pgPool) {
     try {
+      const sanitizedUrl = sanitizePostgresUrl(dbUrl);
       pgPool = new pg.Pool({
-        connectionString: dbUrl,
+        connectionString: sanitizedUrl,
         ssl: { rejectUnauthorized: false },
-        connectionTimeoutMillis: 7000
+        max: 10,
+        idleTimeoutMillis: 30000,
+        connectionTimeoutMillis: 10000
+      });
+      pgPool.on('error', (err) => {
+        console.warn('[Postgres Pool Warning]:', err?.message || err);
       });
     } catch (e) {
       console.error('[Postgres Pool Init Error]:', e);
@@ -1746,9 +1768,23 @@ app.get('/api/auth/google-config', (req, res) => {
   res.json({ clientId });
 });
 
+// Global Error Handler to guarantee JSON responses and prevent FUNCTION_INVOCATION_FAILED non-JSON crashes
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error('[Unhandled Express Error]:', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(500).json({
+    success: false,
+    message: err?.message || 'Internal Server Error',
+    error: process.env.NODE_ENV === 'development' ? err?.stack : undefined
+  });
+});
+
 // Start the server with Vite middleware in dev or static serving in prod
 export async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

@@ -87,6 +87,7 @@ export interface PropertyFilterState {
   minBedrooms: number | 'all';
   minBathrooms: number | 'all';
   isFurnished?: boolean;
+  finishingStatus?: 'finished' | 'unfinished' | 'all';
   verifiedOnly: boolean;
   sortBy: 'newest' | 'price-asc' | 'price-desc' | 'popular' | 'area';
   selectedAmenities: string[];
@@ -116,6 +117,7 @@ export interface UserProfile {
   activePlan?: 'basic' | 'premium' | 'vip' | 'free' | 'standard';
   planExpiresAt?: string;
   planStartedAt?: string;
+  bio?: string;
 }
 
 export interface TourBooking {

@@ -50,7 +50,7 @@ export const PaymentModal: React.FC = () => {
 
   if (!isPaymentModalOpen) return null;
 
-  const isBlocked = isTenant || !hasPostedProperties;
+  const isBlocked = false; // Allow all users and first-time posters to acquire listing packages
 
   const basePrice = selectedPlan?.price || (pendingPaymentPurpose === 'boost' ? 399 : 599);
   const totalAmount = basePrice * durationMonths;
@@ -85,6 +85,11 @@ export const PaymentModal: React.FC = () => {
     setIsProcessing(true);
 
     setTimeout(() => {
+      // If user was tenant, upgrade role to landlord
+      if (user && user.role === 'tenant') {
+        updateUser({ role: 'landlord' });
+      }
+
       // Send payment request to Owner for review & approval
       submitPaymentRequest({
         userName: payerName.trim(),

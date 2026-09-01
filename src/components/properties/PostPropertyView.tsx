@@ -15,6 +15,11 @@ import {
   Layers,
   Check,
   Info,
+  Crown,
+  Copy,
+  Smartphone,
+  Tag,
+  CreditCard,
   Image as ImageIcon
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
@@ -25,8 +30,8 @@ import { PropertyType, ListingType } from '../../types';
 
 export const PostPropertyView: React.FC = () => {
   const { t, isAmharic } = useLanguage();
-  const { addProperty, setCurrentView } = useProperties();
-  const { user, setIsAuthModalOpen } = useAuth();
+  const { addProperty, setCurrentView, plans, telebirrSettings, submitPaymentRequest, setSelectedPlan, setIsPaymentModalOpen } = useProperties();
+  const { user, setIsAuthModalOpen, updateUser } = useAuth();
 
   // 1. Basic Info - NO Auto-fill
   const [title, setTitle] = useState('');
@@ -62,8 +67,17 @@ export const PostPropertyView: React.FC = () => {
   const [whatsapp, setWhatsapp] = useState('');
   const [description, setDescription] = useState('');
 
+  // 5. Listing Package & Payment
+  const [selectedPlanId, setSelectedPlanId] = useState<'basic' | 'premium' | 'vip'>('premium');
+  const [durationMonths, setDurationMonths] = useState<number>(1);
+  const [transactionRef, setTransactionRef] = useState('');
+  const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
+  const [screenshotFileName, setScreenshotFileName] = useState('');
+  const [copiedNumber, setCopiedNumber] = useState(false);
+
   const [formError, setFormError] = useState<string | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [submittedPropertyTitle, setSubmittedPropertyTitle] = useState('');
 
   const handleAmenityToggle = (id: string) => {
     setSelectedAmenities(prev => 
@@ -102,6 +116,24 @@ export const PostPropertyView: React.FC = () => {
     setImages(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const handleProofUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setScreenshotFileName(file.name);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setScreenshotPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCopyTelebirr = () => {
+    navigator.clipboard?.writeText(telebirrSettings.accountNumber);
+    setCopiedNumber(true);
+    setTimeout(() => setCopiedNumber(false), 2000);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
@@ -126,8 +158,8 @@ export const PostPropertyView: React.FC = () => {
       return;
     }
 
-    if (propertyType === 'Floor House' && !finishingStatus) {
-      setFormError(isAmharic ? 'እባክዎ የቤቱን አጨራረስ ሁኔታ (ያለቀለት ወይስ ያልተጠናቀቀ) ይምረጡ' : 'Please select whether the Floor House is Finished or Unfinished');
+    if (!finishingStatus) {
+      setFormError(isAmharic ? 'እባክዎ ቤቱ ያለቀለት ወይስ ያልተጠናቀቀ መሆኑን ይምረጡ * (Is the house Finished Or Unfinished? *)' : 'Please specify: Is the house Finished Or Unfinished? *');
       return;
     }
 
@@ -144,7 +176,27 @@ export const PostPropertyView: React.FC = () => {
       ? images 
       : ['https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80'];
 
-    addProperty({
+    const chosenPlan = plans.find(p => p.id === selectedPlanId) || {
+      id: selectedPlanId,
+      name: selectedPlanId === 'vip' ? 'VIP TOP+ Plan' : selectedPlanId === 'basic' ? 'Basic Plan' : 'Premium Plan',
+      nameAm: selectedPlanId === 'vip' ? 'ቪአይፒ ቶፕ+ ፕላን' : selectedPlanId === 'basic' ? 'መሰረታዊ ፕላን' : 'ፕሪሚየም ፕላን',
+      price: selectedPlanId === 'vip' ? 750 : selectedPlanId === 'basic' ? 150 : 350,
+      durationDays: selectedPlanId === 'vip' ? 90 : selectedPlanId === 'basic' ? 30 : 60,
+      features: [],
+      featuresAm: [],
+      badge: 'Popular',
+      isPopular: selectedPlanId === 'premium'
+    };
+
+    // If user was registered as tenant, elevate role to landlord upon posting
+    if (user.role === 'tenant') {
+      updateUser({ role: 'landlord' });
+    }
+
+    const isStaff = user.role === 'admin' || user.role === 'owner';
+    const isVipOrPremium = selectedPlanId === 'vip' || selectedPlanId === 'premium';
+
+    const newProp = addProperty({
       title: generatedTitle,
       titleAm: generatedTitleAm,
       description: description.trim() || (isAmharic ? `በ${locLabel} የሚገኝ ${propertyType}።` : `Well maintained ${propertyType.toLowerCase()} in ${locLabel}.`),
@@ -165,8 +217,10 @@ export const PostPropertyView: React.FC = () => {
       areaSqm: areaSqm ? Number(areaSqm) : 0,
       floor: floor ? Number(floor) : undefined,
       isFurnished: Boolean(isFurnished),
-      isVerified: user.role === 'admin' || user.role === 'owner',
-      isFeatured: false,
+      isVerified: isStaff,
+      isFeatured: isStaff || isVipOrPremium,
+      payPlan: selectedPlanId,
+      payPlanName: isAmharic ? chosenPlan.nameAm : chosenPlan.name,
       images: defaultImages,
       amenities: selectedAmenities,
       owner: {
@@ -175,7 +229,7 @@ export const PostPropertyView: React.FC = () => {
         phone: phone.trim() || user.phone || '+251 900 000000',
         email: user.email,
         role: user.role === 'admin' ? 'agency' : (user.role === 'landlord' ? 'landlord' : 'broker'),
-        isVerified: user.role === 'admin' || user.role === 'owner',
+        isVerified: isStaff,
         rating: 5.0,
         avatar: user.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
         telegram: formattedTelegram,
@@ -188,6 +242,20 @@ export const PostPropertyView: React.FC = () => {
       hasElevator: selectedAmenities.includes('elevator')
     });
 
+    // If transaction reference or payment proof is entered, submit payment verification
+    if (transactionRef.trim()) {
+      submitPaymentRequest({
+        userName: user.name,
+        userPhone: phone.trim() || user.phone,
+        transactionRef: transactionRef.trim(),
+        screenshotUrl: screenshotPreview || undefined,
+        plan: chosenPlan,
+        durationMonths,
+        totalAmount: (chosenPlan.price || 350) * durationMonths
+      });
+    }
+
+    setSubmittedPropertyTitle(generatedTitle);
     setIsSuccess(true);
   };
 
@@ -204,13 +272,32 @@ export const PostPropertyView: React.FC = () => {
           <h2 className="text-2xl font-extrabold text-slate-900 mb-2">
             {isStaff ? t('postSuccessTitle') : (isAmharic ? 'የቤት መረጃው በተሳካ ሁኔታ ተልኳል!' : 'Property Submitted for Verification!')}
           </h2>
-          <p className="text-sm text-slate-500 mb-6">
+          <p className="text-sm text-slate-500 mb-4">
             {isStaff 
               ? t('postSuccessDesc')
               : (isAmharic 
                   ? 'የለጠፉት ቤት መረጃ ትክክለኛነቱ ተረጋግጦ ወዲያውኑ በቤቴ ፈላጊ ላይ ይታያል።'
                   : 'Your property has been submitted. Once verified by the platform admin, it will be published live on Bete Finder.')}
           </p>
+
+          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left mb-6 space-y-2">
+            {submittedPropertyTitle && (
+              <p className="text-xs font-black text-slate-900 truncate">
+                🏠 {submittedPropertyTitle}
+              </p>
+            )}
+            <div className="flex items-center justify-between text-xs text-slate-600">
+              <span>Package: <strong className="text-slate-900 capitalize font-black">{selectedPlanId} Plan</strong></span>
+              <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
+                Neon DB Synced
+              </span>
+            </div>
+            {transactionRef && (
+              <p className="text-[11px] text-slate-500 font-mono">
+                Telebirr Ref: <strong className="text-slate-800">{transactionRef}</strong>
+              </p>
+            )}
+          </div>
 
           <div className="space-y-3">
             <button
@@ -356,17 +443,16 @@ export const PostPropertyView: React.FC = () => {
               </div>
             </div>
 
-            {/* CONDITIONAL SECTION: Floor House (ፎቅ ቤት) Details */}
+            {/* CONDITIONAL SECTION: Floor House (ፎቅ ቤት) Structure Size */}
             {propertyType === 'Floor House' && (
-              <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-50/70 via-purple-50/50 to-indigo-50/70 border-2 border-violet-200 space-y-5 animate-fadeIn">
+              <div className="p-5 rounded-2xl bg-gradient-to-br from-violet-50/70 via-purple-50/50 to-indigo-50/70 border-2 border-violet-200 space-y-4 animate-fadeIn">
                 <div className="flex items-center gap-2 text-violet-900 border-b border-violet-200/80 pb-2.5">
                   <Layers className="w-5 h-5 text-violet-600" />
                   <span className="font-extrabold text-sm">
-                    {isAmharic ? 'የፎቅ ቤት ዝርዝር መረጃ (Floor House Details)' : 'Floor House Specifications'}
+                    {isAmharic ? 'የፎቅ ቤት መጠን መረጃ (Floor House Structure)' : 'Floor House Structure (ፎቅ ቤት)'}
                   </span>
                 </div>
 
-                {/* 1. Floor Size Question (e.g. G+2, G+4) */}
                 <div>
                   <label className="block text-xs font-bold text-violet-950 mb-2">
                     {isAmharic ? 'የፎቅ መጠን (Floor Size / Structure) *' : 'Floor Size / Structure (e.g. G+2, G+4) *'}
@@ -412,65 +498,81 @@ export const PostPropertyView: React.FC = () => {
                     />
                   )}
                 </div>
-
-                {/* 2. Finished Or Unfinished Question */}
-                <div>
-                  <label className="block text-xs font-bold text-violet-950 mb-2">
-                    {isAmharic ? 'ቤቱ ያለቀለት ወይስ ያልተጠናቀቀ ነው? (Finished Or Unfinished?) *' : 'Is the house Finished Or Unfinished? *'}
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setFinishingStatus('finished')}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer ${
-                        finishingStatus === 'finished'
-                          ? 'bg-white border-emerald-500 text-emerald-950 shadow-md ring-2 ring-emerald-500/20'
-                          : 'bg-white/70 border-violet-200 text-slate-700 hover:bg-white'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                        finishingStatus === 'finished' ? 'bg-emerald-600 text-white' : 'border border-slate-300'
-                      }`}>
-                        {finishingStatus === 'finished' && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-900">
-                          {isAmharic ? 'የተጠናቀቀ / ያለቀለት ቤት' : 'Finished House (የተጠናቀቀ)'}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                          {isAmharic ? 'ሙሉ በሙሉ የተጠናቀቀና ለኑሮ ወይም ለስራ ዝግጁ የሆነ' : 'Fully completed, ready for immediate move-in or operation.'}
-                        </p>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setFinishingStatus('unfinished')}
-                      className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer ${
-                        finishingStatus === 'unfinished'
-                          ? 'bg-white border-amber-500 text-amber-950 shadow-md ring-2 ring-amber-500/20'
-                          : 'bg-white/70 border-violet-200 text-slate-700 hover:bg-white'
-                      }`}
-                    >
-                      <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                        finishingStatus === 'unfinished' ? 'bg-amber-600 text-white' : 'border border-slate-300'
-                      }`}>
-                        {finishingStatus === 'unfinished' && <Check className="w-3.5 h-3.5" />}
-                      </div>
-                      <div>
-                        <p className="text-xs font-extrabold text-slate-900">
-                          {isAmharic ? 'ያልተጠናቀቀ / ከፊል ያለቀ' : 'Unfinished House (ያልተጠናቀቀ)'}
-                        </p>
-                        <p className="text-[11px] text-slate-500 mt-0.5 leading-tight">
-                          {isAmharic ? 'ግንባታው በመካሄድ ላይ ያለ ወይም በራስ ምርጫ ለማጠናቀቅ የሚሸጥ/የሚከራይ' : 'Under construction, structure only, or semi-finished.'}
-                        </p>
-                      </div>
-                    </button>
-                  </div>
-                </div>
-
               </div>
             )}
+
+            {/* MANDATORY FOR ALL PROPERTY TYPES: Finished Or Unfinished? * */}
+            <div className="p-5 rounded-2xl bg-slate-50/90 border-2 border-slate-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs sm:text-sm font-extrabold text-slate-900">
+                  {isAmharic ? 'ቤቱ ያለቀለት ወይስ ያልተጠናቀቀ ነው? *' : 'Is the house Finished Or Unfinished? *'}
+                </label>
+                <span className="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                  Required / አስፈላጊ
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                {isAmharic 
+                  ? 'ለሁሉም የቤት ዓይነቶች (አፓርታማ፣ ቪላ፣ ኮንዶሚኒየም፣ ፎቅ ቤት ወዘተ) የቤቱን አጨራረስ ሁኔታ ይምረጡ' 
+                  : 'Please specify the construction and finishing state for this property listing'}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setFinishingStatus('finished')}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer ${
+                    finishingStatus === 'finished'
+                      ? 'bg-white border-emerald-500 text-emerald-950 shadow-md ring-2 ring-emerald-500/20'
+                      : 'bg-white/80 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                    finishingStatus === 'finished' ? 'bg-emerald-600 text-white' : 'border border-slate-300'
+                  }`}>
+                    {finishingStatus === 'finished' && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <span>{isAmharic ? 'የተጠናቀቀ / ያለቀለት ቤት' : 'Finished House'}</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-emerald-100 text-emerald-800">
+                        {isAmharic ? 'ያለቀለት' : 'Finished'}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      {isAmharic ? 'ሙሉ በሙሉ የተጠናቀቀና ለኑሮ ወይም ለስራ ዝግጁ የሆነ ቤት' : 'Fully completed and ready for immediate occupancy or operation.'}
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFinishingStatus('unfinished')}
+                  className={`p-3.5 rounded-2xl border-2 text-left transition-all flex items-start gap-3 cursor-pointer ${
+                    finishingStatus === 'unfinished'
+                      ? 'bg-white border-amber-500 text-amber-950 shadow-md ring-2 ring-amber-500/20'
+                      : 'bg-white/80 border-slate-200 text-slate-700 hover:bg-white hover:border-slate-300'
+                  }`}
+                >
+                  <div className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                    finishingStatus === 'unfinished' ? 'bg-amber-600 text-white' : 'border border-slate-300'
+                  }`}>
+                    {finishingStatus === 'unfinished' && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                      <span>{isAmharic ? 'ያልተጠናቀቀ / ከፊል ያለቀ ቤት' : 'Unfinished House'}</span>
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-amber-100 text-amber-800">
+                        {isAmharic ? 'ያልተጠናቀቀ' : 'Unfinished'}
+                      </span>
+                    </p>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      {isAmharic ? 'ግንባታው በመካሄድ ላይ ያለ ወይም በራስ ምርጫ ለማጠናቀቅ የሚሸጥ/የሚከራይ' : 'Under construction, core & shell, or semi-finished structure.'}
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -839,6 +941,174 @@ export const PostPropertyView: React.FC = () => {
                     ? 'ሁሉም የሚለጠፉ ቤቶች ደንበኞችን ከአጭበርባሪ ለመጠበቅና ትክክለኛ መረጃ ለማረጋገጥ በቤቴ ፈላጊ አስተዳዳሪ ጸድቀው ይለቀቃሉ።'
                     : 'Every submitted property listing is verified by the platform owner to protect buyers and tenants from fraudulent listings.'}
                 </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 5: Choose Listing Package & Telebirr Payment */}
+          <div className="space-y-5">
+            <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
+              <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                <Crown className="w-5 h-5 text-amber-500" />
+                <span>{isAmharic ? '5. የማስታወቂያ ፓኬጅ እና ክፍያ' : '5. Listing Package & Promotion Plan'}</span>
+              </h2>
+              <span className="text-xs font-semibold text-slate-400">Step 5 of 5</span>
+            </div>
+
+            <p className="text-xs text-slate-600">
+              {isAmharic 
+                ? 'የቤትዎን ማስታወቂያ በቶሎ እንዲከራይ ወይም እንዲሸጥ የሚፈልጉትን ፓኬጅ ይምረጡ። ክፍያ በቴሌብር (Telebirr) ይፈጽሙ።'
+                : 'Select a promotion package to speed up tenant or buyer inquiries. Complete payment via Telebirr.'}
+            </p>
+
+            {/* Packages Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Basic */}
+              <div
+                onClick={() => setSelectedPlanId('basic')}
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
+                  selectedPlanId === 'basic' 
+                    ? 'border-emerald-500 bg-emerald-50/50 shadow-md' 
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black text-slate-900">
+                    {isAmharic ? 'መሰረታዊ (Basic)' : 'Basic Plan'}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedPlanId === 'basic' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>
+                    {selectedPlanId === 'basic' && <Check className="w-3 h-3" />}
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 mb-1">
+                  150 <span className="text-xs font-bold text-slate-500">ETB/mo</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 space-y-1">
+                  <li>• 30 Days Active Listing</li>
+                  <li>• Verified Badge Check</li>
+                  <li>• Cross-Device Neon Sync</li>
+                </ul>
+              </div>
+
+              {/* Premium */}
+              <div
+                onClick={() => setSelectedPlanId('premium')}
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+                  selectedPlanId === 'premium' 
+                    ? 'border-amber-500 bg-amber-50/50 shadow-md ring-2 ring-amber-400/20' 
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <span className="absolute -top-2.5 right-3 bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs">
+                  {isAmharic ? 'ተመራጭ' : 'Popular'}
+                </span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black text-slate-900">
+                    {isAmharic ? 'ፕሪሚየም (Premium)' : 'Premium Plan'}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedPlanId === 'premium' ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-300'}`}>
+                    {selectedPlanId === 'premium' && <Check className="w-3 h-3" />}
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 mb-1">
+                  350 <span className="text-xs font-bold text-slate-500">ETB/mo</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 space-y-1">
+                  <li>• 60 Days Active Listing</li>
+                  <li>• 24/7 Auto-Renew Ranking</li>
+                  <li>• Enhanced Search Priority</li>
+                </ul>
+              </div>
+
+              {/* VIP */}
+              <div
+                onClick={() => setSelectedPlanId('vip')}
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+                  selectedPlanId === 'vip' 
+                    ? 'border-purple-600 bg-purple-50/50 shadow-md ring-2 ring-purple-400/20' 
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <span className="absolute -top-2.5 right-3 bg-purple-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs">
+                  {isAmharic ? 'ቪአይፒ' : 'VIP TOP+'}
+                </span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black text-slate-900">
+                    {isAmharic ? 'ቪአይፒ ቶፕ+ (VIP)' : 'VIP Spotlight'}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedPlanId === 'vip' ? 'border-purple-600 bg-purple-600 text-white' : 'border-slate-300'}`}>
+                    {selectedPlanId === 'vip' && <Check className="w-3 h-3" />}
+                  </div>
+                </div>
+                <div className="text-xl font-black text-slate-900 mb-1">
+                  750 <span className="text-xs font-bold text-slate-500">ETB/mo</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 space-y-1">
+                  <li>• 90 Days Spotlight Banner</li>
+                  <li>• Top Carousel on Homepage</li>
+                  <li>• Direct VIP Lead Priority</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Telebirr Payment Instructions Box */}
+            <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Smartphone className="w-4 h-4 text-emerald-400" />
+                  <span className="font-extrabold text-xs text-white">Telebirr Official Payment (የቴሌብር ሂሳብ)</span>
+                </div>
+                <span className="text-xs font-black text-amber-400">
+                  {selectedPlanId === 'vip' ? '750 ETB' : selectedPlanId === 'basic' ? '150 ETB' : '350 ETB'}
+                </span>
+              </div>
+
+              <div className="bg-slate-800/90 p-3 rounded-xl flex items-center justify-between text-xs">
+                <div>
+                  <p className="text-slate-400 text-[10px]">Account Holder / ስም:</p>
+                  <p className="font-bold text-slate-100">{telebirrSettings.accountName}</p>
+                  <p className="text-slate-400 text-[10px] mt-1">Telebirr Number / ቁጥር:</p>
+                  <p className="font-mono font-bold text-emerald-400 text-sm">{telebirrSettings.accountNumber}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyTelebirr}
+                  className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                >
+                  {copiedNumber ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedNumber ? 'Copied!' : 'Copy'}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    Telebirr Transaction Ref / ቁጥር (e.g. TB12345678)
+                  </label>
+                  <input
+                    type="text"
+                    value={transactionRef}
+                    onChange={(e) => setTransactionRef(e.target.value)}
+                    placeholder="Enter Telebirr Tx Ref (optional or pay now)"
+                    className="w-full p-2 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white font-mono placeholder:text-slate-500 focus:ring-1 focus:ring-emerald-400"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                    Upload Payment Receipt / ስክሪንሽኦት
+                  </label>
+                  <label className="w-full p-2 bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-lg text-slate-300 text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                    <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
+                    <span className="truncate">{screenshotFileName || 'Upload Receipt'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleProofUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
             </div>
           </div>

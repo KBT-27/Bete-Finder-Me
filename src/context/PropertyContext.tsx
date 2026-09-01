@@ -15,6 +15,7 @@ const DEFAULT_FILTER: PropertyFilterState = {
   minBedrooms: 'all',
   minBathrooms: 'all',
   isFurnished: undefined,
+  finishingStatus: 'all',
   verifiedOnly: false,
   sortBy: 'newest',
   selectedAmenities: []
@@ -275,6 +276,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       if (filters.isFurnished !== undefined && prop.isFurnished !== filters.isFurnished) return false;
+      if (filters.finishingStatus && filters.finishingStatus !== 'all' && prop.finishingStatus !== filters.finishingStatus) return false;
       if (filters.verifiedOnly && !prop.isVerified) return false;
 
       if (filters.selectedAmenities.length > 0) {

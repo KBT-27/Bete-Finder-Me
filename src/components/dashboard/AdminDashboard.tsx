@@ -6,7 +6,9 @@ import {
   Trash2, 
   CheckCircle2, 
   XCircle, 
-  Eye, 
+  Eye,
+  EyeOff,
+  Camera,
   PlusCircle, 
   Zap,
   Sparkles,
@@ -164,9 +166,19 @@ export const AdminDashboard: React.FC = () => {
     isOwner ? ownerCredentials.password : adminCredentials.password
   );
   const [securityName, setSecurityName] = useState(
-    user?.name || (isOwner ? 'Owner (Kaleb Bereket)' : 'Admin (Kaleb Bereket)')
+    user?.name || (isOwner ? (ownerCredentials.name || 'Kaleb Bereket') : (adminCredentials.name || 'Admin (Kaleb Bereket)'))
   );
-  const [securityPhone, setSecurityPhone] = useState(user?.phone || '+251995406697');
+  const [securityPhone, setSecurityPhone] = useState(
+    user?.phone || (isOwner ? (ownerCredentials.phone || '0995406697') : (adminCredentials.phone || '+251995406697'))
+  );
+  const [securityAvatar, setSecurityAvatar] = useState(
+    user?.avatar || (isOwner ? (ownerCredentials.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80') : (adminCredentials.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80'))
+  );
+  const [securityBio, setSecurityBio] = useState(
+    user?.bio || (isOwner ? (ownerCredentials.bio || 'Platform Founder & Master Executive') : (adminCredentials.bio || 'System Administrator'))
+  );
+  const [showSecurityPassword, setShowSecurityPassword] = useState(false);
+  const [syncTelebirrWithProfile, setSyncTelebirrWithProfile] = useState(true);
   const [securitySaveSuccess, setSecuritySaveSuccess] = useState(false);
 
   // Admin Profile Management by Owner state (Owner only)
@@ -890,17 +902,39 @@ export const AdminDashboard: React.FC = () => {
   // -------------------------------------------------------------
   const handleSaveSecurity = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!securityEmail.trim() || !securityPassword.trim()) return;
+    if (!securityEmail.trim() || !securityPassword.trim() || !securityName.trim() || !securityPhone.trim()) {
+      showToast('All fields (Name, Email, Phone, Password) are required.');
+      return;
+    }
 
     if (isOwner) {
-      updateOwnerSecurity(securityEmail.trim(), securityPassword.trim(), securityName.trim(), securityPhone.trim());
+      updateOwnerSecurity(
+        securityEmail.trim(),
+        securityPassword.trim(),
+        securityName.trim(),
+        securityPhone.trim(),
+        securityAvatar.trim(),
+        securityBio.trim()
+      );
+      if (syncTelebirrWithProfile) {
+        updateTelebirrSettings(securityPhone.trim(), `${securityName.trim()} (Owner)`);
+        setTelebirrAccountNum(securityPhone.trim());
+        setTelebirrAccountName(`${securityName.trim()} (Owner)`);
+      }
     } else {
-      updateAdminSecurity(securityEmail.trim(), securityPassword.trim(), securityName.trim(), securityPhone.trim());
+      updateAdminSecurity(
+        securityEmail.trim(),
+        securityPassword.trim(),
+        securityName.trim(),
+        securityPhone.trim(),
+        securityAvatar.trim(),
+        securityBio.trim()
+      );
     }
 
     setSecuritySaveSuccess(true);
-    setTimeout(() => setSecuritySaveSuccess(false), 4000);
-    showToast('Your security credentials have been updated.');
+    setTimeout(() => setSecuritySaveSuccess(false), 5000);
+    showToast(isOwner ? '👑 Owner Profile & Security settings updated and synced!' : 'Admin Profile & Security updated successfully!');
   };
 
   const handleSaveAdminProfileByOwner = (e: React.FormEvent) => {
@@ -972,6 +1006,15 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            <button
+              onClick={() => setActiveAdminTab('security')}
+              id="admin-edit-profile-btn"
+              className="px-4 py-2.5 bg-white/15 hover:bg-white/25 text-white font-bold text-xs rounded-xl border border-white/20 shadow-xs flex items-center gap-1.5 cursor-pointer transition-all"
+              title="Edit Name, Phone, Email, Password, and Avatar"
+            >
+              <User className="w-4 h-4 text-amber-300" />
+              <span>Edit Profile</span>
+            </button>
             <button
               onClick={handleManualSync}
               disabled={isDatabaseSyncing}
@@ -2123,100 +2166,268 @@ export const AdminDashboard: React.FC = () => {
         {activeAdminTab === 'security' && (
           <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in">
             
-            {/* Section A: Owner / Current User's Own Credentials */}
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
-              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center">
-                  <Lock className="w-6 h-6" />
+            {/* Section A: Owner / Current User's Own Profile & Credentials */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+              <div className="flex items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100 flex-wrap">
+                <div className="flex items-center gap-3">
+                  <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
+                    isOwner 
+                      ? 'bg-amber-500/10 border border-amber-500/20 text-amber-600' 
+                      : 'bg-purple-500/10 border border-purple-500/20 text-purple-600'
+                  }`}>
+                    {isOwner ? <Crown className="w-6 h-6" /> : <Lock className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                      <span>{isOwner ? '👑 Master Owner Profile & Security Suite' : 'Admin Profile & Security Settings'}</span>
+                    </h3>
+                    <p className="text-xs text-slate-500">
+                      Full control to edit your display name, phone number, login email, password, avatar, and bio
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-extrabold text-slate-900">
-                    {isOwner ? 'Owner Credentials & Security Settings' : 'Admin Credentials & Security Settings'}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Update your personal login email, password, and contact profile
-                  </p>
-                </div>
+                <span className={`text-[11px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider ${
+                  isOwner ? 'bg-amber-100 text-amber-900 border border-amber-300' : 'bg-purple-100 text-purple-900 border border-purple-300'
+                }`}>
+                  {isOwner ? '👑 Master Identity' : '🛡️ Administrator'}
+                </span>
               </div>
 
               {securitySaveSuccess && (
-                <div className="p-4 mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+                <div className="p-4 mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2.5 animate-in fade-in shadow-xs">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                  <span>Credentials updated successfully! You can now use this new Email and Password to log in.</span>
+                  <div>
+                    <p className="font-black text-emerald-900">Profile & Credentials Successfully Synchronized!</p>
+                    <p className="text-[11px] text-emerald-700 mt-0.5">
+                      Updated identity ({securityName}, {securityPhone}, {securityEmail}) is active in your session, local store, and synced across database devices.
+                    </p>
+                  </div>
                 </div>
               )}
 
-              <form onSubmit={handleSaveSecurity} className="space-y-4">
+              <form onSubmit={handleSaveSecurity} className="space-y-6">
+                
+                {/* 1. Avatar Selection & Preview */}
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
+                  <label className="block text-xs font-black text-slate-800 uppercase tracking-wider mb-3">
+                    Profile Picture / Avatar
+                  </label>
+                  
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="relative shrink-0">
+                      <img
+                        src={securityAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'}
+                        alt={securityName}
+                        referrerPolicy="no-referrer"
+                        className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-400 shadow-md"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80';
+                        }}
+                      />
+                      {isOwner && (
+                        <div className="absolute -top-2 -right-2 bg-amber-500 text-slate-950 p-1 rounded-full shadow-md border border-white">
+                          <Crown className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 w-full space-y-2">
+                      <div className="relative">
+                        <Camera className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <input
+                          type="url"
+                          placeholder="Paste custom avatar image URL..."
+                          value={securityAvatar}
+                          onChange={(e) => setSecurityAvatar(e.target.value)}
+                          className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+
+                      {/* Fast Preset Avatars */}
+                      <div className="flex items-center gap-2 pt-1 flex-wrap">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Presets:</span>
+                        {[
+                          { label: 'Executive 1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80' },
+                          { label: 'Corporate', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80' },
+                          { label: 'Tech Leader', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80' },
+                          { label: 'Director', url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80' }
+                        ].map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setSecurityAvatar(preset.url)}
+                            className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition-all cursor-pointer ${
+                              securityAvatar === preset.url
+                                ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Full Name and Phone Number */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Full Name / Display Title*
+                    </label>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Kaleb Bereket"
+                        value={securityName}
+                        onChange={(e) => setSecurityName(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Registered Phone Number*
+                    </label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. 0995406697 or +251995406697"
+                        value={securityPhone}
+                        onChange={(e) => setSecurityPhone(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors font-mono"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Used for SMS/Call verifications and Password Reset lookups
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. Login Email and Password */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      Login Email / Account Identifier*
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        required
+                        placeholder={isOwner ? 'kalebbereket49@gmail.com/owner' : 'admin@betefinder.et'}
+                        value={securityEmail}
+                        onChange={(e) => setSecurityEmail(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                      />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                      Supports direct Gmail login or custom <code className="text-amber-700">/owner</code> username
+                    </p>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-slate-700">
+                        Login Password*
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowSecurityPassword(!showSecurityPassword)}
+                        className="text-[11px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 cursor-pointer"
+                      >
+                        {showSecurityPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                        <span>{showSecurityPassword ? 'Hide' : 'Show'}</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                      <input
+                        type={showSecurityPassword ? 'text' : 'password'}
+                        required
+                        value={securityPassword}
+                        onChange={(e) => setSecurityPassword(e.target.value)}
+                        className="w-full pl-9 pr-16 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(securityPassword);
+                          showToast('Password copied to clipboard!');
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-slate-200 hover:bg-slate-300 text-[10px] font-bold text-slate-700 rounded-md transition-colors cursor-pointer"
+                        title="Copy password"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    {/* Password strength indicator */}
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      <div className={`h-1 flex-1 rounded-full ${
+                        securityPassword.length >= 8 ? 'bg-emerald-500' : securityPassword.length >= 5 ? 'bg-amber-500' : 'bg-rose-500'
+                      }`} />
+                      <span className="text-[10px] font-bold text-slate-500">
+                        {securityPassword.length >= 8 ? 'Strong' : securityPassword.length >= 5 ? 'Medium' : 'Short'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Professional Title / Bio */}
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Full Name / Display Title
+                    Role Title / Platform Bio
                   </label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="text"
-                      required
-                      value={securityName}
-                      onChange={(e) => setSecurityName(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white"
+                      placeholder="e.g. Platform Founder & Real Estate Director"
+                      value={securityBio}
+                      onChange={(e) => setSecurityBio(e.target.value)}
+                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white transition-colors"
                     />
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Login Email / Username*
-                  </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      required
-                      value={securityEmail}
-                      onChange={(e) => setSecurityEmail(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white"
-                    />
+                {/* 5. Telebirr Payment Receiver Auto-Sync Toggle (Owner only) */}
+                {isOwner && (
+                  <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={syncTelebirrWithProfile}
+                        onChange={(e) => setSyncTelebirrWithProfile(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 text-emerald-600 rounded-sm border-emerald-300 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <div>
+                        <p className="text-xs font-black text-emerald-950 flex items-center gap-1.5">
+                          <span>Auto-sync Telebirr Merchant Account to this Name & Phone</span>
+                          <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded-md font-bold">Recommended</span>
+                        </p>
+                        <p className="text-[11px] text-emerald-800 mt-0.5">
+                          When checked, tenant and landlord VIP/Premium plan subscription payments will automatically be directed to <strong className="font-mono">{securityPhone || '0995406697'}</strong> under <strong className="font-mono">{securityName || 'Kaleb Bereket'} (Owner)</strong>.
+                        </p>
+                      </div>
+                    </label>
                   </div>
-                </div>
+                )}
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Login Password*
-                  </label>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      required
-                      value={securityPassword}
-                      onChange={(e) => setSecurityPassword(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Phone Number
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={securityPhone}
-                      onChange={(e) => setSecurityPhone(e.target.value)}
-                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-amber-500 focus:bg-white"
-                    />
-                  </div>
-                </div>
-
+                {/* 6. Save Button */}
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs rounded-xl shadow-md transition-colors cursor-pointer flex items-center justify-center gap-2"
+                    id="save-owner-credentials-btn"
+                    className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-extrabold text-xs sm:text-sm rounded-2xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
                   >
                     <Save className="w-4 h-4 text-emerald-400" />
-                    <span>Save My Credentials</span>
+                    <span>Save {isOwner ? 'Owner Profile & Security' : 'My Credentials'}</span>
                   </button>
                 </div>
               </form>

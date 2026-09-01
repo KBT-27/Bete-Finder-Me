@@ -21,7 +21,8 @@ import { useAuth, AuthModalMode } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { ResetPasswordView } from './ResetPasswordView';
 import { isSlashAllowedForPassword, getRegisteredUsers } from '../../lib/passwords';
-import { authenticateWithGoogle } from '../../lib/googleAuth';
+import { authenticateWithGoogle, GoogleUserProfile } from '../../lib/googleAuth';
+import { GoogleAccountChooserModal } from './GoogleAccountChooserModal';
 
 const GoogleIcon: React.FC = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -80,6 +81,7 @@ export const AuthModal: React.FC = () => {
   // Loading and alerts
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isGoogleChooserOpen, setIsGoogleChooserOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isDeliveredViaSmtp, setIsDeliveredViaSmtp] = useState<boolean>(false);
@@ -92,6 +94,7 @@ export const AuthModal: React.FC = () => {
     setSuccessMessage(null);
     setIsDeliveredViaSmtp(false);
     setPendingGoogleProfile(null);
+    setIsGoogleChooserOpen(false);
   }, [authModalInitialMode, isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
@@ -101,30 +104,40 @@ export const AuthModal: React.FC = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setPendingGoogleProfile(null);
+    setIsGoogleChooserOpen(false);
   };
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = () => {
+    setErrorMessage(null);
+    setSuccessMessage(null);
+    setIsGoogleChooserOpen(true);
+  };
+
+  const handleSelectGoogleAccount = async (profile: GoogleUserProfile) => {
+    setIsGoogleChooserOpen(false);
     setIsGoogleLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
 
     try {
-      const authRes = await authenticateWithGoogle();
-      if (!authRes.success || !authRes.profile) {
-        setErrorMessage(authRes.error || 'Google Sign-In failed or was cancelled.');
-        setIsGoogleLoading(false);
-        return;
-      }
-
-      const { email: gEmail, name: gName, avatar: gAvatar } = authRes.profile;
+      const { email: gEmail, name: gName, avatar: gAvatar } = profile;
       const registered = getRegisteredUsers();
       const existing = registered.find(u => u.email.toLowerCase() === gEmail.toLowerCase());
 
-      if (existing) {
-        // Existing user - log in directly with their existing profile role
-        const res = await loginWithGoogle(existing.role, authRes.profile);
+      const isOwnerEmail = 
+        gEmail.toLowerCase() === 'kalebbereket49@gmail.com' ||
+        gEmail.toLowerCase() === 'kalebbereker49@gmail.com';
+
+      if (existing || isOwnerEmail) {
+        // Existing user or owner - log in directly with their profile role
+        const targetRole = isOwnerEmail ? 'owner' : (existing?.role || 'tenant');
+        const res = await loginWithGoogle(targetRole, profile);
         if (res.success) {
-          setSuccessMessage(language === 'am' ? 'በ Google በተሳካ ሁኔታ ገብተዋል!' : 'Successfully signed in with Google!');
+          setSuccessMessage(
+            language === 'am' 
+              ? `በ Google (${gEmail}) በተሳካ ሁኔታ ገብተዋል!` 
+              : `Successfully signed in as ${gName || gEmail}!`
+          );
           setTimeout(() => {
             handleClose();
           }, 600);
@@ -135,11 +148,11 @@ export const AuthModal: React.FC = () => {
         // New user registering with Google!
         if (mode === 'signup') {
           // In Sign Up mode, the user has selected their "I am a..." role
-          const res = await loginWithGoogle(selectedRole, authRes.profile);
+          const res = await loginWithGoogle(selectedRole, profile);
           if (res.success) {
             setSuccessMessage(
               language === 'am'
-                ? `በ Google እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} በተሳካ ሁኔታ ተመዝግበዋል!`
+                ? `በ Google (${gEmail}) እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} በተሳካ ሁኔታ ተመዝግበዋል!`
                 : `Successfully registered with Google as ${selectedRole === 'tenant' ? 'Tenant / Buyer' : 'Landlord'}!`
             );
             setTimeout(() => {
@@ -891,6 +904,14 @@ export const AuthModal: React.FC = () => {
         )}
 
       </div>
+
+      {/* Google Account Chooser Modal (Choose account / ሌላ መለያ ይጠቀሙ) */}
+      <GoogleAccountChooserModal
+        isOpen={isGoogleChooserOpen}
+        onClose={() => setIsGoogleChooserOpen(false)}
+        onSelectAccount={handleSelectGoogleAccount}
+        language={language}
+      />
     </div>
   );
 };

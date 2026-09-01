@@ -5,6 +5,8 @@ export interface StoredCredentials {
   password: string;
   name: string;
   phone: string;
+  avatar?: string;
+  bio?: string;
 }
 
 export interface RegisteredAccount extends UserProfile {
@@ -21,8 +23,8 @@ const DEFAULT_ADMIN_CREDENTIALS: StoredCredentials = {
 const DEFAULT_OWNER_CREDENTIALS: StoredCredentials = {
   email: 'kalebbereket49@gmail.com/owner',
   password: 'Kaleb5873',
-  name: 'Owner (Kaleb Bereket)',
-  phone: '+251995406697'
+  name: 'Kaleb Bereket',
+  phone: '0995406697'
 };
 
 // Check if "/" is allowed for this email/username (allowed ONLY for Admin and Owner)
@@ -48,9 +50,12 @@ export const isSlashAllowedForPassword = (emailOrRole: string, password: string)
     normalized === 'admin' ||
     normalized === 'kalebbereket49@gmail.com/owner' ||
     normalized === 'kalebbereket49@gmail.com/admin' ||
+    normalized === 'kalebbereker49@gmail.com/owner' ||
+    normalized === 'kalebbereker49@gmail.com/admin' ||
     normalized.endsWith('/admin') ||
     normalized.endsWith('/owner') ||
-    normalized === 'kalebbereket49@gmail.com'
+    normalized === 'kalebbereket49@gmail.com' ||
+    normalized === 'kalebbereker49@gmail.com'
   );
 };
 
@@ -96,12 +101,17 @@ export const verifyRegisteredAccountAndPhone = (
 
   // 1. Check Owner Account
   const owner = getOwnerCredentials();
+  const cleanOwnerEmail = (owner.email || '').split('/')[0].toLowerCase();
   if (
     normEmail === owner.email.toLowerCase() ||
+    normEmail === cleanOwnerEmail ||
+    normEmail === `${cleanOwnerEmail}/owner` ||
     normEmail === 'kalebbereket49@gmail.com/owner' ||
-    normEmail === 'kalebbereket49@gmail.com'
+    normEmail === 'kalebbereket49@gmail.com' ||
+    normEmail === 'kalebbereker49@gmail.com/owner' ||
+    normEmail === 'kalebbereker49@gmail.com'
   ) {
-    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '+251995406697');
+    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '0995406697');
     if (ownerPhoneNorm === normPhone) {
       return { 
         matched: true, 
@@ -112,15 +122,18 @@ export const verifyRegisteredAccountAndPhone = (
     } else {
       return { 
         matched: false, 
-        error: 'The provided Phone Number does not match the registered Owner account phone number (+251995406697).' 
+        error: `The provided Phone Number does not match the registered Owner account phone number (${owner.phone || '0995406697'}).` 
       };
     }
   }
 
   // 2. Check Admin Account
   const admin = getAdminCredentials();
+  const cleanAdminEmail = (admin.email || '').split('/')[0].toLowerCase();
   if (
     normEmail === admin.email.toLowerCase() ||
+    normEmail === cleanAdminEmail ||
+    normEmail === `${cleanAdminEmail}/admin` ||
     normEmail === 'kalebbereket49@gmail.com/admin'
   ) {
     const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
@@ -134,7 +147,7 @@ export const verifyRegisteredAccountAndPhone = (
     } else {
       return { 
         matched: false, 
-        error: 'The provided Phone Number does not match the registered Admin account phone number.' 
+        error: `The provided Phone Number does not match the registered Admin account phone number (${admin.phone || '+251995406697'}).` 
       };
     }
   }
