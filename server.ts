@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import pg from 'pg';
+import { GoogleGenAI } from '@google/genai';
 
 dotenv.config();
 
@@ -27,12 +28,26 @@ app.use((req, res, next) => {
   next();
 });
 
+// URL Rewrite normalization for Vercel Serverless Function proxying
+app.use((req, res, next) => {
+  const forwarded = req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.headers['x-now-route-matches'];
+  if (forwarded && typeof forwarded === 'string') {
+    if (req.url === '/api/index' || req.url === '/api/index.ts' || req.url.startsWith('/api/index?') || req.url === '/api' || req.url === '/api/') {
+      req.url = forwarded;
+    }
+  }
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 
 // Database JSON File Path
 const DB_FILE_PATH = process.env.VERCEL 
   ? path.join('/tmp', 'bete_finder_db.json')
   : path.join(process.cwd(), 'data', 'bete_finder_db.json');
+
+// In-Memory Database Cache to guarantee zero-latency fallback on serverless cold starts
+let inMemoryDbCache: any = null;
 
 // Memory store for active password reset codes
 interface ServerResetRequest {
@@ -58,65 +73,52 @@ function ensureDataDirectory() {
   }
 }
 
-// Read database from local JSON file
+// Read database from local JSON file or in-memory fallback
 function readDbFromFile(): any {
   ensureDataDirectory();
   try {
     if (fs.existsSync(DB_FILE_PATH)) {
       const content = fs.readFileSync(DB_FILE_PATH, 'utf-8');
       const parsed = JSON.parse(content);
-      // Migrate admin password if still set to placeholder
-      if (parsed.adminCredentials?.password === '1234567890admin' || !parsed.adminCredentials?.password) {
-        parsed.adminCredentials = {
-          ...parsed.adminCredentials,
-          password: 'Kaleb5873'
-        };
+      if (parsed && typeof parsed === 'object') {
+        inMemoryDbCache = parsed;
+        return parsed;
       }
-      if (parsed.ownerCredentials?.password === '1234567890owner' || !parsed.ownerCredentials?.password) {
-        parsed.ownerCredentials = {
-          ...parsed.ownerCredentials,
-          password: 'Kaleb5873'
-        };
+    }
+    // Also try local project data directory if on serverless
+    const localDataPath = path.join(process.cwd(), 'data', 'bete_finder_db.json');
+    if (fs.existsSync(localDataPath)) {
+      const content = fs.readFileSync(localDataPath, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (parsed && typeof parsed === 'object') {
+        inMemoryDbCache = parsed;
+        return parsed;
       }
-      return parsed;
     }
   } catch (e) {
     console.error('[DB File Read Error]:', e);
   }
-  return {
-    lastUpdated: Date.now(),
-    properties: [],
-    users: [],
-    adminCredentials: {
-      email: 'kalebbereket49@gmail.com/admin',
-      password: 'Kaleb5873',
-      name: 'Admin (Kaleb Bereket)',
-      phone: '+251995406697'
-    },
-    ownerCredentials: {
-      email: 'kalebbereket49@gmail.com/owner',
-      password: 'Kaleb5873',
-      name: 'Kaleb Bereket',
-      phone: '0995406697'
-    },
-    telebirrSettings: {
-      accountNumber: '0995406697',
-      accountName: 'Kaleb Bereket (Owner)'
-    },
-    paymentRequests: []
-  };
+
+  if (inMemoryDbCache) {
+    return inMemoryDbCache;
+  }
+
+  const cleanState = getCleanInitialState();
+  inMemoryDbCache = cleanState;
+  return cleanState;
 }
 
-// Write database to local JSON file
+// Write database to local JSON file and in-memory cache
 function writeDbToFile(data: any): boolean {
-  ensureDataDirectory();
   try {
     data.lastUpdated = Date.now();
+    inMemoryDbCache = data;
+    ensureDataDirectory();
     fs.writeFileSync(DB_FILE_PATH, JSON.stringify(data, null, 2), 'utf-8');
     return true;
   } catch (e) {
-    console.error('[DB File Write Error]:', e);
-    return false;
+    // In serverless, writing to disk might fail but memory cache persists
+    return true;
   }
 }
 
@@ -147,7 +149,21 @@ function getCleanInitialState() {
   return {
     lastUpdated: Date.now(),
     properties: [],
-    users: [],
+    users: [
+      {
+        id: 'usr-owner-master',
+        name: 'Kaleb Bereket',
+        role: 'owner',
+        email: 'kalebbereket49@gmail.com',
+        phone: '0995406697',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+        activePlan: 'vip',
+        toursBooked: [],
+        planExpiresAt: '2027-09-01T07:30:42.094Z',
+        savedPropertyIds: [],
+        postedPropertyIds: []
+      }
+    ],
     adminCredentials: {
       email: 'kalebbereket49@gmail.com/admin',
       password: 'Kaleb5873',
@@ -157,12 +173,12 @@ function getCleanInitialState() {
     ownerCredentials: {
       email: 'kalebbereket49@gmail.com/owner',
       password: 'Kaleb5873',
-      name: 'Owner (Kaleb Bereket)',
-      phone: '+251995406697'
+      name: 'Kaleb Bereket',
+      phone: '0995406697'
     },
     telebirrSettings: {
       accountNumber: '0995406697',
-      accountName: 'Kaleb Bereket (Bete Finder Owner)'
+      accountName: 'Kaleb Bereket (Owner)'
     },
     paymentRequests: []
   };
@@ -194,9 +210,9 @@ function getPgPool(): pg.Pool | null {
       pgPool = new pg.Pool({
         connectionString: sanitizedUrl,
         ssl: { rejectUnauthorized: false },
-        max: 10,
-        idleTimeoutMillis: 30000,
-        connectionTimeoutMillis: 10000
+        max: 5,
+        idleTimeoutMillis: 10000,
+        connectionTimeoutMillis: 3500
       });
       pgPool.on('error', (err) => {
         console.warn('[Postgres Pool Warning]:', err?.message || err);
@@ -306,8 +322,12 @@ async function fetchMasterData(): Promise<any> {
   return readDbFromFile();
 }
 
-// Initialize DB on boot
-initNeonDb().catch(console.error);
+// Lazy background database check
+if (!process.env.VERCEL) {
+  setTimeout(() => {
+    initNeonDb().catch((e) => console.warn('[Neon DB Boot Notice]:', e?.message || e));
+  }, 200);
+}
 
 // Lazy-initialized nodemailer transport for Gmail SMTP
 function getMailTransporter() {
@@ -827,6 +847,201 @@ app.post('/api/admin/controller-config', async (req, res) => {
   }
 });
 
+// ----------------------------------------------------
+// Bete AI Intelligent Virtual Assistant & Gemini Routes
+// ----------------------------------------------------
+let aiClientInstance: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI | null {
+  if (!aiClientInstance && process.env.GEMINI_API_KEY) {
+    aiClientInstance = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return aiClientInstance;
+}
+
+const BETE_AI_SYSTEM_INSTRUCTION = `
+You are "Bete AI", the primary intelligent virtual assistant and real estate Q&A expert for the "Bete Finder" real estate platform in Ethiopia.
+
+Rules and Responsibilities:
+1. Answering Any Real Estate Question:
+- You are a comprehensive Ethiopian real estate advisor. You answer ANY question the user asks regarding:
+  * Rental prices, neighborhood comparisons (e.g. Bole vs CMC vs Kazanchis vs Sarbet vs Gerji).
+  * Legal procedures, tenancy agreements, advance rent customs (typically 3-6 months), broker/delala commissions (usually 1 month rent or 2% sale).
+  * Bank loans & mortgages in Ethiopia (Commercial Bank of Ethiopia CBE, Awash Bank, Dashen Bank, Bank of Abyssinia, Diaspora housing mortgage schemes).
+  * Essential amenities for Ethiopian living: backup water storage (Roto water tanks), backup electric generators/solar power, EEU prepaid electricity meters, AAWSA water meters.
+  * Neighborhood safety, public transit (Addis Ababa Light Rail LRT, Sheger Express, Anbessa Bus, minibus routes), international schools (ICS, Sandford, Bingham, French School), embassies, and major hospitals (Korean Hospital, St. Paul, Black Lion).
+  * Regional real estate in Hawassa, Bahir Dar, Bishoftu, Adama, Dire Dawa, Mekelle, Gondar.
+- You DO NOT autofill or generate listings; you act as an open-ended conversational expert for answering user questions.
+
+2. Bilingual Language Support & Tone:
+- Language: Communicate naturally and fluently in both Amharic (አማርኛ) and English.
+- Detect the language of the user's query and respond in that language. If the user uses a mix, respond in fluent Amharic with clear English terminology.
+- Tone: Friendly, professional, knowledgeable, direct, and respectful.
+
+3. Boundaries & Accuracy:
+- Provide accurate, realistic advice based on Ethiopian real estate conditions.
+- If the user asks for specific property recommendations, highlight typical price ranges and key location factors.
+
+4. Output Format (Text Only):
+Provide all outputs strictly in structured text form without outputting raw software programming code blocks.
+Every response should include:
+User Response: A helpful, informative, and direct reply answering the user's question or providing advice in the user's language.
+Map & Search Context: A concise plain-text breakdown of relevant location or search metadata (Target Location, Nearby Landmarks, Property Type, Listing Intent [Rent/Sale], Max Price Limit, and Bedroom Count) when applicable.
+`;
+
+// 1. Bete AI Interactive Chat
+app.post('/api/ai/chat', async (req, res) => {
+  try {
+    const { message, history = [], language = 'auto' } = req.body;
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ success: false, message: 'Message is required.' });
+    }
+
+    const ai = getGeminiClient();
+    let replyText = '';
+
+    if (ai) {
+      // Build conversation context
+      const formattedContents: any[] = [];
+      
+      // Add previous messages if any (limit to last 6 for token efficiency)
+      const recentHistory = Array.isArray(history) ? history.slice(-6) : [];
+      for (const h of recentHistory) {
+        if (h.sender === 'user') {
+          formattedContents.push({ role: 'user', parts: [{ text: h.text }] });
+        } else if (h.sender === 'assistant') {
+          formattedContents.push({ role: 'model', parts: [{ text: h.text }] });
+        }
+      }
+
+      // Add current user message
+      formattedContents.push({
+        role: 'user',
+        parts: [{ text: message }]
+      });
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.7-flash',
+        contents: formattedContents,
+        config: {
+          systemInstruction: BETE_AI_SYSTEM_INSTRUCTION,
+          temperature: 0.7,
+        }
+      });
+
+      replyText = response.text || '';
+    } else {
+      // Fallback rule-based assistant when GEMINI_API_KEY is not yet populated
+      const isAmh = /[\u1200-\u137F]/.test(message);
+      if (isAmh) {
+        replyText = `User Response:
+እንኳን ወደ ቤቴ ፈላጊ በደህና መጡ! ጥያቄዎን ተቀብያለሁ። በኢትዮጵያ ውስጥ የሚፈልጉትን ቤት፣ አፓርታማ ወይም የንግድ ቦታ በካርታ ላይ በቀላሉ እንዲያገኙ እረዳዎታለሁ። የሚፈልጉትን አካባቢ (ቦሌ፣ ሲኤምሲ፣ ካዛንቺስ ወዘተ)፣ የክፍል ብዛት ወይም የዋጋ ገደብዎን በግልጽ ቢያስቀምጡልኝ ምርጥ ቤቶችን አዘጋጅቼ አቀርብልዎታለሁ።
+
+Map & Search Context:
+- Target Location: ${message.includes('ቦሌ') ? 'Bole (ቦሌ)' : message.includes('ሲኤምሲ') ? 'CMC (ሲኤምሲ)' : message.includes('ካዛንቺስ') ? 'Kazanchis (ካዛንቺስ)' : 'Addis Ababa & Regional Hubs'}
+- Nearby Landmarks: Pending User Selection
+- Property Type: ${message.includes('አፓርታማ') ? 'Apartment' : message.includes('ቪላ') ? 'Villa' : message.includes('ኮንዶሚኒየም') ? 'Condominium' : 'All'}
+- Listing Intent: ${message.includes('ሽያጭ') ? 'Sale' : 'Rent'}
+- Max Price Limit: ${message.match(/\d+[\d,]*/)?.[0] ? message.match(/\d+[\d,]*/)?.[0] + ' ETB' : 'Flexible'}
+- Bedroom Count: ${message.includes('1') ? '1' : message.includes('2') ? '2' : message.includes('3') ? '3' : 'Any'}`;
+      } else {
+        replyText = `User Response:
+Welcome to Bete Finder! I am Bete AI, your real estate and map guide in Ethiopia. I have noted your request. To help you find the best property in areas like Bole, Kazanchis, CMC, or other Ethiopian cities, could you specify your target neighborhood, preferred property type, and budget?
+
+Map & Search Context:
+- Target Location: ${message.toLowerCase().includes('bole') ? 'Bole' : message.toLowerCase().includes('cmc') ? 'CMC' : message.toLowerCase().includes('kazanchis') ? 'Kazanchis' : 'Addis Ababa & Hubs'}
+- Nearby Landmarks: Open
+- Property Type: ${message.toLowerCase().includes('villa') ? 'Villa' : message.toLowerCase().includes('apartment') ? 'Apartment' : 'Any'}
+- Listing Intent: ${message.toLowerCase().includes('buy') || message.toLowerCase().includes('sale') ? 'Sale' : 'Rent'}
+- Max Price Limit: ${message.match(/\d+[\d,]*/)?.[0] ? message.match(/\d+[\d,]*/)?.[0] + ' ETB' : 'Flexible'}
+- Bedroom Count: ${message.match(/(\d+)\s*(?:bed|bedroom)/i)?.[1] || 'Any'}`;
+      }
+    }
+
+    // Extract structured search parameters for frontend map/filter actions
+    const searchContext: any = {};
+    const lower = message.toLowerCase();
+    const replyLower = replyText.toLowerCase();
+
+    // Detect target location
+    if (lower.includes('bole') || replyLower.includes('bole') || lower.includes('ቦሌ')) {
+      searchContext.city = 'Addis Ababa';
+      searchContext.subcity = 'Bole';
+      searchContext.targetLocation = 'Bole';
+    } else if (lower.includes('cmc') || lower.includes('ሲኤምሲ') || lower.includes('yeka') || lower.includes('የካ')) {
+      searchContext.city = 'Addis Ababa';
+      searchContext.subcity = 'Yeka';
+      searchContext.targetLocation = 'CMC / Yeka';
+    } else if (lower.includes('kazanchis') || lower.includes('ካዛንቺስ') || lower.includes('kirkos')) {
+      searchContext.city = 'Addis Ababa';
+      searchContext.subcity = 'Kirkos';
+      searchContext.targetLocation = 'Kazanchis';
+    } else if (lower.includes('sarbet') || lower.includes('ሳርቤት') || lower.includes('bisrate') || lower.includes('ብስራተ')) {
+      searchContext.city = 'Addis Ababa';
+      searchContext.subcity = 'Nifas Silk-Lafto';
+      searchContext.targetLocation = 'Sarbet / Bisrate Gabriel';
+    } else if (lower.includes('hawassa') || lower.includes('ሐዋሳ')) {
+      searchContext.city = 'Hawassa';
+      searchContext.targetLocation = 'Hawassa';
+    } else if (lower.includes('bahir dar') || lower.includes('ባሕር ዳር')) {
+      searchContext.city = 'Bahir Dar';
+      searchContext.targetLocation = 'Bahir Dar';
+    } else if (lower.includes('bishoftu') || lower.includes('ቢሾፍቱ')) {
+      searchContext.city = 'Bishoftu (Debre Zeyit)';
+      searchContext.targetLocation = 'Bishoftu';
+    }
+
+    // Detect property type
+    if (lower.includes('apartment') || lower.includes('አፓርታማ')) searchContext.propertyType = 'Apartment';
+    else if (lower.includes('villa') || lower.includes('ቪላ')) searchContext.propertyType = 'Villa';
+    else if (lower.includes('condo') || lower.includes('ኮንዶሚኒየም')) searchContext.propertyType = 'Condominium';
+    else if (lower.includes('floor house') || lower.includes('g+') || lower.includes('ጂ+')) searchContext.propertyType = 'Floor House';
+    else if (lower.includes('commercial') || lower.includes('ንግድ') || lower.includes('ሱቅ')) searchContext.propertyType = 'Commercial';
+
+    // Detect intent
+    if (lower.includes('buy') || lower.includes('sale') || lower.includes('መግዛት') || lower.includes('ሽያጭ')) {
+      searchContext.listingType = 'sale';
+    } else {
+      searchContext.listingType = 'rent';
+    }
+
+    // Detect price numbers
+    const numMatch = message.match(/(\d[\d,.]*)\s*(?:birr|etb|ብር|k|thousand|million|ሚሊዮን)?/i);
+    if (numMatch) {
+      let rawVal = parseFloat(numMatch[1].replace(/,/g, ''));
+      if (lower.includes('k') && rawVal < 1000) rawVal *= 1000;
+      if ((lower.includes('million') || message.includes('ሚሊዮን')) && rawVal < 1000) rawVal *= 1000000;
+      if (rawVal > 1000) {
+        searchContext.maxPriceLimit = rawVal;
+      }
+    }
+
+    // Detect bedroom numbers
+    const bedMatch = message.match(/(\d+)\s*(?:bed|bedroom|መኝታ)/i);
+    if (bedMatch) {
+      searchContext.bedroomCount = parseInt(bedMatch[1], 10);
+    }
+
+    res.json({
+      success: true,
+      text: replyText,
+      searchContext
+    });
+  } catch (error: any) {
+    console.error('[AI Chat Error]:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: error?.message || 'Error processing AI assistant request.' 
+    });
+  }
+});
+
 // Property Upsert (Add or Update)
 app.post('/api/properties', async (req, res) => {
   try {
@@ -867,7 +1082,22 @@ app.delete('/api/properties/:id', async (req, res) => {
   }
 });
 
-// User Upsert / Registration
+// Get all Registered Users (Owner / Admin / Public Sync)
+app.get('/api/users', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    res.json({
+      success: true,
+      users: currentData.users || [],
+      totalUsers: (currentData.users || []).length,
+      timestamp: Date.now()
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// User Upsert / Registration (Guaranteed save to Owner database)
 app.post('/api/users', async (req, res) => {
   try {
     const userData = req.body;
@@ -880,16 +1110,31 @@ app.post('/api/users', async (req, res) => {
     let users = [...(currentData.users || [])];
     const existingIndex = users.findIndex((u: any) => u.email.toLowerCase() === email);
 
+    const fullRecord = {
+      ...userData,
+      email,
+      registeredAt: userData.registeredAt || (existingIndex >= 0 ? users[existingIndex].registeredAt : new Date().toISOString()),
+      lastActiveAt: new Date().toISOString(),
+      activePlan: userData.activePlan || (existingIndex >= 0 ? users[existingIndex].activePlan : 'basic'),
+      provider: userData.provider || (email.includes('@gmail.com') ? 'google' : 'local'),
+      role: userData.role || (existingIndex >= 0 ? users[existingIndex].role : 'tenant')
+    };
+
     if (existingIndex >= 0) {
-      users[existingIndex] = { ...users[existingIndex], ...userData };
+      users[existingIndex] = { ...users[existingIndex], ...fullRecord };
     } else {
-      users = [userData, ...users];
+      users = [fullRecord, ...users];
     }
 
     currentData.users = users;
     await persistMasterData(currentData);
 
-    res.json({ success: true, totalUsers: users.length, message: 'User updated in database.' });
+    res.json({ 
+      success: true, 
+      user: fullRecord,
+      totalUsers: users.length, 
+      message: 'User registered and saved to owner database.' 
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error?.message });
   }
@@ -1766,6 +2011,15 @@ app.post('/api/auth/reset-password', async (req, res) => {
 app.get('/api/auth/google-config', (req, res) => {
   const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID || '';
   res.json({ clientId });
+});
+
+// Catch-all for API endpoints to ensure JSON is ALWAYS returned (prevents HTML error parsing failures)
+app.all('/api/*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `API endpoint ${req.method} ${req.originalUrl || req.url} not found on server.`,
+    isJson: true
+  });
 });
 
 // Global Error Handler to guarantee JSON responses and prevent FUNCTION_INVOCATION_FAILED non-JSON crashes

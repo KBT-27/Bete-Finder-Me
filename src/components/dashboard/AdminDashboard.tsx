@@ -1909,33 +1909,138 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               {/* Search Bar for Database Users */}
-              <div className="relative">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                <input
-                  type="text"
-                  value={userSearchQuery}
-                  onChange={(e) => setUserSearchQuery(e.target.value)}
-                  placeholder="Search registered users by Name, Email, Phone, Role, or Plan..."
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 focus:bg-white"
-                />
-                {userSearchQuery && (
-                  <button 
-                    onClick={() => setUserSearchQuery('')}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={userSearchQuery}
+                    onChange={(e) => setUserSearchQuery(e.target.value)}
+                    placeholder="Search registered users by Name, Email, Phone, Role, Plan, or Provider..."
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 font-medium focus:ring-2 focus:ring-amber-500 focus:bg-white"
+                  />
+                  {userSearchQuery && (
+                    <button 
+                      onClick={() => setUserSearchQuery('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetch('/api/users')
+                      .then(res => res.json())
+                      .then(d => {
+                        if (d.users) setUsersList(d.users);
+                        showToast('Database registered users refreshed successfully!');
+                      })
+                      .catch(() => showToast('Refreshed from live state.'));
+                  }}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+                  <span>Refresh DB</span>
+                </button>
               </div>
 
-              {/* Users Table */}
-              <div className="overflow-x-auto">
+              {/* Mobile Card List View (Visible on Mobile & Tablet) */}
+              <div className="block md:hidden space-y-3">
+                {filteredUsers.map((u) => {
+                  const userProps = properties.filter(p => p.owner.email.toLowerCase() === u.email.toLowerCase());
+                  const isOwnerUser = u.email.toLowerCase() === ownerCredentials.email.toLowerCase() || u.role === 'owner';
+                  const isGoogleUser = u.provider === 'google' || u.email.toLowerCase().includes('@gmail.com');
+
+                  return (
+                    <div key={u.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3 shadow-2xs">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-slate-200 text-slate-800 flex items-center justify-center font-black text-sm shrink-0">
+                            {u.name ? u.name.charAt(0).toUpperCase() : 'U'}
+                          </div>
+                          <div>
+                            <p className="font-extrabold text-sm text-slate-900">{u.name || 'Registered User'}</p>
+                            <p className="font-mono text-xs text-slate-600 break-all">{u.email}</p>
+                          </div>
+                        </div>
+
+                        <span className={`px-2.5 py-0.5 rounded-full font-black uppercase text-[10px] shrink-0 ${
+                          u.role === 'owner' 
+                            ? 'bg-amber-400 text-slate-950' 
+                            : u.role === 'admin' 
+                            ? 'bg-purple-600 text-white' 
+                            : u.role === 'landlord' 
+                            ? 'bg-blue-100 text-blue-900' 
+                            : 'bg-slate-200 text-slate-700'
+                        }`}>
+                          {u.role}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-slate-200/60 text-slate-600">
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">Phone</p>
+                          <p className="font-mono font-medium text-slate-800">{u.phone || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">Registered Via</p>
+                          <span className="inline-flex items-center gap-1 font-bold text-[11px] text-slate-700">
+                            {isGoogleUser ? '🔵 Google Auth' : '🔑 Email / Pass'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">Active Plan</p>
+                          <span className={`px-2 py-0.5 rounded-md font-bold uppercase text-[10px] inline-block ${
+                            u.activePlan === 'vip' 
+                              ? 'bg-amber-400 text-slate-950' 
+                              : u.activePlan === 'premium' 
+                              ? 'bg-purple-600 text-white' 
+                              : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            {u.activePlan || 'basic'}
+                          </span>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase">Listings</p>
+                          <p className="font-bold text-slate-800">{userProps.length} property</p>
+                        </div>
+                      </div>
+
+                      {u.registeredAt && (
+                        <p className="text-[10px] text-slate-400 font-medium">
+                          Registered: {new Date(u.registeredAt).toLocaleDateString()} at {new Date(u.registeredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
+
+                      <div className="pt-1">
+                        {isOwnerUser ? (
+                          <span className="text-xs text-slate-400 italic">Owner Protected</span>
+                        ) : (
+                          <button
+                            onClick={() => setUserToDelete({ email: u.email, name: u.name || u.email })}
+                            className="w-full py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete User Account</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop / Laptop Table View */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
                     <tr>
                       <th className="px-4 py-3.5">User Identity</th>
                       <th className="px-4 py-3.5">Gmail / Email</th>
                       <th className="px-4 py-3.5">Phone</th>
+                      <th className="px-4 py-3.5">Provider</th>
                       <th className="px-4 py-3.5">Role</th>
                       <th className="px-4 py-3.5">Active Plan</th>
                       <th className="px-4 py-3.5">Listings</th>
@@ -1946,7 +2051,7 @@ export const AdminDashboard: React.FC = () => {
                     {filteredUsers.map((u) => {
                       const userProps = properties.filter(p => p.owner.email.toLowerCase() === u.email.toLowerCase());
                       const isOwnerUser = u.email.toLowerCase() === ownerCredentials.email.toLowerCase() || u.role === 'owner';
-                      const isAdminUser = u.email.toLowerCase() === adminCredentials.email.toLowerCase() || u.role === 'admin';
+                      const isGoogleUser = u.provider === 'google' || u.email.toLowerCase().includes('@gmail.com');
 
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
@@ -1957,7 +2062,13 @@ export const AdminDashboard: React.FC = () => {
                               </div>
                               <div>
                                 <p className="font-bold text-slate-900">{u.name || 'Registered User'}</p>
-                                <p className="text-[10px] text-slate-400">ID: {u.id.substring(0, 10)}...</p>
+                                {u.registeredAt ? (
+                                  <p className="text-[10px] text-slate-400">
+                                    {new Date(u.registeredAt).toLocaleDateString()}
+                                  </p>
+                                ) : (
+                                  <p className="text-[10px] text-slate-400">ID: {u.id.substring(0, 10)}...</p>
+                                )}
                               </div>
                             </div>
                           </td>
@@ -1968,6 +2079,14 @@ export const AdminDashboard: React.FC = () => {
 
                           <td className="px-4 py-4 font-mono text-slate-700">
                             {u.phone || '—'}
+                          </td>
+
+                          <td className="px-4 py-4">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              isGoogleUser ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'bg-slate-100 text-slate-700'
+                            }`}>
+                              {isGoogleUser ? 'Google Sign-In' : 'Email/Password'}
+                            </span>
                           </td>
 
                           <td className="px-4 py-4">

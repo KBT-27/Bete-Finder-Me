@@ -20,13 +20,18 @@ import {
   Smartphone,
   Tag,
   CreditCard,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Bot,
+  RefreshCw,
+  Compass
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
 import { useAuth } from '../../context/AuthContext';
 import { ETHIOPIAN_LOCATIONS, AMENITIES_LIST } from '../../data/ethiopianLocations';
+import { getCoordinatesForLocation } from '../../data/ethiopianGeoData';
 import { PropertyType, ListingType } from '../../types';
+import { safeFetchJson } from '../../lib/apiHelper';
 
 export const PostPropertyView: React.FC = () => {
   const { t, isAmharic } = useLanguage();
@@ -50,6 +55,7 @@ export const PostPropertyView: React.FC = () => {
   const [subcity, setSubcity] = useState('');
   const [neighborhood, setNeighborhood] = useState('');
   const [address, setAddress] = useState('');
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [bedrooms, setBedrooms] = useState<number | ''>('');
   const [bathrooms, setBathrooms] = useState<number | ''>('');
   const [areaSqm, setAreaSqm] = useState<number | ''>('');
@@ -66,6 +72,7 @@ export const PostPropertyView: React.FC = () => {
   const [telegram, setTelegram] = useState('');
   const [whatsapp, setWhatsapp] = useState('');
   const [description, setDescription] = useState('');
+  const [descriptionAm, setDescriptionAm] = useState('');
 
   // 5. Listing Package & Payment
   const [selectedPlanId, setSelectedPlanId] = useState<'basic' | 'premium' | 'vip'>('premium');
@@ -200,7 +207,7 @@ export const PostPropertyView: React.FC = () => {
       title: generatedTitle,
       titleAm: generatedTitleAm,
       description: description.trim() || (isAmharic ? `በ${locLabel} የሚገኝ ${propertyType}።` : `Well maintained ${propertyType.toLowerCase()} in ${locLabel}.`),
-      descriptionAm: description.trim() || `በ${locLabel} የሚገኝ ${propertyType === 'Floor House' ? 'ፎቅ ቤት' : propertyType}።`,
+      descriptionAm: descriptionAm.trim() || description.trim() || `በ${locLabel} የሚገኝ ${propertyType === 'Floor House' ? 'ፎቅ ቤት' : propertyType}።`,
       price: Number(price),
       pricePeriod: listingType === 'rent' ? 'month' : 'total',
       currency: 'ETB',
@@ -212,6 +219,7 @@ export const PostPropertyView: React.FC = () => {
       subcity: subcity || 'Central',
       neighborhood: neighborhood || '',
       address: address || '',
+      coordinates: coordinates || (city ? getCoordinatesForLocation(city, subcity, neighborhood) : undefined),
       bedrooms: bedrooms ? Number(bedrooms) : 0,
       bathrooms: bathrooms ? Number(bathrooms) : 0,
       areaSqm: areaSqm ? Number(areaSqm) : 0,
@@ -342,6 +350,8 @@ export const PostPropertyView: React.FC = () => {
                 setTelegram('');
                 setWhatsapp('');
                 setDescription('');
+                setDescriptionAm('');
+                setCoordinates(undefined);
               }}
               className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
             >
@@ -918,17 +928,34 @@ export const PostPropertyView: React.FC = () => {
               />
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                {t('postDescLabel')}
-              </label>
-              <textarea
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder={isAmharic ? 'ስለ ቤቱ ተጨማሪ ማብራሪያ (ለምሳሌ፡ የውሃና መብራት ሁኔታ፣ የመኪና ማቆሚያ፣ አካባቢው ያለው ምቾት)...' : 'Detail key advantages (e.g. power backup, water reserve tank, 24/7 security, proximity to main road, compound size)...'}
-                className="w-full p-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>{t('postDescLabel')} (English)</span>
+                  <span className="text-[10px] text-slate-400 font-normal">English Description</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Detail key advantages (e.g. power backup, water reserve tank, 24/7 security, proximity to main road)..."
+                  className="w-full p-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl text-slate-800 focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                  <span>የቤቱ ዝርዝር መግለጫ (አማርኛ)</span>
+                  <span className="text-[10px] text-emerald-700 font-bold">አማርኛ / Amharic</span>
+                </label>
+                <textarea
+                  rows={4}
+                  value={descriptionAm}
+                  onChange={(e) => setDescriptionAm(e.target.value)}
+                  placeholder="ስለ ቤቱ ተጨማሪ ማብራሪያ (ለምሳሌ፡ የውሃና መብራት ሁኔታ፣ የመኪና ማቆሚያ፣ አካባቢው ያለው ምቾት)..."
+                  className="w-full p-3 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl text-slate-800 amharic-font focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                />
+              </div>
             </div>
 
             {/* Note on Owner verification */}

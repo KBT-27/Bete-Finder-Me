@@ -32,6 +32,7 @@ interface AuthContextType {
   login: (email: string, password?: string) => { success: boolean; message?: string };
   signup: (data: { name: string; email: string; phone: string; password: string; role?: UserRole }) => { success: boolean; message?: string };
   loginWithGoogle: (role?: UserRole, customProfile?: { name?: string; email?: string; avatar?: string }) => Promise<{ success: boolean; message?: string }>;
+  isEmailRegistered: (email: string) => boolean;
   requestPasswordReset: (email: string, phone: string) => Promise<{ success: boolean; message: string; resetToken?: string; resetCode?: string; resetUrl?: string; delivered?: boolean }>;
   verifyResetToken: (token: string) => { valid: boolean; email?: string; error?: string };
   resetPasswordWithToken: (token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
@@ -159,6 +160,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const role: UserRole = user ? user.role : 'guest';
   const isAuthenticated = !!user;
+
+  // Helper to check if an email is already registered in local / cached database
+  const isEmailRegistered = (testEmail: string): boolean => {
+    if (!testEmail) return false;
+    const clean = testEmail.trim().toLowerCase();
+    
+    // Check owner / admin emails
+    const currentOwner = getOwnerCredentials();
+    const cleanOwnerEmail = (currentOwner.email || '').split('/')[0].toLowerCase();
+    if (
+      clean === cleanOwnerEmail ||
+      clean === currentOwner.email.toLowerCase() ||
+      clean === 'kalebbereket49@gmail.com' ||
+      clean === 'kalebbereker49@gmail.com'
+    ) {
+      return true;
+    }
+
+    const currentAdmin = getAdminCredentials();
+    const cleanAdminEmail = (currentAdmin.email || '').split('/')[0].toLowerCase();
+    if (
+      clean === cleanAdminEmail ||
+      clean === currentAdmin.email.toLowerCase() ||
+      clean === 'kalebbereket49@gmail.com/admin'
+    ) {
+      return true;
+    }
+
+    const registered = getRegisteredUsers();
+    return registered.some(u => u.email.toLowerCase() === clean);
+  };
 
   // Login handler
   const login = (email: string, password?: string): { success: boolean; message?: string } => {
@@ -319,13 +351,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         phone: data.phone.trim() || existing.phone,
         password: data.password.trim(),
         role: data.role || existing.role,
-        provider: 'local'
+        provider: 'local',
+        registeredAt: existing.registeredAt || new Date().toISOString()
       };
       saveRegisteredUser(updatedAccount);
       fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedAccount)
+      }).then(() => {
+        syncAuthWithDatabase().catch(() => {});
       }).catch(() => {});
 
       const { password: _, ...profile } = updatedAccount;
@@ -341,6 +376,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       role: data.role || 'tenant',
       password: data.password.trim(),
       provider: 'local',
+      registeredAt: new Date().toISOString(),
+      activePlan: 'basic',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
       savedPropertyIds: [],
       postedPropertyIds: [],
@@ -352,6 +389,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newAccount)
+    }).then(() => {
+      syncAuthWithDatabase().catch(() => {});
     }).catch(() => {});
 
     const { password: _, ...profile } = newAccount;
@@ -362,7 +401,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Google OAuth Login
   const loginWithGoogle = async (
     userRole: UserRole = 'tenant', 
-    customProfile?: { name?: string; email?: string; avatar?: string }
+    customProfile?: { name?: string; email?: string; avatar?: string; phone?: string }
   ): Promise<{ success: boolean; message?: string }> => {
     try {
       let googleEmail = customProfile?.email?.toLowerCase();
@@ -438,17 +477,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (existing) {
         const { password: _, ...profile } = existing;
         setUser(profile);
+        // Refresh last active timestamp in server
+        fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...existing, lastActiveAt: new Date().toISOString() })
+        }).catch(() => {});
         return { success: true };
       }
 
       const newGoogleAccount: RegisteredAccount = {
         id: `google-${Date.now()}`,
         name: googleName || 'Google User',
-        email: googleEmail || 'kalebbereket49@gmail.com',
-        phone: '+251995406697',
+        email: googleEmail || 'user@gmail.com',
+        phone: customProfile?.phone || '+251995406697',
         role: userRole,
         password: 'google-oauth-auth',
         provider: 'google',
+        registeredAt: new Date().toISOString(),
+        activePlan: 'basic',
         avatar: googleAvatar || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
         savedPropertyIds: [],
         postedPropertyIds: [],
@@ -460,6 +507,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newGoogleAccount)
+      }).then(() => {
+        syncAuthWithDatabase().catch(() => {});
       }).catch(() => {});
 
       const { password: _, ...profile } = newGoogleAccount;
@@ -767,6 +816,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         signup,
         loginWithGoogle,
+        isEmailRegistered,
         requestPasswordReset,
         verifyResetToken,
         resetPasswordWithToken,

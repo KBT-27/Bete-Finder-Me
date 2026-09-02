@@ -14,7 +14,9 @@ import {
   ChevronDown, 
   LogOut,
   Crown,
-  ShieldCheck
+  ShieldCheck,
+  Sparkles,
+  Bot
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -22,9 +24,9 @@ import { useProperties } from '../../context/PropertyContext';
 import { UserRole } from '../../types';
 
 export const Navbar: React.FC = () => {
-  const { t, language, toggleLanguage } = useLanguage();
+  const { t, language, toggleLanguage, isAmharic } = useLanguage();
   const { user, role, logout, setIsAuthModalOpen, setAuthModalInitialMode } = useAuth();
-  const { currentView, setCurrentView, setActiveListingType, savedProperties, updateFilter, resetFilters } = useProperties();
+  const { currentView, setCurrentView, setActiveListingType, savedProperties, updateFilter, resetFilters, openAIChatWithPrompt } = useProperties();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
 
@@ -154,6 +156,17 @@ export const Navbar: React.FC = () => {
           {/* Right Action Tools: Language, Post Property, User Profile */}
           <div className="hidden md:flex items-center gap-3">
             
+            {/* Bete AI Assistant Launcher Button */}
+            <button
+              id="header-bete-ai-btn"
+              onClick={() => openAIChatWithPrompt()}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-800 hover:from-emerald-500 hover:to-teal-700 text-white text-xs font-black rounded-xl shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer ring-1 ring-emerald-400/40"
+              title="Bete AI Assistant"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+              <span>{isAmharic ? 'Bete AI ረዳት' : 'Bete AI'}</span>
+            </button>
+
             {/* Language Switcher */}
             <button
               id="lang-toggle-btn"

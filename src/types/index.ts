@@ -69,6 +69,37 @@ export interface Property {
   hasSecurity?: boolean;
   hasParking?: boolean;
   hasElevator?: boolean;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+}
+
+export interface BeteAISearchContext {
+  targetLocation?: string;
+  nearbyLandmarks?: string;
+  propertyType?: PropertyType | 'all' | string;
+  listingIntent?: ListingType | 'all' | string;
+  maxPriceLimit?: number | null;
+  minPriceLimit?: number | null;
+  bedroomCount?: number | 'all' | null;
+  city?: string;
+  subcity?: string;
+  neighborhood?: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+}
+
+export interface BeteAIMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  userResponsePart?: string;
+  mapContextPart?: string;
+  searchContext?: BeteAISearchContext;
+  timestamp: number;
 }
 
 export interface TelebirrSettings {
@@ -117,6 +148,7 @@ export interface UserProfile {
   activePlan?: 'basic' | 'premium' | 'vip' | 'free' | 'standard';
   planExpiresAt?: string;
   planStartedAt?: string;
+  registeredAt?: string;
   bio?: string;
 }
 
@@ -133,10 +165,16 @@ export interface TourBooking {
 
 export interface EthiopianLocation {
   city: string;
+  cityAm?: string;
+  region: string;
+  regionAm?: string;
+  tagline?: string;
+  taglineAm?: string;
   subcities: string[];
   popularNeighborhoods: string[];
   image: string;
   propertyCount: number;
+  isMajorHub?: boolean;
 }
 
 export interface ListingPlan {

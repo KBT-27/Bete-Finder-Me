@@ -3,6 +3,12 @@ import { EthiopianLocation } from '../types';
 export const ETHIOPIAN_LOCATIONS: EthiopianLocation[] = [
   {
     city: 'Addis Ababa',
+    cityAm: 'አዲስ አበባ',
+    region: 'Addis Ababa (Charter City)',
+    regionAm: 'አዲስ አበባ (አስተዳደር)',
+    tagline: 'Capital & Diplomatic Heart of Africa',
+    taglineAm: 'የዲፕሎማሲና የኢኮኖሚ ማዕከል',
+    isMajorHub: true,
     subcities: [
       'Bole',
       'Yeka',
@@ -33,42 +39,98 @@ export const ETHIOPIAN_LOCATIONS: EthiopianLocation[] = [
       'Lebu'
     ],
     image: 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=800&q=80',
-    propertyCount: 342
+    propertyCount: 0
   },
   {
     city: 'Hawassa',
+    cityAm: 'ሐዋሳ',
+    region: 'Sidama Regional State',
+    regionAm: 'ሲዳማ ክልል',
+    tagline: 'Lakefront Resort Hub & Industrial Center',
+    taglineAm: 'የሐይቅ ዳርቻና የኢንዱስትሪ ማዕከል',
+    isMajorHub: true,
     subcities: ['Tabor', 'Menehariya', 'Haik Dar', 'Bahil Adarash', 'Mehal Ketema'],
-    popularNeighborhoods: ['Lakefront Area', 'Piassa Hawassa', 'St. George', 'Gudumale'],
+    popularNeighborhoods: ['Lakefront Area', 'Piassa Hawassa', 'St. George', 'Gudumale', 'Industrial Park'],
     image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80',
-    propertyCount: 54
+    propertyCount: 0
   },
   {
     city: 'Bahir Dar',
+    cityAm: 'ባሕር ዳር',
+    region: 'Amhara Regional State',
+    regionAm: 'አማራ ክልል',
+    tagline: 'Lake Tana & Source of the Blue Nile',
+    taglineAm: 'የጣና ሐይቅ እና አባይ መነሻ',
+    isMajorHub: true,
     subcities: ['Gish Abay', 'Fasilo', 'Belay Zeleke', 'Dagmawi Menelik'],
-    popularNeighborhoods: ['Tana View', 'Avanti Lakefront', 'Shimbit', 'Ginbot 20'],
+    popularNeighborhoods: ['Tana View', 'Avanti Lakefront', 'Shimbit', 'Ginbot 20', 'Kebele 14'],
     image: 'https://images.unsplash.com/photo-1512917774080-9991f1c4c750?auto=format&fit=crop&w=800&q=80',
-    propertyCount: 42
+    propertyCount: 0
   },
   {
     city: 'Bishoftu (Debre Zeyit)',
-    subcities: ['Bishoftu Town', 'Kuriftu Area', 'Babby Lake', 'Hora'],
-    popularNeighborhoods: ['Kuriftu Resort Zone', 'Lake Babogaya', 'Lake Bishoftu', 'Center'],
+    cityAm: 'ቢሾፍቱ (ደብረ ዘይት)',
+    region: 'Oromia Regional State',
+    regionAm: 'ኦሮሚያ ክልል',
+    tagline: 'Crater Lakes Tourism & Luxury Living Hub',
+    taglineAm: 'የእሳተ ጎመራ ሐይቆች እና የቱሪዝም ማዕከል',
+    isMajorHub: true,
+    subcities: ['Bishoftu Town', 'Kuriftu Area', 'Babby Lake', 'Hora', 'Kality Corridor'],
+    popularNeighborhoods: ['Kuriftu Resort Zone', 'Lake Babogaya', 'Lake Bishoftu', 'Center', 'Air Force Base Area'],
     image: 'https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=800&q=80',
-    propertyCount: 38
+    propertyCount: 0
   },
   {
     city: 'Adama (Nazret)',
+    cityAm: 'አዳማ (ናዝሬት)',
+    region: 'Oromia Regional State',
+    regionAm: 'ኦሮሚያ ክልል',
+    tagline: 'Major Commercial Highway & Logistics Center',
+    taglineAm: 'የንግድና የሎጅስቲክስ መገናኛ መስመር',
+    isMajorHub: true,
     subcities: ['Boku Shenen', 'Dembela', 'Goro', 'Lugo'],
-    popularNeighborhoods: ['Ras Hotel Area', 'Canal Area', 'Stadium Area', 'Posta'],
+    popularNeighborhoods: ['Ras Hotel Area', 'Canal Area', 'Stadium Area', 'Posta', 'Expressway Junction'],
     image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80',
-    propertyCount: 29
+    propertyCount: 0
   },
   {
     city: 'Dire Dawa',
+    cityAm: 'ድሬዳዋ',
+    region: 'Dire Dawa (Charter City)',
+    regionAm: 'ድሬዳዋ (አስተዳደር)',
+    tagline: 'Eastern Trade, Railway & Free Trade Hub',
+    taglineAm: 'የምስራቅ ንግድ እና የባቡር መናኸሪያ',
+    isMajorHub: true,
     subcities: ['Sabian', 'Gende Kore', 'Melka Jebdu', 'Gezira'],
-    popularNeighborhoods: ['Kazira', 'Megala', 'Sabian High St', 'Taiwan Market Area'],
+    popularNeighborhoods: ['Kazira', 'Megala', 'Sabian High St', 'Taiwan Market Area', 'Free Trade Zone'],
     image: 'https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&q=80',
-    propertyCount: 23
+    propertyCount: 0
+  },
+  {
+    city: 'Mekelle',
+    cityAm: 'መቐለ',
+    region: 'Tigray Regional State',
+    regionAm: 'ትግራይ ክልል',
+    tagline: 'Northern Regional Economic & Educational Hub',
+    taglineAm: 'የሰሜኑ የኢኮኖሚና የትምህርት ማዕከል',
+    isMajorHub: true,
+    subcities: ['Hawelti', 'Ayder', 'Kedamay Weyane', 'Semien', 'Hadnet'],
+    popularNeighborhoods: ['Ayder Referral Area', 'Monument Area', 'Romanat Square', 'Quiha'],
+    image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80',
+    propertyCount: 0
+  },
+  {
+    city: 'Gondar',
+    cityAm: 'ጎንደር',
+    region: 'Amhara Regional State',
+    regionAm: 'አማራ ክልል',
+    tagline: 'Royal Historic Castles & Heritage Hub',
+    taglineAm: 'የታሪካዊ ቤተ-መንግሥታት እና ቅርስ ከተማ',
+    isMajorHub: true,
+    subcities: ['Fasil', 'Arada', 'Zobel', 'Maraki'],
+    popularNeighborhoods: ['Piazza Gondar', 'Maraki Campus Area', 'Fasil Ghebbi Vicinity', 'Azezo'],
+    image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=800&q=80',
+    propertyCount: 0
   }
 ];
 

@@ -77,6 +77,13 @@ interface PropertyContextType {
   isDatabaseSyncing: boolean;
   isNeonConnected: boolean;
   lastDbSyncTimestamp: number;
+  syncIntervalSeconds: number;
+  setSyncIntervalSeconds: (seconds: number) => void;
+  isAIChatOpen: boolean;
+  setIsAIChatOpen: (open: boolean) => void;
+  aiInitialPrompt: string;
+  setAiInitialPrompt: (prompt: string) => void;
+  openAIChatWithPrompt: (prompt?: string) => void;
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
@@ -150,6 +157,30 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [isDatabaseSyncing, setIsDatabaseSyncing] = useState(false);
   const [isNeonConnected, setIsNeonConnected] = useState(false);
   const [lastDbSyncTimestamp, setLastDbSyncTimestamp] = useState(Date.now());
+  const [isAIChatOpen, setIsAIChatOpen] = useState(false);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState('');
+
+  const openAIChatWithPrompt = useCallback((prompt?: string) => {
+    if (prompt) {
+      setAiInitialPrompt(prompt);
+    }
+    setIsAIChatOpen(true);
+  }, []);
+
+  const [syncIntervalSeconds, setSyncIntervalSecondsState] = useState<number>(() => {
+    const saved = localStorage.getItem('bete_finder_sync_interval');
+    if (saved) {
+      const val = parseInt(saved, 10);
+      if (!isNaN(val) && val >= 1 && val <= 300) return val;
+    }
+    return 3;
+  });
+
+  const setSyncIntervalSeconds = useCallback((sec: number) => {
+    const validSec = Math.max(1, Math.min(300, sec));
+    setSyncIntervalSecondsState(validSec);
+    localStorage.setItem('bete_finder_sync_interval', validSec.toString());
+  }, []);
 
   // Database Synchronization Function
   const syncWithDatabase = useCallback(async (): Promise<{ success: boolean; message: string; connectedNeon: boolean }> => {
@@ -203,7 +234,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, []);
 
-  // Initial Sync and Real-Time Multi-Device Periodic Poll (every 3.5s and on window focus/visibility)
+  // Initial Sync and Real-Time Multi-Device Periodic Poll (based on user configured interval and on window focus/visibility)
   useEffect(() => {
     syncWithDatabase();
 
@@ -219,14 +250,14 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
     window.addEventListener('online', handleSyncTrigger);
 
-    const interval = setInterval(syncWithDatabase, 3500);
+    const interval = setInterval(syncWithDatabase, syncIntervalSeconds * 1000);
 
     return () => {
       window.removeEventListener('focus', handleSyncTrigger);
       window.removeEventListener('online', handleSyncTrigger);
       clearInterval(interval);
     };
-  }, [syncWithDatabase]);
+  }, [syncWithDatabase, syncIntervalSeconds]);
 
   // Persist properties locally
   useEffect(() => {
@@ -672,7 +703,14 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         syncWithDatabase,
         isDatabaseSyncing,
         isNeonConnected,
-        lastDbSyncTimestamp
+        lastDbSyncTimestamp,
+        syncIntervalSeconds,
+        setSyncIntervalSeconds,
+        isAIChatOpen,
+        setIsAIChatOpen,
+        aiInitialPrompt,
+        setAiInitialPrompt,
+        openAIChatWithPrompt
       }}
     >
       {children}
