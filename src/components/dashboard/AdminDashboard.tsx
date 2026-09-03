@@ -192,9 +192,9 @@ export const AdminDashboard: React.FC = () => {
   // Telebirr & Pricing state for Owner
   const [telebirrAccountNum, setTelebirrAccountNum] = useState(telebirrSettings.accountNumber);
   const [telebirrAccountName, setTelebirrAccountName] = useState(telebirrSettings.accountName);
-  const [basicPrice, setBasicPrice] = useState(plans.find(p => p.id === 'basic')?.price ?? 0);
+  const [basicPrice, setBasicPrice] = useState(plans.find(p => p.id === 'basic')?.price ?? 299);
   const [premiumPrice, setPremiumPrice] = useState(plans.find(p => p.id === 'premium')?.price ?? 599);
-  const [vipPrice, setVipPrice] = useState(plans.find(p => p.id === 'vip')?.price ?? 1199);
+  const [vipPrice, setVipPrice] = useState(plans.find(p => p.id === 'vip')?.price ?? 999);
   const [pricingSaveSuccess, setPricingSaveSuccess] = useState(false);
 
   // Database Connection String & Advanced Management State

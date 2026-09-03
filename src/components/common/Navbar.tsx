@@ -22,6 +22,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProperties } from '../../context/PropertyContext';
 import { UserRole } from '../../types';
+import { GeminiIcon } from './GeminiIcon';
 
 export const Navbar: React.FC = () => {
   const { t, language, toggleLanguage, isAmharic } = useLanguage();
@@ -156,15 +157,20 @@ export const Navbar: React.FC = () => {
           {/* Right Action Tools: Language, Post Property, User Profile */}
           <div className="hidden md:flex items-center gap-3">
             
-            {/* Bete AI Assistant Launcher Button */}
+            {/* Bete Assistance (Gemini) Launcher Button */}
             <button
-              id="header-bete-ai-btn"
+              id="header-gemini-ai-btn"
               onClick={() => openAIChatWithPrompt()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-emerald-600 via-emerald-700 to-teal-800 hover:from-emerald-500 hover:to-teal-700 text-white text-xs font-black rounded-xl shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer ring-1 ring-emerald-400/40"
-              title="Bete AI Assistant"
+              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-xl shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer ring-1 ring-slate-700/60 hover:ring-indigo-400 group"
+              title={isAmharic ? 'Bete Assistance (በ Google Gemini የተደገፈ)' : 'Bete Assistance (Powered by Google Gemini)'}
             >
-              <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
-              <span>{isAmharic ? 'Bete AI ረዳት' : 'Bete AI'}</span>
+              <GeminiIcon size={18} className="transition-transform group-hover:scale-115 group-hover:rotate-6 shrink-0" />
+              <span className="tracking-tight bg-gradient-to-r from-white via-indigo-100 to-indigo-200 bg-clip-text text-transparent font-bold">
+                {isAmharic ? 'ቤቴ ረዳት' : 'Bete Assistance'}
+              </span>
+              <span className="hidden xl:inline text-[9px] font-bold text-indigo-300 px-1 py-0.2 bg-indigo-500/20 rounded">
+                Gemini
+              </span>
             </button>
 
             {/* Language Switcher */}
@@ -372,6 +378,23 @@ export const Navbar: React.FC = () => {
             >
               <Building2 className="w-5 h-5 text-amber-600" />
               <span>{t('navSale')}</span>
+            </button>
+
+            <button
+              id="mobile-nav-gemini-ai-btn"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                openAIChatWithPrompt();
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-xl text-base font-bold text-white bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-700/60 flex items-center justify-between shadow-xs"
+            >
+              <div className="flex items-center gap-3">
+                <GeminiIcon size={22} className="shrink-0" />
+                <span>{isAmharic ? 'ቤቴ ረዳት (Bete Assistance)' : 'Bete Assistance'}</span>
+              </div>
+              <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/30">
+                Gemini
+              </span>
             </button>
 
             <button

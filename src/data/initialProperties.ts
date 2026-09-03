@@ -4,6 +4,31 @@ export const INITIAL_PROPERTIES: Property[] = [];
 
 export const LISTING_PLANS: ListingPlan[] = [
   {
+    id: 'free',
+    name: 'Free Plan',
+    nameAm: 'ነፃ ፕላን (Free Plan)',
+    price: 0,
+    durationDays: 30,
+    multiplierText: 'Standard Listing',
+    multiplierTextAm: 'መደበኛ ነፃ ማስታወቂያ',
+    renewInterval: 'Standard search ranking',
+    renewIntervalAm: 'መደበኛ የፍለጋ ደረጃ',
+    features: [
+      'Standard search & interactive map placement',
+      'Direct phone, WhatsApp & Telegram contact',
+      'Upload high-quality property photos',
+      'Display amenities & location details',
+      '100% Free — No payment or Telebirr needed'
+    ],
+    featuresAm: [
+      'በፍለጋ እና በካርታ ላይ መደበኛ ምደባ',
+      'ቀጥታ የስልክ፣ ዋትስአፕ እና ቴሌግራም ግንኙነት',
+      'ጥራት ያላቸው ፎቶዎችን በነፃ ማካተት',
+      'የቤት መገልገያዎችን እና አድራሻን ማሳየት',
+      '100% ነፃ — ምንም ክፍያ ወይም ቴሌብር አያስፈልግም'
+    ]
+  },
+  {
     id: 'basic',
     name: 'Basic Package',
     nameAm: 'መሠረታዊ ፓኬጅ (Basic)',

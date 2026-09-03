@@ -1,7 +1,21 @@
 {
-  "users": [],
+  "users": [
+    {
+      "id": "usr-owner-master",
+      "name": "Kaleb Bereket (Owner)",
+      "role": "owner",
+      "email": "kaleb.bereket@betefinder.et",
+      "phone": "+251912345678",
+      "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80",
+      "activePlan": "vip",
+      "toursBooked": [],
+      "planExpiresAt": "2027-09-01T07:30:42.094Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    }
+  ],
   "properties": [],
-  "lastUpdated": 1788201801171,
+  "lastUpdated": 1788434149776,
   "paymentRequests": [],
   "adminCredentials": {
     "name": "Admin (Kaleb Bereket)",
@@ -16,7 +30,164 @@
     "password": "Kaleb5873"
   },
   "telebirrSettings": {
-    "accountName": "Kaleb Bereket (Bete Finder Owner)",
+    "accountName": "Desalegn Guta",
     "accountNumber": "0995406697"
+  },
+  "adminControllerConfig": {
+    "auditLogs": [
+      {
+        "id": "log-1788273027491-k2vc",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canExportBackups",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T14:30:27.491Z"
+      },
+      {
+        "id": "log-1788273026542-2nca",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canExportBackups",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T14:30:26.542Z"
+      },
+      {
+        "id": "log-1788273023524-fpld",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canViewUserDatabase",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T14:30:23.524Z"
+      },
+      {
+        "id": "log-1788273022258-gyns",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canBroadcastNotices",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T14:30:22.258Z"
+      },
+      {
+        "id": "log-1788273021646-405q",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canVerifyProperties",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T14:30:21.646Z"
+      },
+      {
+        "id": "log-1788273019240-d0bt",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canExportBackups",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T14:30:19.240Z"
+      },
+      {
+        "id": "log-1788273018374-m1o4",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canDeleteProperties",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T14:30:18.374Z"
+      },
+      {
+        "id": "log-1",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Synchronized Master DB Schema",
+        "details": "Full cross-device sync completed across 6 PostgreSQL entities.",
+        "category": "system",
+        "severity": "info",
+        "timestamp": "2026-09-01T14:13:51.944Z"
+      },
+      {
+        "id": "log-2",
+        "actor": "Admin (Kaleb Bereket)",
+        "action": "Verified Property Listing",
+        "details": "Approved luxury 3-bedroom apartment in Bole Olympia for public display.",
+        "category": "property",
+        "severity": "success",
+        "timestamp": "2026-09-01T13:43:51.944Z"
+      },
+      {
+        "id": "log-3",
+        "actor": "Admin (Kaleb Bereket)",
+        "action": "Processed Telebirr Payment",
+        "details": "Approved 2,499 ETB VIP Spotlight package for Landlord account.",
+        "category": "payment",
+        "severity": "success",
+        "timestamp": "2026-09-01T12:28:51.944Z"
+      },
+      {
+        "id": "log-4",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Updated Admin Authority Rules",
+        "details": "Permissions matrix saved and broadcasted to edge cache.",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-01T08:28:51.944Z"
+      }
+    ],
+    "subAdmins": [
+      {
+        "id": "subadmin-1",
+        "name": "Bole Sub-City Property Inspector",
+        "role": "regional_inspector",
+        "email": "bole.inspector@betefinder.com/admin",
+        "phone": "+251911223344",
+        "status": "active",
+        "password": "InspectorBole2025",
+        "createdAt": "2026-08-27T14:28:51.944Z",
+        "lastLogin": "2026-09-01T10:28:51.944Z",
+        "permissions": {
+          "isSuspended": false,
+          "canExportBackups": false,
+          "canApprovePayments": false,
+          "canBroadcastNotices": false,
+          "canDeleteProperties": false,
+          "canVerifyProperties": true,
+          "canViewUserDatabase": false
+        },
+        "assignedSubcity": "Bole"
+      },
+      {
+        "id": "subadmin-2",
+        "name": "Telebirr Payment Review Officer",
+        "role": "payment_officer",
+        "email": "telebirr.officer@betefinder.com/admin",
+        "phone": "+251922334455",
+        "status": "active",
+        "password": "TelebirrOfficer2025",
+        "createdAt": "2026-08-20T14:28:51.944Z",
+        "lastLogin": "2026-09-01T12:28:51.944Z",
+        "permissions": {
+          "isSuspended": false,
+          "canExportBackups": false,
+          "canApprovePayments": true,
+          "canBroadcastNotices": false,
+          "canDeleteProperties": false,
+          "canVerifyProperties": false,
+          "canViewUserDatabase": false
+        },
+        "assignedSubcity": "All Addis Ababa"
+      }
+    ],
+    "adminPermissions": {
+      "isSuspended": false,
+      "canExportBackups": false,
+      "canApprovePayments": true,
+      "canBroadcastNotices": false,
+      "canDeleteProperties": false,
+      "canVerifyProperties": false,
+      "canViewUserDatabase": false
+    },
+    "adminBroadcastNotice": "System Notice: Please prioritize verifying VIP listing requests submitted within 24 hours."
   }
 }

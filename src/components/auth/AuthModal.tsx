@@ -22,7 +22,6 @@ import { UserRole } from '../../types';
 import { ResetPasswordView } from './ResetPasswordView';
 import { isSlashAllowedForPassword, getRegisteredUsers } from '../../lib/passwords';
 import { authenticateWithGoogle, GoogleUserProfile } from '../../lib/googleAuth';
-import { GoogleAccountChooserModal } from './GoogleAccountChooserModal';
 
 const GoogleIcon: React.FC = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -81,7 +80,6 @@ export const AuthModal: React.FC = () => {
   // Loading and alerts
   const [isLoading, setIsLoading] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
-  const [isGoogleChooserOpen, setIsGoogleChooserOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isDeliveredViaSmtp, setIsDeliveredViaSmtp] = useState<boolean>(false);
@@ -94,7 +92,6 @@ export const AuthModal: React.FC = () => {
     setSuccessMessage(null);
     setIsDeliveredViaSmtp(false);
     setPendingGoogleProfile(null);
-    setIsGoogleChooserOpen(false);
   }, [authModalInitialMode, isAuthModalOpen]);
 
   if (!isAuthModalOpen) return null;
@@ -104,17 +101,31 @@ export const AuthModal: React.FC = () => {
     setErrorMessage(null);
     setSuccessMessage(null);
     setPendingGoogleProfile(null);
-    setIsGoogleChooserOpen(false);
   };
 
-  const handleGoogleSignIn = () => {
+  const handleGoogleSignIn = async () => {
     setErrorMessage(null);
     setSuccessMessage(null);
-    setIsGoogleChooserOpen(true);
+    setIsGoogleLoading(true);
+
+    try {
+      // Direct Google Sign-In with configured/given Google Client ID
+      const authRes = await authenticateWithGoogle();
+
+      if (authRes.success && authRes.profile) {
+        await handleSelectGoogleAccount(authRes.profile);
+      } else if (authRes.error && !authRes.error.includes('closed') && !authRes.error.includes('cancel')) {
+        setErrorMessage(authRes.error);
+      }
+    } catch (err: any) {
+      console.warn('Google sign-in error:', err);
+      setErrorMessage(language === 'am' ? 'የ Google መግባት አልተሳካም። እባክዎ እንደገና ይሞክሩ።' : 'Google sign-in could not be completed. Please try again.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const handleSelectGoogleAccount = async (profile: GoogleUserProfile) => {
-    setIsGoogleChooserOpen(false);
     setIsGoogleLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
@@ -904,14 +915,6 @@ export const AuthModal: React.FC = () => {
         )}
 
       </div>
-
-      {/* Google Account Chooser Modal (Choose account / ሌላ መለያ ይጠቀሙ) */}
-      <GoogleAccountChooserModal
-        isOpen={isGoogleChooserOpen}
-        onClose={() => setIsGoogleChooserOpen(false)}
-        onSelectAccount={handleSelectGoogleAccount}
-        language={language}
-      />
     </div>
   );
 };

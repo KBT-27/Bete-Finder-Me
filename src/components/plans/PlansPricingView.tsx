@@ -61,8 +61,8 @@ export const PlansPricingView: React.FC = () => {
       return;
     }
 
-    if (plan.price === 0) {
-      updateUser({ activePlan: 'basic' });
+    if (plan.price === 0 || plan.id === 'free') {
+      updateUser({ activePlan: 'free' });
       return;
     }
 
@@ -126,24 +126,34 @@ export const PlansPricingView: React.FC = () => {
         </div>
 
         {/* Pricing Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto items-stretch">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto items-stretch">
           {plans.map(plan => {
             const isCurrent = user?.activePlan === plan.id;
             const isVip = plan.id === 'vip';
             const isPremium = plan.id === 'premium';
+            const isFree = plan.id === 'free' || plan.price === 0;
             
             return (
               <div
                 key={plan.id}
-                className={`relative rounded-3xl p-7 sm:p-8 flex flex-col justify-between transition-all duration-300 ${
+                className={`relative rounded-3xl p-6 sm:p-7 flex flex-col justify-between transition-all duration-300 ${
                   isPremium
                     ? 'bg-slate-900 text-white shadow-2xl scale-102 border-2 border-emerald-500'
                     : isVip
                     ? 'bg-gradient-to-b from-slate-900 via-purple-950 to-slate-950 text-white shadow-2xl border-2 border-amber-400'
+                    : isFree
+                    ? 'bg-white text-slate-900 border-2 border-emerald-500/50 shadow-sm hover:shadow-lg'
                     : 'bg-white text-slate-900 border border-slate-200 shadow-xs hover:shadow-lg'
                 }`}
               >
                 {/* Top Badge */}
+                {isFree && (
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-[11px] font-extrabold uppercase tracking-wider py-1 px-3.5 rounded-full shadow-md flex items-center gap-1">
+                    <Check className="w-3 h-3" />
+                    <span>Free Plan</span>
+                  </div>
+                )}
+
                 {isPremium && (
                   <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-emerald-500 to-teal-500 text-white text-[11px] font-extrabold uppercase tracking-wider py-1 px-4 rounded-full shadow-md flex items-center gap-1">
                     <Sparkles className="w-3 h-3" />
@@ -213,7 +223,7 @@ export const PlansPricingView: React.FC = () => {
                   <p className={`text-xs mb-6 pb-6 border-b ${
                     isPremium || isVip ? 'text-slate-300 border-white/10' : 'text-slate-500 border-slate-100'
                   }`}>
-                    {plan.price === 0 ? 'Basic tier to get started' : `Pay strictly via Telebirr (${telebirrSettings.accountNumber} - ${telebirrSettings.accountName})`}
+                    {plan.price === 0 ? (isAmharic ? 'መደበኛ ነፃ ማስታወቂያ (ምንም ክፍያ የለውም)' : 'Standard free listing (No payment required)') : `Pay strictly via Telebirr (${telebirrSettings.accountNumber} - ${telebirrSettings.accountName})`}
                   </p>
 
                   {/* Features List */}

@@ -107,7 +107,16 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const saved = localStorage.getItem('bete_finder_plans');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const parsed = JSON.parse(saved);
+        if (
+          Array.isArray(parsed) && 
+          parsed.some(p => p.id === 'free') &&
+          parsed.some(p => p.id === 'basic' && p.price === 299) &&
+          parsed.some(p => p.id === 'vip' && p.price === 999)
+        ) {
+          return parsed;
+        }
+        return LISTING_PLANS;
       } catch {
         return LISTING_PLANS;
       }

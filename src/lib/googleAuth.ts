@@ -70,7 +70,8 @@ export function getGoogleClientId(): string {
     return (window as any).__GOOGLE_CLIENT_ID__;
   }
 
-  return '';
+  // 5. Default to the configured Google Client ID
+  return '311827431803-ib5cdg34gmgjui2s61067soqub68afro.apps.googleusercontent.com';
 }
 
 // Trigger Google OAuth sign-in flow

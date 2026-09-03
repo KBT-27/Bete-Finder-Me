@@ -23,7 +23,8 @@ import {
   Image as ImageIcon,
   Bot,
   RefreshCw,
-  Compass
+  Compass,
+  User
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -74,8 +75,10 @@ export const PostPropertyView: React.FC = () => {
   const [description, setDescription] = useState('');
   const [descriptionAm, setDescriptionAm] = useState('');
 
-  // 5. Listing Package & Payment
-  const [selectedPlanId, setSelectedPlanId] = useState<'basic' | 'premium' | 'vip'>('premium');
+  // 5. Listing Package & Promotion Plan - Initially do NOT select anything (null)
+  const [selectedPlanId, setSelectedPlanId] = useState<'free' | 'basic' | 'premium' | 'vip' | null>(null);
+  const [telebirrName, setTelebirrName] = useState('');
+  const [telebirrPhone, setTelebirrPhone] = useState('');
   const [durationMonths, setDurationMonths] = useState<number>(1);
   const [transactionRef, setTransactionRef] = useState('');
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
@@ -170,6 +173,24 @@ export const PostPropertyView: React.FC = () => {
       return;
     }
 
+    // If person touched Basic, Premium, or VIP, section 5 is mandatory!
+    const isPaidPlan = selectedPlanId === 'basic' || selectedPlanId === 'premium' || selectedPlanId === 'vip';
+    if (isPaidPlan) {
+      if (!telebirrName.trim()) {
+        setFormError(isAmharic 
+          ? 'እባክዎ ለተመረጠው የማስተዋወቂያ ፓኬጅ ሙሉ ስምዎን (የቴሌብር አካውንት ስም) ያስገቡ *' 
+          : 'Please enter your Full Name (Telebirr Account Holder Name) for the selected promotion plan *');
+        return;
+      }
+      const cleanTelebirrPhone = telebirrPhone.trim().replace(/[\s-]/g, '');
+      if (!cleanTelebirrPhone || cleanTelebirrPhone.length < 9) {
+        setFormError(isAmharic 
+          ? 'እባክዎ ትክክለኛ የቴሌብር ስልክ ቁጥር ያስገቡ (ለምሳሌ 0912345678 ወይም 0712345678) *' 
+          : 'Please enter a valid Telebirr phone number (e.g. 0912345678 or 0712345678) *');
+        return;
+      }
+    }
+
     const effectiveFloorSize = floorSize === 'other' ? customFloorSize.trim() : floorSize;
     const formattedTelegram = telegram.trim() 
       ? (telegram.trim().startsWith('@') ? telegram.trim() : `@${telegram.trim()}`)
@@ -183,16 +204,17 @@ export const PostPropertyView: React.FC = () => {
       ? images 
       : ['https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=1200&q=80'];
 
-    const chosenPlan = plans.find(p => p.id === selectedPlanId) || {
-      id: selectedPlanId,
-      name: selectedPlanId === 'vip' ? 'VIP TOP+ Plan' : selectedPlanId === 'basic' ? 'Basic Plan' : 'Premium Plan',
-      nameAm: selectedPlanId === 'vip' ? 'ቪአይፒ ቶፕ+ ፕላን' : selectedPlanId === 'basic' ? 'መሰረታዊ ፕላን' : 'ፕሪሚየም ፕላን',
-      price: selectedPlanId === 'vip' ? 750 : selectedPlanId === 'basic' ? 150 : 350,
-      durationDays: selectedPlanId === 'vip' ? 90 : selectedPlanId === 'basic' ? 30 : 60,
+    const effectivePlanId = selectedPlanId || 'free';
+    const chosenPlan = plans.find(p => p.id === effectivePlanId) || {
+      id: effectivePlanId,
+      name: effectivePlanId === 'vip' ? 'VIP TOP+ Plan' : effectivePlanId === 'premium' ? 'Premium Plan' : effectivePlanId === 'basic' ? 'Basic Plan' : 'Free Plan',
+      nameAm: effectivePlanId === 'vip' ? 'ቪአይፒ ቶፕ+ ፕላን' : effectivePlanId === 'premium' ? 'ፕሪሚየም ፕላን' : effectivePlanId === 'basic' ? 'መሰረታዊ ፕላን' : 'ነፃ ፕላን',
+      price: effectivePlanId === 'vip' ? 999 : effectivePlanId === 'premium' ? 599 : effectivePlanId === 'basic' ? 299 : 0,
+      durationDays: effectivePlanId === 'vip' ? 90 : effectivePlanId === 'premium' ? 60 : 30,
       features: [],
       featuresAm: [],
-      badge: 'Popular',
-      isPopular: selectedPlanId === 'premium'
+      badge: effectivePlanId === 'free' ? 'Free' : 'Popular',
+      isPopular: effectivePlanId === 'premium'
     };
 
     // If user was registered as tenant, elevate role to landlord upon posting
@@ -227,7 +249,7 @@ export const PostPropertyView: React.FC = () => {
       isFurnished: Boolean(isFurnished),
       isVerified: isStaff,
       isFeatured: isStaff || isVipOrPremium,
-      payPlan: selectedPlanId,
+      payPlan: effectivePlanId,
       payPlanName: isAmharic ? chosenPlan.nameAm : chosenPlan.name,
       images: defaultImages,
       amenities: selectedAmenities,
@@ -250,16 +272,17 @@ export const PostPropertyView: React.FC = () => {
       hasElevator: selectedAmenities.includes('elevator')
     });
 
-    // If transaction reference or payment proof is entered, submit payment verification
-    if (transactionRef.trim()) {
+    // If a paid package was chosen (Basic, Premium, VIP), submit payment verification
+    if (isPaidPlan) {
+      const planPrice = chosenPlan.price || (selectedPlanId === 'vip' ? 999 : selectedPlanId === 'premium' ? 599 : 299);
       submitPaymentRequest({
-        userName: user.name,
-        userPhone: phone.trim() || user.phone,
-        transactionRef: transactionRef.trim(),
+        userName: telebirrName.trim() || user.name,
+        userPhone: telebirrPhone.trim() || phone.trim() || user.phone,
+        transactionRef: transactionRef.trim() || `TB-PROMO-${Date.now().toString().slice(-6)}`,
         screenshotUrl: screenshotPreview || undefined,
         plan: chosenPlan,
         durationMonths,
-        totalAmount: (chosenPlan.price || 350) * durationMonths
+        totalAmount: planPrice * durationMonths
       });
     }
 
@@ -295,15 +318,25 @@ export const PostPropertyView: React.FC = () => {
               </p>
             )}
             <div className="flex items-center justify-between text-xs text-slate-600">
-              <span>Package: <strong className="text-slate-900 capitalize font-black">{selectedPlanId} Plan</strong></span>
+              <span>Package: <strong className="text-slate-900 capitalize font-black">{!selectedPlanId || selectedPlanId === 'free' ? (isAmharic ? 'ነፃ ፕላን (0 ETB)' : 'Free Plan (0 ETB)') : `${selectedPlanId.toUpperCase()} Plan (${selectedPlanId === 'vip' ? '999 ETB' : selectedPlanId === 'premium' ? '599 ETB' : '299 ETB'})`}</strong></span>
               <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
                 Neon DB Synced
               </span>
             </div>
-            {transactionRef && (
-              <p className="text-[11px] text-slate-500 font-mono">
-                Telebirr Ref: <strong className="text-slate-800">{transactionRef}</strong>
-              </p>
+            {selectedPlanId && selectedPlanId !== 'free' && (
+              <div className="space-y-1 text-[11px] text-slate-600 pt-1 border-t border-slate-200/60">
+                {telebirrName && (
+                  <p>Account Name: <strong className="text-slate-800">{telebirrName}</strong></p>
+                )}
+                {telebirrPhone && (
+                  <p>Telebirr Phone: <strong className="text-slate-800 font-mono">{telebirrPhone}</strong></p>
+                )}
+                {transactionRef && (
+                  <p className="font-mono">
+                    Telebirr Ref: <strong className="text-slate-800">{transactionRef}</strong>
+                  </p>
+                )}
+              </div>
             )}
           </div>
 
@@ -972,30 +1005,63 @@ export const PostPropertyView: React.FC = () => {
             </div>
           </div>
 
-          {/* Section 5: Choose Listing Package & Telebirr Payment */}
+          {/* Section 5: Choose Listing Package & Telebirr Payment (Optional) */}
           <div className="space-y-5">
             <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
               <h2 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
                 <Crown className="w-5 h-5 text-amber-500" />
-                <span>{isAmharic ? '5. የማስታወቂያ ፓኬጅ እና ክፍያ' : '5. Listing Package & Promotion Plan'}</span>
+                <span>{isAmharic ? '5. የማስታወቂያ ፓኬጅ እና ክፍያ (አማራጭ)' : '5. Listing Package & Promotion Plan (Optional)'}</span>
               </h2>
-              <span className="text-xs font-semibold text-slate-400">Step 5 of 5</span>
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                {isAmharic ? 'አማራጭ (Optional)' : 'Optional'}
+              </span>
             </div>
 
             <p className="text-xs text-slate-600">
               {isAmharic 
-                ? 'የቤትዎን ማስታወቂያ በቶሎ እንዲከራይ ወይም እንዲሸጥ የሚፈልጉትን ፓኬጅ ይምረጡ። ክፍያ በቴሌብር (Telebirr) ይፈጽሙ።'
-                : 'Select a promotion package to speed up tenant or buyer inquiries. Complete payment via Telebirr.'}
+                ? 'ይህ ክፍል አማራጭ ነው። ነፃ ፕላን (0 ETB) ከመረጡ ማስታወቂያዎ ያለምንም ክፍያ ወዲያውኑ ይለጠፋል። ወይም ደግሞ ለተጨማሪ ደንበኞች የማስተዋወቂያ ፓኬጅ መምረጥ ይችላሉ።'
+                : 'This section is completely optional. Choose the Free Plan (0 ETB) to publish with zero payment, or optionally select a promotion package to boost your reach.'}
             </p>
 
-            {/* Packages Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Packages Grid - Includes Free Plan */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Free Plan */}
+              <div
+                onClick={() => setSelectedPlanId('free')}
+                className={`p-4 rounded-2xl border-2 cursor-pointer transition-all relative ${
+                  selectedPlanId === 'free' 
+                    ? 'border-emerald-600 bg-emerald-50/70 shadow-md ring-2 ring-emerald-500/20' 
+                    : 'border-slate-200 bg-white hover:border-slate-300'
+                }`}
+              >
+                <span className="absolute -top-2.5 right-3 bg-emerald-600 text-white text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs">
+                  {isAmharic ? 'ነፃ (Free)' : 'Free'}
+                </span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-black text-slate-900">
+                    {isAmharic ? 'ነፃ ፕላን (Free)' : 'Free Plan'}
+                  </span>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedPlanId === 'free' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>
+                    {selectedPlanId === 'free' && <Check className="w-3 h-3" />}
+                  </div>
+                </div>
+                <div className="text-xl font-black text-emerald-700 mb-1">
+                  0 <span className="text-xs font-bold text-slate-500">ETB (Free)</span>
+                </div>
+                <ul className="text-[11px] text-slate-600 space-y-1">
+                  <li>• Standard Active Listing</li>
+                  <li>• Search & Map Placement</li>
+                  <li>• Direct Phone & Chat</li>
+                  <li>• No Payment Required</li>
+                </ul>
+              </div>
+
               {/* Basic */}
               <div
                 onClick={() => setSelectedPlanId('basic')}
                 className={`p-4 rounded-2xl border-2 cursor-pointer transition-all ${
                   selectedPlanId === 'basic' 
-                    ? 'border-emerald-500 bg-emerald-50/50 shadow-md' 
+                    ? 'border-blue-500 bg-blue-50/50 shadow-md ring-2 ring-blue-400/20' 
                     : 'border-slate-200 bg-white hover:border-slate-300'
                 }`}
               >
@@ -1003,7 +1069,7 @@ export const PostPropertyView: React.FC = () => {
                   <span className="text-xs font-black text-slate-900">
                     {isAmharic ? 'መሰረታዊ (Basic)' : 'Basic Plan'}
                   </span>
-                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedPlanId === 'basic' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300'}`}>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedPlanId === 'basic' ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300'}`}>
                     {selectedPlanId === 'basic' && <Check className="w-3 h-3" />}
                   </div>
                 </div>
@@ -1013,7 +1079,7 @@ export const PostPropertyView: React.FC = () => {
                 <ul className="text-[11px] text-slate-600 space-y-1">
                   <li>• 30 Days Active Listing</li>
                   <li>• Verified Badge Check</li>
-                  <li>• Cross-Device Neon Sync</li>
+                  <li>• 2x Client Inquiry Boost</li>
                 </ul>
               </div>
 
@@ -1043,7 +1109,7 @@ export const PostPropertyView: React.FC = () => {
                 <ul className="text-[11px] text-slate-600 space-y-1">
                   <li>• 60 Days Active Listing</li>
                   <li>• 24/7 Auto-Renew Ranking</li>
-                  <li>• Enhanced Search Priority</li>
+                  <li>• 5x Enhanced Search Priority</li>
                 </ul>
               </div>
 
@@ -1073,71 +1139,108 @@ export const PostPropertyView: React.FC = () => {
                 <ul className="text-[11px] text-slate-600 space-y-1">
                   <li>• 90 Days Spotlight Banner</li>
                   <li>• Top Carousel on Homepage</li>
-                  <li>• Direct VIP Lead Priority</li>
+                  <li>• 7x Direct VIP Lead Priority</li>
                 </ul>
               </div>
             </div>
 
-            {/* Telebirr Payment Instructions Box */}
-            <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Smartphone className="w-4 h-4 text-emerald-400" />
-                  <span className="font-extrabold text-xs text-white">Telebirr Official Payment (የቴሌብር ሂሳብ)</span>
+            {/* Free Plan Confirmation Box */}
+            {selectedPlanId === 'free' ? (
+              <div className="p-4 bg-emerald-50/80 border border-emerald-200 rounded-2xl flex items-start gap-3">
+                <div className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
+                  <Check className="w-4 h-4" />
                 </div>
-                <span className="text-xs font-black text-amber-400">
-                  {selectedPlanId === 'vip' ? '750 ETB' : selectedPlanId === 'basic' ? '150 ETB' : '350 ETB'}
-                </span>
+                <div className="text-xs">
+                  <p className="font-extrabold text-emerald-950 text-sm">
+                    {isAmharic ? 'ነፃ ፕላን ተመርጧል (ምንም ክፍያ አያስፈልግም)' : 'Free Plan Selected — 100% Free'}
+                  </p>
+                  <p className="text-emerald-800 text-[11px] mt-0.5 leading-relaxed">
+                    {isAmharic 
+                      ? 'ማስታወቂያዎ ያለምንም ክፍያ ወይም የቴሌብር ግብይት ቁጥር ሳያስፈልግ በቀጥታ ይለጠፋል። ከታች ያለውን አዝራር በመጫን ቤቱን ማተም ይችላሉ።'
+                      : 'No payment, transaction reference, or receipt is required. Your property listing will be published immediately for free.'}
+                  </p>
+                </div>
               </div>
-
-              <div className="bg-slate-800/90 p-3 rounded-xl flex items-center justify-between text-xs">
-                <div>
-                  <p className="text-slate-400 text-[10px]">Account Holder / ስም:</p>
-                  <p className="font-bold text-slate-100">{telebirrSettings.accountName}</p>
-                  <p className="text-slate-400 text-[10px] mt-1">Telebirr Number / ቁጥር:</p>
-                  <p className="font-mono font-bold text-emerald-400 text-sm">{telebirrSettings.accountNumber}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleCopyTelebirr}
-                  className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  {copiedNumber ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedNumber ? 'Copied!' : 'Copy'}</span>
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                    Telebirr Transaction Ref / ቁጥር (e.g. TB12345678)
-                  </label>
-                  <input
-                    type="text"
-                    value={transactionRef}
-                    onChange={(e) => setTransactionRef(e.target.value)}
-                    placeholder="Enter Telebirr Tx Ref (optional or pay now)"
-                    className="w-full p-2 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white font-mono placeholder:text-slate-500 focus:ring-1 focus:ring-emerald-400"
-                  />
+            ) : (
+              /* Optional Telebirr Payment Instructions Box for Paid Plans */
+              <div className="p-4 bg-slate-900 text-white rounded-2xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-emerald-400" />
+                    <span className="font-extrabold text-xs text-white">
+                      {isAmharic ? 'የቴሌብር ክፍያ (አማራጭ የማስተዋወቂያ ክፍያ)' : 'Telebirr Payment (Optional Promotion)'}
+                    </span>
+                  </div>
+                  <span className="text-xs font-black text-amber-400">
+                    {selectedPlanId === 'vip' ? '750 ETB' : selectedPlanId === 'basic' ? '150 ETB' : '350 ETB'}
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                    Upload Payment Receipt / ስክሪንሽኦት
-                  </label>
-                  <label className="w-full p-2 bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-lg text-slate-300 text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors">
-                    <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="truncate">{screenshotFileName || 'Upload Receipt'}</span>
+                <p className="text-[11px] text-slate-400">
+                  {isAmharic 
+                    ? 'ማስተዋወቂያውን ወዲያውኑ ለማስጀመር አሁን በቴሌብር መክፈል ወይም በኋላ ከዳሽቦርድዎ ላይ መክፈል ይችላሉ።'
+                    : 'You can pay now via Telebirr to boost this listing immediately, or pay later from your dashboard.'}
+                </p>
+
+                <div className="bg-slate-800/90 p-3 rounded-xl flex items-center justify-between text-xs">
+                  <div>
+                    <p className="text-slate-400 text-[10px]">Account Holder / ስም:</p>
+                    <p className="font-bold text-slate-100">{telebirrSettings.accountName}</p>
+                    <p className="text-slate-400 text-[10px] mt-1">Telebirr Number / ቁጥር:</p>
+                    <p className="font-mono font-bold text-emerald-400 text-sm">{telebirrSettings.accountNumber}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyTelebirr}
+                    className="px-3 py-2 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {copiedNumber ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedNumber ? 'Copied!' : 'Copy'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Telebirr Transaction Ref / ቁጥር (Optional)
+                    </label>
                     <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleProofUpload}
-                      className="hidden"
+                      type="text"
+                      value={transactionRef}
+                      onChange={(e) => setTransactionRef(e.target.value)}
+                      placeholder="Optional: Enter Tx Ref if paying now"
+                      className="w-full p-2 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white font-mono placeholder:text-slate-500 focus:ring-1 focus:ring-emerald-400"
                     />
-                  </label>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
+                      Upload Payment Receipt / ስክሪንሽኦት (Optional)
+                    </label>
+                    <label className="w-full p-2 bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-lg text-slate-300 text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors">
+                      <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="truncate">{screenshotFileName || 'Upload Receipt (Optional)'}</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleProofUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-1 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPlanId('free')}
+                    className="text-[11px] text-emerald-400 hover:text-emerald-300 font-bold underline cursor-pointer"
+                  >
+                    {isAmharic ? '← በነፃ ፕላን መለጠፍ እፈልጋለሁ (Switch to Free Plan)' : '← Switch to Free Plan (0 ETB)'}
+                  </button>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Submit Button */}

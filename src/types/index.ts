@@ -45,7 +45,7 @@ export interface Property {
   isFurnished: boolean;
   isVerified: boolean;
   isFeatured: boolean;
-  payPlan?: 'basic' | 'premium' | 'vip';
+  payPlan?: 'free' | 'basic' | 'premium' | 'vip' | 'standard';
   payPlanName?: string;
   images: string[];
   amenities: string[];

@@ -7,6 +7,7 @@ import { Footer } from './components/common/Footer';
 import { SyncStatusBar } from './components/common/SyncStatusBar';
 import { HeroSection } from './components/home/HeroSection';
 import { PropertyCategories } from './components/home/PropertyCategories';
+import { BeteAISection } from './components/home/BeteAISection';
 import { FeaturedProperties } from './components/home/FeaturedProperties';
 import { PopularLocations } from './components/home/PopularLocations';
 import { WhyChooseUs } from './components/home/WhyChooseUs';
@@ -19,9 +20,11 @@ import { UserDashboard } from './components/dashboard/UserDashboard';
 import { AuthModal } from './components/auth/AuthModal';
 import { ResetPasswordView } from './components/auth/ResetPasswordView';
 import { PaymentModal } from './components/payment/PaymentModal';
+import { FloatingBeteAIButton } from './components/ai/FloatingBeteAIButton';
+import { BeteAIAssistantModal } from './components/ai/BeteAIAssistantModal';
 
 const MainContent: React.FC = () => {
-  const { currentView, setCurrentView } = useProperties();
+  const { currentView, setCurrentView, openAIChatWithPrompt } = useProperties();
 
   return (
     <main className="min-h-screen flex flex-col justify-between">
@@ -30,6 +33,8 @@ const MainContent: React.FC = () => {
           <>
             <HeroSection />
             <PropertyCategories />
+            {/* Bete AI Ethiopian Real Estate Advisor */}
+            <BeteAISection onOpenAIChat={openAIChatWithPrompt} />
             <FeaturedProperties />
             <PopularLocations />
             <WhyChooseUs />
@@ -62,20 +67,38 @@ const MainContent: React.FC = () => {
   );
 };
 
+const AppShell: React.FC = () => {
+  const { isAIChatOpen, setIsAIChatOpen, aiInitialPrompt, openAIChatWithPrompt } = useProperties();
+
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-900 selection:bg-amber-500 selection:text-white">
+      <SyncStatusBar />
+      <Navbar />
+      <MainContent />
+
+      {/* Global Bete AI Floating Action Button */}
+      <FloatingBeteAIButton onClick={() => openAIChatWithPrompt()} />
+
+      {/* Global Bete AI Assistant Modal */}
+      <BeteAIAssistantModal 
+        isOpen={isAIChatOpen} 
+        onClose={() => setIsAIChatOpen(false)} 
+        initialPrompt={aiInitialPrompt} 
+      />
+
+      {/* Global Overlays & Modals */}
+      <AuthModal />
+      <PaymentModal />
+    </div>
+  );
+};
+
 export default function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
         <PropertyProvider>
-          <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-900 selection:bg-amber-500 selection:text-white">
-            <SyncStatusBar />
-            <Navbar />
-            <MainContent />
-
-            {/* Global Overlays & Modals */}
-            <AuthModal />
-            <PaymentModal />
-          </div>
+          <AppShell />
         </PropertyProvider>
       </AuthProvider>
     </LanguageProvider>

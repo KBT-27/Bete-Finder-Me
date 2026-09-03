@@ -865,37 +865,41 @@ function getGeminiClient(): GoogleGenAI | null {
   return aiClientInstance;
 }
 
-const BETE_AI_SYSTEM_INSTRUCTION = `
-You are "Bete AI", the primary intelligent virtual assistant and real estate Q&A expert for the "Bete Finder" real estate platform in Ethiopia.
+const BETE_ASSISTANCE_SYSTEM_INSTRUCTION = `
+You are Bete Assistance, an intelligent AI assistant powered by Google Gemini.
 
-Rules and Responsibilities:
-1. Answering Any Real Estate Question:
-- You are a comprehensive Ethiopian real estate advisor. You answer ANY question the user asks regarding:
-  * Rental prices, neighborhood comparisons (e.g. Bole vs CMC vs Kazanchis vs Sarbet vs Gerji).
-  * Legal procedures, tenancy agreements, advance rent customs (typically 3-6 months), broker/delala commissions (usually 1 month rent or 2% sale).
-  * Bank loans & mortgages in Ethiopia (Commercial Bank of Ethiopia CBE, Awash Bank, Dashen Bank, Bank of Abyssinia, Diaspora housing mortgage schemes).
-  * Essential amenities for Ethiopian living: backup water storage (Roto water tanks), backup electric generators/solar power, EEU prepaid electricity meters, AAWSA water meters.
-  * Neighborhood safety, public transit (Addis Ababa Light Rail LRT, Sheger Express, Anbessa Bus, minibus routes), international schools (ICS, Sandford, Bingham, French School), embassies, and major hospitals (Korean Hospital, St. Paul, Black Lion).
-  * Regional real estate in Hawassa, Bahir Dar, Bishoftu, Adama, Dire Dawa, Mekelle, Gondar.
-- You DO NOT autofill or generate listings; you act as an open-ended conversational expert for answering user questions.
+Your identity, scope, and capabilities:
+1. About Yourself (Bete Assistance) and what you can do:
+- When asked "Who are you?", "What can you do?", "ስለ አንተ ንገረኝ", "ምን ማድረግ ትችላለህ?", or questions about the AI itself:
+  * State that you are Bete Assistance, powered by Google Gemini.
+  * Clearly explain what you can do:
+    - Guide users on all features of the Bete Finder platform (searching properties, listing homes for rent or sale, contacting landlords/agents, calculating mortgages, currency conversion).
+    - Provide accurate Ethiopian real estate market information (average rental and buying prices in Bole, Kazanchis, CMC, Sarbet, Summit, Old Airport, Hawassa, Bahir Dar, etc.).
+    - Explain tenancy regulations, written contract requirements, advance rent customs (3-6 months), broker fees, and bank mortgage policies (CBE, Awash Bank, etc.).
+    - Answer ANY question about the web, science, technology, history, culture, math, everyday life, coding, travel, or any topic.
+    - Provide answers fluently in both Amharic (አማርኛ) and English.
 
-2. Bilingual Language Support & Tone:
-- Language: Communicate naturally and fluently in both Amharic (አማርኛ) and English.
-- Detect the language of the user's query and respond in that language. If the user uses a mix, respond in fluent Amharic with clear English terminology.
-- Tone: Friendly, professional, knowledgeable, direct, and respectful.
+2. About Bete Finder Platform:
+- When asked about Bete Finder:
+  * Explain that Bete Finder (ቤቴ ፈላጊ) is Ethiopia's modern digital real estate marketplace.
+  * It connects tenants and homebuyers directly with property owners and verified brokers.
+  * Core features:
+    - Search & Filter: Filter by location/subcity, listing type (Rent/Sale), property type (Apartment, Villa, Condominium, Townhouse, Studio, Commercial), price range (ETB / USD), and bedrooms.
+    - Post Property: Landlords and agents can click "Post Property / ቤት ይለጥፉ" to create listings with photo uploads, descriptions, and amenities.
+    - Direct Contact: Call, SMS, WhatsApp, and in-app message property owners.
+    - Interactive Tools: Live interactive map, ETB/USD currency toggle, mortgage & loan payment calculator, and saved favorites.
 
-3. Boundaries & Accuracy:
-- Provide accurate, realistic advice based on Ethiopian real estate conditions.
-- If the user asks for specific property recommendations, highlight typical price ranges and key location factors.
+3. About the Web and All Things:
+- You can answer any questions about the web, technology, world knowledge, science, mathematics, literature, history, and daily life.
+- Deliver helpful, accurate, well-structured, and clear explanations.
 
-4. Output Format (Text Only):
-Provide all outputs strictly in structured text form without outputting raw software programming code blocks.
-Every response should include:
-User Response: A helpful, informative, and direct reply answering the user's question or providing advice in the user's language.
-Map & Search Context: A concise plain-text breakdown of relevant location or search metadata (Target Location, Nearby Landmarks, Property Type, Listing Intent [Rent/Sale], Max Price Limit, and Bedroom Count) when applicable.
+4. Formatting & Style Directives:
+- Answer the user's specific question directly, warmly, and concisely.
+- Do NOT output any internal prefixes or tags like "User Response:", "Search Context:", or markdown code blocks for normal conversation.
+- Answer in the language the user asked in (Amharic or English).
 `;
 
-// 1. Bete AI Interactive Chat
+// 1. Bete Assistance Interactive Chat (Powered by Gemini)
 app.post('/api/ai/chat', async (req, res) => {
   try {
     const { message, history = [], language = 'auto' } = req.body;
@@ -926,48 +930,144 @@ app.post('/api/ai/chat', async (req, res) => {
         parts: [{ text: message }]
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.7-flash',
-        contents: formattedContents,
-        config: {
-          systemInstruction: BETE_AI_SYSTEM_INSTRUCTION,
-          temperature: 0.7,
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: formattedContents,
+          config: {
+            systemInstruction: BETE_ASSISTANCE_SYSTEM_INSTRUCTION,
+            temperature: 0.6,
+          }
+        });
+        replyText = response.text || '';
+      } catch (geminiErr: any) {
+        // If gemini-3.8-flash experiences a temporary 503 spike, try gemini-3.1-flash-lite fallback
+        const isDemandSpike = geminiErr?.status === 503 || geminiErr?.message?.includes('503') || geminiErr?.message?.includes('demand');
+        if (isDemandSpike) {
+          try {
+            const fallbackResponse = await ai.models.generateContent({
+              model: 'gemini-3.1-flash-lite',
+              contents: formattedContents,
+              config: {
+                systemInstruction: BETE_ASSISTANCE_SYSTEM_INSTRUCTION,
+                temperature: 0.6,
+              }
+            });
+            replyText = fallbackResponse.text || '';
+          } catch (fallbackErr) {
+            replyText = '';
+          }
+        } else {
+          replyText = '';
         }
-      });
-
-      replyText = response.text || '';
-    } else {
-      // Fallback rule-based assistant when GEMINI_API_KEY is not yet populated
-      const isAmh = /[\u1200-\u137F]/.test(message);
-      if (isAmh) {
-        replyText = `User Response:
-እንኳን ወደ ቤቴ ፈላጊ በደህና መጡ! ጥያቄዎን ተቀብያለሁ። በኢትዮጵያ ውስጥ የሚፈልጉትን ቤት፣ አፓርታማ ወይም የንግድ ቦታ በካርታ ላይ በቀላሉ እንዲያገኙ እረዳዎታለሁ። የሚፈልጉትን አካባቢ (ቦሌ፣ ሲኤምሲ፣ ካዛንቺስ ወዘተ)፣ የክፍል ብዛት ወይም የዋጋ ገደብዎን በግልጽ ቢያስቀምጡልኝ ምርጥ ቤቶችን አዘጋጅቼ አቀርብልዎታለሁ።
-
-Map & Search Context:
-- Target Location: ${message.includes('ቦሌ') ? 'Bole (ቦሌ)' : message.includes('ሲኤምሲ') ? 'CMC (ሲኤምሲ)' : message.includes('ካዛንቺስ') ? 'Kazanchis (ካዛንቺስ)' : 'Addis Ababa & Regional Hubs'}
-- Nearby Landmarks: Pending User Selection
-- Property Type: ${message.includes('አፓርታማ') ? 'Apartment' : message.includes('ቪላ') ? 'Villa' : message.includes('ኮንዶሚኒየም') ? 'Condominium' : 'All'}
-- Listing Intent: ${message.includes('ሽያጭ') ? 'Sale' : 'Rent'}
-- Max Price Limit: ${message.match(/\d+[\d,]*/)?.[0] ? message.match(/\d+[\d,]*/)?.[0] + ' ETB' : 'Flexible'}
-- Bedroom Count: ${message.includes('1') ? '1' : message.includes('2') ? '2' : message.includes('3') ? '3' : 'Any'}`;
-      } else {
-        replyText = `User Response:
-Welcome to Bete Finder! I am Bete AI, your real estate and map guide in Ethiopia. I have noted your request. To help you find the best property in areas like Bole, Kazanchis, CMC, or other Ethiopian cities, could you specify your target neighborhood, preferred property type, and budget?
-
-Map & Search Context:
-- Target Location: ${message.toLowerCase().includes('bole') ? 'Bole' : message.toLowerCase().includes('cmc') ? 'CMC' : message.toLowerCase().includes('kazanchis') ? 'Kazanchis' : 'Addis Ababa & Hubs'}
-- Nearby Landmarks: Open
-- Property Type: ${message.toLowerCase().includes('villa') ? 'Villa' : message.toLowerCase().includes('apartment') ? 'Apartment' : 'Any'}
-- Listing Intent: ${message.toLowerCase().includes('buy') || message.toLowerCase().includes('sale') ? 'Sale' : 'Rent'}
-- Max Price Limit: ${message.match(/\d+[\d,]*/)?.[0] ? message.match(/\d+[\d,]*/)?.[0] + ' ETB' : 'Flexible'}
-- Bedroom Count: ${message.match(/(\d+)\s*(?:bed|bedroom)/i)?.[1] || 'Any'}`;
       }
     }
+
+    if (!replyText) {
+      // Fallback direct answers answering the asked question
+      const isAmh = /[\u1200-\u137F]/.test(message);
+      const lower = message.toLowerCase();
+
+      // 1. Questions about the AI / What it can do
+      if (
+        lower.includes('who are you') || 
+        lower.includes('what can you do') || 
+        lower.includes('about you') || 
+        lower.includes('your name') || 
+        lower.includes('what do you do') || 
+        message.includes('ማን ነህ') || 
+        message.includes('ምን ማድረግ ትችላለህ') || 
+        message.includes('ስለ አንተ') ||
+        message.includes('ረዳት')
+      ) {
+        replyText = isAmh
+          ? `እኔ **Bete Assistance** (ቤቴ ረዳት) ነኝ፤ በ **Google Gemini** የተደገፍኩ ዘመናዊ የ AI ረዳት ነኝ።
+
+ምን ማድረግ እችላለሁ?
+1. **ስለ ቤቴ ፈላጊ (Bete Finder)**፡ በድረ-ገፁ ላይ ቤቶችን እንዴት መፈለግ፣ መከራየት፣ መግዛት፣ ቤት ለኪራይ ወይም ለሽያጭ መለጠፍ፣ እና ከአከራዮች ጋር በቀጥታ መገናኘት እንደሚችሉ መምራት እችላለሁ።
+2. **ስለ ኢትዮጵያ ሪል እስቴት**፡ በአዲስ አበባ (ቦሌ፣ ሲኤምሲ፣ ካዛንቺስ፣ ሳርቤት፣ ወዘተ) እና በክልል ከተሞች ስላሉ የቤት ኪራይና ግዢ ዋጋዎች፣ የውል ስምምነት ደንቦች፣ የደላላ ኮሚሽን እና የባንክ ብድር (Mortgage) ትክክለኛ መረጃ መስጠት እችላለሁ።
+3. **ስለ ድር (Web) እና አጠቃላይ እውቀት**፡ ስለ ሳይንስ፣ ቴክኖሎጂ፣ ታሪክ፣ ትምህርት ወይም ማንኛውም አጠቃላይ ጥያቄዎችዎን መመለስ እችላለሁ።
+4. **በሁለት ቋንቋ**፡ በአማርኛ እና በእንግሊዝኛ አቀላጥፌ ምላሽ እሰጣለሁ።`
+          : `I am **Bete Assistance**, an intelligent AI assistant powered by **Google Gemini**.
+
+Here is what I can do:
+1. **Bete Finder Guidance**: I can guide you through every feature of the platform—how to search and filter properties, post homes for rent or sale, contact landlords/agents directly, use the mortgage calculator, and switch currencies.
+2. **Ethiopian Real Estate Market**: I can provide realistic rental and sale price estimates across Addis Ababa (Bole, CMC, Kazanchis, Sarbet, Summit, etc.), explain legal tenancy contracts, advance rent norms, broker fees, and bank mortgage requirements (CBE, Awash Bank).
+3. **The Web & General Knowledge**: You can ask me any question about technology, science, history, culture, coding, or everyday topics on the web.
+4. **Bilingual**: I am fully fluent in both English and Amharic (አማርኛ).`;
+
+      // 2. Questions about Bete Finder platform
+      } else if (
+        lower.includes('bete finder') || 
+        lower.includes('about the app') || 
+        lower.includes('how does this work') || 
+        lower.includes('how to post') || 
+        lower.includes('post property') || 
+        message.includes('ቤቴ ፈላጊ') || 
+        message.includes('መተግበሪያ') || 
+        message.includes('ቤት መለጠፍ')
+      ) {
+        replyText = isAmh
+          ? `**ቤቴ ፈላጊ (Bete Finder)** በኢትዮጵያ ውስጥ የቤት ፈላጊዎችን፣ ተከራዮችን፣ አከራዮችን እና ህጋዊ ደላሎችን በቀጥታ የሚያገናኝ ዘመናዊ የሪል እስቴት መድረክ ነው።
+
+ዋና ዋና አገልግሎቶቹ፡
+* **ቤት መፈለግና ማጣራት**፡ በከተማ (አዲስ አበባ፣ ባህር ዳር፣ ሐዋሳ)፣ በክፍለ ከተማ (ቦሌ፣ የካ፣ ቂርቆስ)፣ በዋጋ መጠን (ETB ወይም USD)፣ እና በመኝታ ቤት ብዛት ማጣራት።
+* **ቤት መለጠፍ (Post Property)**፡ አከራዮች እና ደላሎች "ቤት ይለጥፉ" የሚለውን በመጫን ፎቶዎችን፣ ዋጋን፣ እና እንደ ሮቶ ታንከርና ጀነሬተር ያሉ መገልገያዎችን ጨምረው መለጠፍ ይችላሉ።
+* **ቀጥተኛ ግንኙነት**፡ በስልክ ጥሪ፣ SMS፣ WhatsApp ወይም በድረ-ገፁ የውስጥ መልዕክት በቀጥታ መገናኘት።
+* **የባንክ ብድር ማስያ (Mortgage Calculator)** እና የካርታ እይታ።`
+          : `**Bete Finder** is Ethiopia's premier digital real estate marketplace connecting tenants, home buyers, verified landlords, and licensed agents.
+
+Key features include:
+* **Search & Filters**: Browse rental and sale properties with subcity filters (Bole, CMC, Kazanchis, Sarbet), property types (villas, apartments, condominiums, studios), and price range in ETB or USD.
+* **Post Property**: Landlords and agents can click **"Post Property / ቤት ይለጥፉ"** to list homes with photo uploads and amenity specifications.
+* **Direct Communication**: Connect directly with owners via Phone, SMS, WhatsApp, or in-app chat.
+* **Smart Tools**: Interactive map view, live currency switcher (ETB & USD), mortgage calculation tool, and saved favorites.`;
+
+      // 3. Real Estate Locations & Topics
+      } else if (lower.includes('bole') || message.includes('ቦሌ')) {
+        replyText = isAmh
+          ? 'በአዲስ አበባ ቦሌ አካባቢ ባለ 2 መኝታ አፓርታማ ኪራይ እንደ ቤቱ ጥራት፣ ፈርኒቸር እና ጀነሬተር በወር በአማካይ ከ 35,000 እስከ 75,000 የኢትዮጵያ ብር ይደርሳል። ቪላ ቤቶች ደግሞ ከ 80,000 ብር ጀምሮ ይከራያሉ።'
+          : 'In Bole, Addis Ababa, average rent for a 2-bedroom apartment ranges from 35,000 to 75,000 ETB per month depending on furnishings, building generator, and water backup. Standalone villas typically rent from 80,000 to 180,000+ ETB per month.';
+      } else if (lower.includes('cmc') || message.includes('ሲኤምሲ')) {
+        replyText = isAmh
+          ? 'በሲኤምሲ እና ሰሚት አካባቢ ባለ 2 መኝታ አፓርታማ ወይም ኮንዶሚኒየም ኪራይ በወር በአማካይ ከ 18,000 እስከ 35,000 የኢትዮጵያ ብር ነው። ሪል እስቴት ቪላዎች ከ 50,000 እስከ 90,000 ብር ይከራያሉ።'
+          : 'In CMC and Summit, rent for a 2-bedroom apartment or condominium averages between 18,000 and 35,000 ETB per month. Real estate villas in gated compounds range between 50,000 and 90,000 ETB per month.';
+      } else if (lower.includes('kazanchis') || message.includes('ካዛንቺስ')) {
+        replyText = isAmh
+          ? 'በካዛንቺስ እና ባምቢስ አካባቢ ለአለም አቀፍ ተቋማት እና ኤምባሲዎች ቅርብ በመሆኑ ባለ 2 መኝታ አፓርታማ ኪራይ በወር በአማካይ ከ 40,000 እስከ 85,000 ብር ይደርሳል።'
+          : 'In Kazanchis and Bambis, due to its proximity to the UNECA and embassies, 2-bedroom apartments rent for an average of 40,000 to 85,000 ETB per month.';
+      } else if (lower.includes('contract') || lower.includes('agreement') || lower.includes('rule') || message.includes('ውል') || message.includes('ህግ') || message.includes('ቅድመ')) {
+        replyText = isAmh
+          ? 'በኢትዮጵያ የቤት ኪራይ ውል በህጋዊ ሰነዶች ማረጋገጫ (ወረዳ ወይም ኖታሪ) መፈረም እና መመዝገብ አለበት። የተለመደው የቅድመ ክፍያ ደንብ ከ 3 እስከ 6 ወር ሲሆን፣ የደላላ ኮሚሽን ደግሞ የአንድ ወር ኪራይ ነው።'
+          : 'In Ethiopia, tenancy agreements should be executed with a written contract registered at the local woreda or document authentication office. The standard practice requires 3 to 6 months of rent paid in advance, and the standard broker commission is one month of rent.';
+      } else if (lower.includes('mortgage') || lower.includes('bank') || lower.includes('loan') || message.includes('ባንክ') || message.includes('ብድር')) {
+        replyText = isAmh
+          ? 'በኢትዮጵያ ንግድ ባንክ (CBE) እና በአዋሽ ባንክ የቤት መግዣ ብድር ለመውሰድ ከ 20% እስከ 30% የቅድመ ክፍያ (down payment) ያስፈልጋል። ቀሪው ገንዘብ በ 15 እስከ 20 ዓመታት ውስጥ በወርሃዊ ክፍያ የሚመለስ ሲሆን፣ የገቢ ማረጋገጫ እና የይዞታ ማረጋገጫ (ካርታ) ማቅረብ ግዴታ ነው።'
+          : 'Mortgage loans in Ethiopia (through CBE, Awash Bank, and private banks) typically require a 20% to 30% down payment. Repayment periods range from 15 to 20 years, and applicants must provide proof of steady income and a clear title deed.';
+      } else if (lower.includes('water') || lower.includes('generator') || message.includes('ውሃ') || message.includes('ጀነሬተር') || message.includes('ሮቶ')) {
+        replyText = isAmh
+          ? 'በአዲስ አበባ ቤት ሲከራዩ ቢያንስ ከ 1,000 እስከ 3,000 ሊትር የሮቶ ውሃ ታንከር እና የኤሌክትሪክ መቆራረጥን የሚከላከል የጀነሬተር አገልግሎት መኖሩን ማረጋገጥ በጣም አስፈላጊ ነው።'
+          : 'When renting in Addis Ababa, having a backup Roto water tank (at least 1,000 to 3,000 liters) and a standby generator in the building are vital amenities to ensure uninterrupted utility access.';
+      } else {
+        replyText = isAmh
+          ? 'እኔ **Bete Assistance** (በ Google Gemini የተደገፍኩ ረዳት) ነኝ። ስለ ቤቴ ፈላጊ (Bete Finder)፣ ስለ ኢትዮጵያ ሪል እስቴት፣ ወይም ማንኛውንም የድርና አጠቃላይ ጥያቄዎን በነፃነት መጠየቅ ይችላሉ።'
+          : 'I am **Bete Assistance**, powered by Google Gemini. Ask me any question about Bete Finder, Ethiopian real estate, or any topic on the web and general knowledge, and I will gladly assist you!';
+      }
+    }
+
+    // Clean any unwanted structural labels so only the direct answer is returned
+    const cleanAnswer = replyText
+      .replace(/^User Response:\s*/i, '')
+      .replace(/^የተጠቃሚ ምላሽ:\s*/i, '')
+      .replace(/Search Context:[\s\S]*$/i, '')
+      .replace(/Map & Search Context:[\s\S]*$/i, '')
+      .replace(/የፍለጋ መረጃ:[\s\S]*$/i, '')
+      .trim();
 
     // Extract structured search parameters for frontend map/filter actions
     const searchContext: any = {};
     const lower = message.toLowerCase();
-    const replyLower = replyText.toLowerCase();
+    const replyLower = cleanAnswer.toLowerCase();
 
     // Detect target location
     if (lower.includes('bole') || replyLower.includes('bole') || lower.includes('ቦሌ')) {
@@ -1030,7 +1130,7 @@ Map & Search Context:
 
     res.json({
       success: true,
-      text: replyText,
+      text: cleanAnswer,
       searchContext
     });
   } catch (error: any) {
