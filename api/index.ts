@@ -13,7 +13,6 @@ export default function handler(req: any, res: any) {
       return res.end();
     }
 
-    // Normalize rewritten path from Vercel edge proxy
     const forwarded = req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.headers['x-now-route-matches'];
     if (forwarded && typeof forwarded === 'string' && (req.url === '/api/index' || req.url === '/api/index.ts' || req.url?.startsWith('/api/index'))) {
       req.url = forwarded;
@@ -33,4 +32,3 @@ export default function handler(req: any, res: any) {
     }
   }
 }
-
