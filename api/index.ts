@@ -1,3 +1,4 @@
+// @ts-ignore
 import serverApp from '../dist/server.mjs';
 
 export default function handler(req: any, res: any) {
