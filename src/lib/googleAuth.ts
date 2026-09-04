@@ -170,8 +170,8 @@ export async function authenticateWithGoogle(): Promise<{
           }
         });
 
-        // Request Access Token popup
-        tokenClient.requestAccessToken({ prompt: 'select_account' });
+        // Request Access Token popup without forcing 'select_account' screen
+        tokenClient.requestAccessToken();
         return;
       } catch (tokenInitErr: any) {
         console.warn('[Google Auth] initTokenClient failed, trying fallback:', tokenInitErr);
