@@ -78,7 +78,7 @@ export const PaymentModal: React.FC = () => {
 
   const handleCompletePayment = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payerName.trim() || !payerPhone.trim() || !transactionRef.trim()) {
+    if (!payerName.trim() || !payerPhone.trim() || !transactionRef.trim() || !screenshotPreview) {
       return;
     }
 
@@ -384,14 +384,23 @@ export const PaymentModal: React.FC = () => {
                 />
               </div>
 
-              {/* Screenshot of Payment */}
+              {/* Screenshot of Payment (Mandatory) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                  <span>Payment Screenshot / Receipt</span>
-                  <span className="text-[11px] text-slate-400 font-normal">Screenshot Proof</span>
+                  <span className="flex items-center gap-1.5">
+                    <span>Payment Screenshot / Receipt</span>
+                    <span className="text-[10px] font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200">
+                      Mandatory *
+                    </span>
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-semibold">Screenshot Proof</span>
                 </label>
                 
-                <label className="border-2 border-dashed border-slate-200 hover:border-emerald-500 bg-slate-50 hover:bg-emerald-50/40 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-colors">
+                <label className={`border-2 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${
+                  screenshotPreview 
+                    ? 'border-emerald-400 bg-emerald-50/50' 
+                    : 'border-dashed border-rose-300 hover:border-emerald-500 bg-rose-50/30 hover:bg-emerald-50/40'
+                }`}>
                   <input
                     type="file"
                     accept="image/*"
@@ -403,17 +412,17 @@ export const PaymentModal: React.FC = () => {
                       <img
                         src={screenshotPreview}
                         alt="Screenshot"
-                        className="w-12 h-12 object-cover rounded-lg border border-emerald-300"
+                        className="w-12 h-12 object-cover rounded-lg border border-emerald-300 shadow-xs"
                       />
                       <div className="text-left">
                         <p className="text-xs font-bold text-emerald-800 truncate max-w-xs">{screenshotFileName || 'Screenshot attached'}</p>
-                        <p className="text-[10px] text-slate-500">Click to change file</p>
+                        <p className="text-[10px] text-emerald-600 font-semibold">Attached • Click to change file</p>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <Upload className="w-4 h-4 text-emerald-600" />
-                      <span className="text-xs font-bold">Attach screenshot of Telebirr payment</span>
+                    <div className="flex items-center gap-2 text-rose-700">
+                      <Upload className="w-4 h-4 text-rose-600" />
+                      <span className="text-xs font-bold">Attach screenshot of Telebirr payment (Mandatory *)</span>
                     </div>
                   )}
                 </label>
@@ -430,7 +439,7 @@ export const PaymentModal: React.FC = () => {
               {/* Complete Payment Button */}
               <button
                 type="submit"
-                disabled={isProcessing || !transactionRef.trim() || !payerPhone.trim() || !payerName.trim()}
+                disabled={isProcessing || !transactionRef.trim() || !payerPhone.trim() || !payerName.trim() || !screenshotPreview}
                 className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-emerald-600/25 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
               >
                 {isProcessing ? (

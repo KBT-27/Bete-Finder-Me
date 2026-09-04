@@ -25,7 +25,8 @@ import {
   RefreshCw,
   Compass,
   User,
-  Phone
+  Phone,
+  X
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -206,6 +207,16 @@ export const PostPropertyView: React.FC = () => {
             : 'Please enter a valid Telebirr phone number (e.g. 0912345678 or 0712345678) *'
         );
         document.getElementById('telebirr-phone-input')?.focus();
+        return;
+      }
+
+      if (!screenshotPreview) {
+        setFormError(
+          isAmharic 
+            ? 'እባክዎ የቴሌብር ክፍያ ደረሰኝ ስክሪንሽኦት (Screenshot) ያስገቡ *' 
+            : 'Please upload the Telebirr payment receipt screenshot (Mandatory *)'
+        );
+        document.getElementById('telebirr-receipt-input')?.scrollIntoView({ behavior: 'smooth' });
         return;
       }
     }
@@ -1039,8 +1050,8 @@ export const PostPropertyView: React.FC = () => {
 
             <p className="text-xs text-slate-600">
               {isAmharic 
-                ? 'እባክዎ የማስታወቂያ ፓኬጅ ይምረጡ (ነፃ 0 ብር፣ መሰረታዊ 299 ብር፣ ፕሪሚየም 599 ብር፣ ወይም ቪአይፒ 999 ብር)። የመረጡትን ፓኬጅ ሲነኩ መረጃውን ያረጋግጡ፤ የሚከፈልበት ፓኬጅ ከመረጡ ስምዎን እና የቴሌብር ስልክ ቁጥርዎን ያስገቡ።'
-                : 'Please select a listing package (Free Plan 0 ETB, Basic 299 ETB, Premium 599 ETB, or VIP 999 ETB). When you touch Basic, Premium, or VIP, please enter your name and Telebirr phone number.'}
+                ? 'እባክዎ የማስታወቂያ ፓኬጅ ይምረጡ (ነፃ 0 ብር፣ መሰረታዊ 299 ብር፣ ፕሪሚየም 599 ብር፣ ወይም ቪአይፒ 999 ብር)። የሚከፈልበት ፓኬጅ ከመረጡ ስምዎን፣ የቴሌብር ስልክ ቁጥርዎን እና የክፍያ ደረሰኝ ስክሪንሽኦት (ግዴታ *) ማያያዝ ይጠበቅብዎታል።'
+                : 'Please select a listing package (Free Plan 0 ETB, Basic 299 ETB, Premium 599 ETB, or VIP 999 ETB). For paid packages, providing your name, Telebirr phone number, and uploading the payment receipt screenshot is mandatory.'}
             </p>
 
             {/* Packages Grid: Free (0 ETB), Basic (299 ETB), Premium (599 ETB), VIP (999 ETB) */}
@@ -1237,7 +1248,7 @@ export const PostPropertyView: React.FC = () => {
                           : (isAmharic ? 'የ መሰረታዊ ፓኬጅ ክፍያ መረጃ' : 'Basic Plan Telebirr Details')}
                       </span>
                       <span className="text-[11px] text-slate-400">
-                        {isAmharic ? 'እባክዎ ስምዎንና የቴሌብር ስልክ ቁጥርዎን ያስገቡ' : 'Please provide your name and Telebirr phone number'}
+                        {isAmharic ? 'እባክዎ ስምዎን፣ የቴሌብር ስልክ ቁጥርዎን እና የክፍያ ደረሰኝ ስክሪንሽኦት (ግዴታ *) ያስገቡ' : 'Please provide your name, Telebirr phone number, and payment receipt screenshot (Mandatory *)'}
                       </span>
                     </div>
                   </div>
@@ -1300,7 +1311,7 @@ export const PostPropertyView: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Optional Transaction Ref and Receipt Upload */}
+                {/* Transaction Ref and Mandatory Receipt Upload */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-300 mb-1">
@@ -1311,24 +1322,75 @@ export const PostPropertyView: React.FC = () => {
                       value={transactionRef}
                       onChange={(e) => setTransactionRef(e.target.value)}
                       placeholder="e.g. TB12345678"
-                      className="w-full p-2 text-xs bg-slate-800 border border-slate-700 rounded-lg text-white font-mono placeholder:text-slate-500 focus:ring-1 focus:ring-emerald-400 outline-none"
+                      className="w-full p-2.5 text-xs bg-slate-800 border border-slate-700 rounded-xl text-white font-mono placeholder:text-slate-500 focus:ring-1 focus:ring-emerald-400 outline-none"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">
-                      {isAmharic ? 'የክፍያ ስክሪንሽኦት / Receipt (አማራጭ)' : 'Upload Receipt Screenshot (Optional)'}
+                  <div id="telebirr-receipt-input">
+                    <label className="block text-[11px] font-bold text-slate-200 mb-1 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <span>{isAmharic ? 'የክፍያ ስክሪንሽኦት / ደረሰኝ *' : 'Upload Receipt Screenshot *'}</span>
+                      </span>
+                      <span className="text-[10px] font-black text-rose-300 bg-rose-900/80 px-2 py-0.5 rounded-full border border-rose-700">
+                        {isAmharic ? 'ግዴታ *' : 'Mandatory *'}
+                      </span>
                     </label>
-                    <label className="w-full p-2 bg-slate-800 border border-slate-700 hover:border-slate-600 rounded-lg text-slate-300 text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors">
-                      <UploadCloud className="w-3.5 h-3.5 text-emerald-400" />
-                      <span className="truncate">{screenshotFileName || (isAmharic ? 'ደረሰኝ ጫን (አማራጭ)' : 'Upload Receipt (Optional)')}</span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleProofUpload}
-                        className="hidden"
-                      />
-                    </label>
+
+                    {screenshotPreview ? (
+                      <div className="p-2 bg-emerald-950/40 border-2 border-emerald-500/80 rounded-xl flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <img
+                            src={screenshotPreview}
+                            alt="Receipt Preview"
+                            className="w-10 h-10 object-cover rounded-lg border border-emerald-400/80 shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-emerald-300 truncate max-w-[140px] sm:max-w-[180px]">
+                              {screenshotFileName || 'Receipt attached'}
+                            </p>
+                            <span className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1">
+                              <Check className="w-3 h-3 stroke-[3]" />
+                              <span>{isAmharic ? 'ተያይዟል (Attached)' : 'Ready for verification'}</span>
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <label className="px-2 py-1 bg-slate-700 hover:bg-slate-600 text-white text-[10px] font-bold rounded-lg cursor-pointer transition-colors">
+                            {isAmharic ? 'ቀይር' : 'Change'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={handleProofUpload}
+                              className="hidden"
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setScreenshotPreview(null);
+                              setScreenshotFileName('');
+                            }}
+                            className="p-1 text-slate-400 hover:text-rose-400 rounded-lg hover:bg-slate-800 transition-colors"
+                            title={isAmharic ? 'አስወግድ' : 'Remove'}
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="w-full p-2.5 bg-slate-800 hover:bg-slate-750 border-2 border-dashed border-rose-400/70 hover:border-emerald-400 rounded-xl text-slate-200 text-xs flex items-center justify-center gap-2 cursor-pointer transition-all">
+                        <UploadCloud className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span className="truncate font-bold text-rose-200">
+                          {isAmharic ? 'የክፍያ ደረሰኝ ስክሪንሽኦት ይጫኑ (ግዴታ *)' : 'Upload Receipt Screenshot (Mandatory *)'}
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleProofUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
               </div>
