@@ -1,13 +1,5 @@
 {
-  "version": 2,
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/dist/server.mjs"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/dist/server.mjs"
-    }
-  ]
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist"
 }
