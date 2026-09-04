@@ -1,4 +1,4 @@
-import app from '../server';
+import serverApp from '../dist/server.mjs';
 
 export default function handler(req: any, res: any) {
   try {
@@ -18,7 +18,7 @@ export default function handler(req: any, res: any) {
       req.url = forwarded;
     }
 
-    return app(req, res);
+    return serverApp(req, res);
   } catch (error: any) {
     console.error('[Vercel Serverless Invocation Error]:', error);
     if (!res.headersSent) {
