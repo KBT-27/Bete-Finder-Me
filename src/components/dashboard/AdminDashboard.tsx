@@ -57,7 +57,8 @@ import {
   Terminal,
   Radio,
   Share2,
-  HelpCircle
+  HelpCircle,
+  Send
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -73,6 +74,7 @@ import {
 } from '../../lib/passwords';
 import { PaymentRequest, Property } from '../../types';
 import { AdminControllerTab } from './AdminControllerTab';
+import { TelegramHubTab } from './TelegramHubTab';
 import { getAdminControllerConfig, logAdminActivity } from '../../lib/adminController';
 import { safeFetchJson } from '../../lib/apiHelper';
 
@@ -81,6 +83,7 @@ export const AdminDashboard: React.FC = () => {
   const { 
     properties, 
     deleteProperty, 
+    clearAllProperties,
     updateProperty, 
     setSelectedProperty, 
     setCurrentView,
@@ -120,7 +123,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Navigation tab state
   const [activeAdminTab, setActiveAdminTab] = useState<
-    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'admin_controller' | 'pricing_settings' | 'security' | 'sync'
+    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'admin_controller' | 'pricing_settings' | 'security' | 'sync' | 'telegram_hub'
   >('payments');
 
   // Search states for all modules
@@ -157,6 +160,11 @@ export const AdminDashboard: React.FC = () => {
 
   // User delete confirmation modal state
   const [userToDelete, setUserToDelete] = useState<{ email: string; name: string } | null>(null);
+
+  // Erase All Properties Modal State (Owner/Admin)
+  const [showEraseAllModal, setShowEraseAllModal] = useState<boolean>(false);
+  const [eraseConfirmText, setEraseConfirmText] = useState<string>('');
+  const [isErasingAll, setIsErasingAll] = useState<boolean>(false);
 
   // Security profile form state for Owner / Admin themselves
   const [securityEmail, setSecurityEmail] = useState(
@@ -245,6 +253,29 @@ export const AdminDashboard: React.FC = () => {
   const showToast = (msg: string) => {
     setActionSuccessToast(msg);
     setTimeout(() => setActionSuccessToast(null), 4500);
+  };
+
+  const handleEraseAllPropertiesAdmin = async () => {
+    const confirmation = eraseConfirmText.trim().toUpperCase();
+    if (confirmation !== 'ERASE' && confirmation !== 'DELETE') {
+      showToast('⚠️ Please type ERASE or DELETE to confirm.');
+      return;
+    }
+    setIsErasingAll(true);
+    try {
+      const ok = await clearAllProperties();
+      if (ok) {
+        showToast('🗑️ All property listings have been permanently erased from the database.');
+        setShowEraseAllModal(false);
+        setEraseConfirmText('');
+      } else {
+        showToast('❌ Failed to erase all properties. Please check database connection.');
+      }
+    } catch (err: any) {
+      showToast(`❌ Error: ${err?.message}`);
+    } finally {
+      setIsErasingAll(false);
+    }
   };
 
   // Fetch live connection info on mount / tab visit
@@ -554,11 +585,11 @@ export const AdminDashboard: React.FC = () => {
       const matchType = (p.propertyType || '').toLowerCase().includes(q);
       const matchNeigh = (p.neighborhood || '').toLowerCase().includes(q);
       const matchSubcity = (p.subcity || '').toLowerCase().includes(q);
-      const matchOwnerName = (p.owner.name || '').toLowerCase().includes(q);
-      const matchOwnerEmail = (p.owner.email || '').toLowerCase().includes(q);
-      const matchOwnerPhone = (p.owner.phone || '').toLowerCase().includes(q);
+      const matchOwnerName = (p.owner?.name || '').toLowerCase().includes(q);
+      const matchOwnerEmail = (p.owner?.email || '').toLowerCase().includes(q);
+      const matchOwnerPhone = (p.owner?.phone || '').toLowerCase().includes(q);
       const matchPlan = (p.payPlan || 'free').toLowerCase().includes(q);
-      const matchPrice = p.price.toString().includes(q);
+      const matchPrice = (p.price || 0).toString().includes(q);
       return matchTitle || matchType || matchNeigh || matchSubcity || matchOwnerName || matchOwnerEmail || matchOwnerPhone || matchPlan || matchPrice;
     }
     return true;
@@ -574,7 +605,7 @@ export const AdminDashboard: React.FC = () => {
       const matchEmail = (u.email || '').toLowerCase().includes(q);
       const matchPhone = (u.phone || '').toLowerCase().includes(q);
       const matchRole = (u.role || '').toLowerCase().includes(q);
-      const matchPlan = (u.activePlan || 'basic').toLowerCase().includes(q);
+      const matchPlan = (u.activePlan || 'free').toLowerCase().includes(q);
       return matchName || matchEmail || matchPhone || matchRole || matchPlan;
     }
     return true;
@@ -604,17 +635,21 @@ export const AdminDashboard: React.FC = () => {
     // From approved payment requests
     paymentRequests.forEach(req => {
       if (req.status === 'approved' && req.expiresAt) {
-        const userProps = properties.filter(p => p.owner.email.toLowerCase() === req.userEmail.toLowerCase());
+        const reqEmail = (req.userEmail || '').trim().toLowerCase();
+        const userProps = properties.filter(p => {
+          const pEmail = (p.owner?.email || '').trim().toLowerCase();
+          return pEmail && reqEmail && pEmail === reqEmail;
+        });
         list.push({
           id: req.id,
-          userName: req.userName,
-          userEmail: req.userEmail,
-          userPhone: req.userPhone,
+          userName: req.userName || 'Subscriber',
+          userEmail: req.userEmail || '',
+          userPhone: req.userPhone || '',
           plan: (req.planId === 'vip' ? 'vip' : req.planId === 'premium' ? 'premium' : 'basic'),
-          planName: req.planName,
-          amount: req.totalAmount,
-          transactionRef: req.transactionRef,
-          startDate: req.submittedAt,
+          planName: req.planName || 'Plan',
+          amount: req.totalAmount || 0,
+          transactionRef: req.transactionRef || 'N/A',
+          startDate: req.submittedAt || new Date().toISOString(),
           expiresAt: req.expiresAt,
           status: new Date(req.expiresAt).getTime() > currentTime ? 'active' : 'expired',
           propertiesCount: userProps.length
@@ -624,15 +659,22 @@ export const AdminDashboard: React.FC = () => {
 
     // Also include registered users who have an activePlan with planExpiresAt not already listed
     usersList.forEach(u => {
-      if (u.activePlan && u.activePlan !== 'basic' && u.planExpiresAt) {
-        const exists = list.some(item => item.userEmail.toLowerCase() === u.email.toLowerCase());
+      if (u.activePlan && u.activePlan !== 'free' && u.activePlan !== 'basic' && u.planExpiresAt) {
+        const uEmail = (u.email || '').trim().toLowerCase();
+        const exists = list.some(item => {
+          const itemEmail = (item.userEmail || '').trim().toLowerCase();
+          return itemEmail && uEmail && itemEmail === uEmail;
+        });
         if (!exists) {
-          const userProps = properties.filter(p => p.owner.email.toLowerCase() === u.email.toLowerCase());
+          const userProps = properties.filter(p => {
+            const pEmail = (p.owner?.email || '').trim().toLowerCase();
+            return pEmail && uEmail && pEmail === uEmail;
+          });
           list.push({
             id: `usr-plan-${u.id}`,
-            userName: u.name,
-            userEmail: u.email,
-            userPhone: u.phone,
+            userName: u.name || 'User',
+            userEmail: u.email || '',
+            userPhone: u.phone || '',
             plan: u.activePlan as 'vip' | 'premium' | 'basic',
             planName: u.activePlan === 'vip' ? 'VIP TOP+ Package' : u.activePlan === 'premium' ? 'Premium Package' : 'Basic Package',
             amount: u.activePlan === 'vip' ? vipPrice : u.activePlan === 'premium' ? premiumPrice : 0,
@@ -653,11 +695,11 @@ export const AdminDashboard: React.FC = () => {
   const filteredPaidSubscribers = allPaidSubscribers.filter(sub => {
     if (paidUsersSearchQuery.trim()) {
       const q = paidUsersSearchQuery.toLowerCase().trim();
-      const matchName = sub.userName.toLowerCase().includes(q);
-      const matchEmail = sub.userEmail.toLowerCase().includes(q);
-      const matchPhone = sub.userPhone.toLowerCase().includes(q);
-      const matchRef = sub.transactionRef.toLowerCase().includes(q);
-      const matchPlan = sub.planName.toLowerCase().includes(q);
+      const matchName = (sub.userName || '').toLowerCase().includes(q);
+      const matchEmail = (sub.userEmail || '').toLowerCase().includes(q);
+      const matchPhone = (sub.userPhone || '').toLowerCase().includes(q);
+      const matchRef = (sub.transactionRef || '').toLowerCase().includes(q);
+      const matchPlan = (sub.planName || '').toLowerCase().includes(q);
       return matchName || matchEmail || matchPhone || matchRef || matchPlan;
     }
     return true;
@@ -781,8 +823,10 @@ export const AdminDashboard: React.FC = () => {
       stopRegisteredUserPlan(userEmail);
 
       // Downgrade properties owned by this user
+      const targetEmail = (userEmail || '').trim().toLowerCase();
       properties.forEach(p => {
-        if (p.owner.email.toLowerCase() === userEmail.toLowerCase()) {
+        const pEmail = (p.owner?.email || '').trim().toLowerCase();
+        if (pEmail && targetEmail && pEmail === targetEmail) {
           updateProperty(p.id, {
             payPlan: undefined,
             isFeatured: false
@@ -1225,6 +1269,20 @@ export const AdminDashboard: React.FC = () => {
             </button>
           )}
 
+          {/* Tab: Telegram Bot & Channel Hub (Owner only) */}
+          {isOwner && (
+            <button
+              id="admin-tab-telegram-hub"
+              onClick={() => setActiveAdminTab('telegram_hub')}
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'telegram_hub' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+              }`}
+            >
+              <Send className="w-4 h-4 text-cyan-300 transform -rotate-12" />
+              <span>Telegram Bot & Channel</span>
+            </button>
+          )}
+
           {/* Tab 6: Security & Profile Settings */}
           <button
             onClick={() => setActiveAdminTab('security')}
@@ -1512,6 +1570,20 @@ export const AdminDashboard: React.FC = () => {
                   }`}
                 >
                   Verified ({verifiedProperties.length})
+                </button>
+
+                {/* Erase All Properties Button */}
+                <button
+                  id="admin-erase-all-properties-btn"
+                  onClick={() => {
+                    setEraseConfirmText('');
+                    setShowEraseAllModal(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-red-50 text-red-700 hover:bg-red-100 border border-red-200 transition-colors cursor-pointer ml-auto"
+                  title="Permanently erase all property listings from database"
+                >
+                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                  <span>Erase All Properties ({properties.length})</span>
                 </button>
               </div>
             </div>
@@ -1949,9 +2021,13 @@ export const AdminDashboard: React.FC = () => {
               {/* Mobile Card List View (Visible on Mobile & Tablet) */}
               <div className="block md:hidden space-y-3">
                 {filteredUsers.map((u) => {
-                  const userProps = properties.filter(p => p.owner.email.toLowerCase() === u.email.toLowerCase());
-                  const isOwnerUser = u.email.toLowerCase() === ownerCredentials.email.toLowerCase() || u.role === 'owner';
-                  const isGoogleUser = u.provider === 'google' || u.email.toLowerCase().includes('@gmail.com');
+                  const uEmail = (u.email || '').trim().toLowerCase();
+                  const userProps = properties.filter(p => {
+                    const pEmail = (p.owner?.email || '').trim().toLowerCase();
+                    return pEmail && uEmail && pEmail === uEmail;
+                  });
+                  const isOwnerUser = (uEmail && uEmail === (ownerCredentials.email || '').trim().toLowerCase()) || u.role === 'owner';
+                  const isGoogleUser = u.provider === 'google' || uEmail.includes('@gmail.com');
 
                   return (
                     <div key={u.id} className="p-4 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-3 shadow-2xs">
@@ -1997,9 +2073,11 @@ export const AdminDashboard: React.FC = () => {
                               ? 'bg-amber-400 text-slate-950' 
                               : u.activePlan === 'premium' 
                               ? 'bg-purple-600 text-white' 
-                              : 'bg-slate-200 text-slate-700'
+                              : u.activePlan === 'basic'
+                              ? 'bg-blue-100 text-blue-900'
+                              : 'bg-emerald-100 text-emerald-800'
                           }`}>
-                            {u.activePlan || 'basic'}
+                            {u.activePlan || 'free'}
                           </span>
                         </div>
                         <div>
@@ -2049,9 +2127,13 @@ export const AdminDashboard: React.FC = () => {
                   </thead>
                   <tbody className="divide-y divide-slate-100 font-medium">
                     {filteredUsers.map((u) => {
-                      const userProps = properties.filter(p => p.owner.email.toLowerCase() === u.email.toLowerCase());
-                      const isOwnerUser = u.email.toLowerCase() === ownerCredentials.email.toLowerCase() || u.role === 'owner';
-                      const isGoogleUser = u.provider === 'google' || u.email.toLowerCase().includes('@gmail.com');
+                      const uEmail = (u.email || '').trim().toLowerCase();
+                      const userProps = properties.filter(p => {
+                        const pEmail = (p.owner?.email || '').trim().toLowerCase();
+                        return pEmail && uEmail && pEmail === uEmail;
+                      });
+                      const isOwnerUser = (uEmail && uEmail === (ownerCredentials.email || '').trim().toLowerCase()) || u.role === 'owner';
+                      const isGoogleUser = u.provider === 'google' || uEmail.includes('@gmail.com');
 
                       return (
                         <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
@@ -2109,9 +2191,11 @@ export const AdminDashboard: React.FC = () => {
                                 ? 'bg-amber-400 text-slate-950' 
                                 : u.activePlan === 'premium' 
                                 ? 'bg-purple-600 text-white' 
-                                : 'bg-slate-100 text-slate-600'
+                                : u.activePlan === 'basic'
+                                ? 'bg-blue-100 text-blue-900'
+                                : 'bg-emerald-100 text-emerald-800'
                             }`}>
-                              {u.activePlan || 'basic'}
+                              {u.activePlan || 'free'}
                             </span>
                           </td>
 
@@ -2725,9 +2809,13 @@ export const AdminDashboard: React.FC = () => {
           const vipUsers = usersList.filter(u => u.activePlan === 'vip').length;
           const premiumUsers = usersList.filter(u => u.activePlan === 'premium').length;
           const basicUsers = usersList.filter(u => u.activePlan === 'basic').length;
-          const postersCount = usersList.filter(u => 
-            properties.some(p => (p.owner?.email || '').toLowerCase() === u.email.toLowerCase())
-          ).length;
+          const postersCount = usersList.filter(u => {
+            const uEmail = (u.email || '').trim().toLowerCase();
+            return uEmail && properties.some(p => {
+              const pEmail = (p.owner?.email || '').trim().toLowerCase();
+              return pEmail === uEmail;
+            });
+          }).length;
 
           // Financial stats
           const approvedPayments = paymentRequests.filter(p => p.status === 'approved');
@@ -3487,6 +3575,16 @@ export const AdminDashboard: React.FC = () => {
           );
         })()}
 
+        {/* ============================================================== */}
+        {/* TAB: Telegram Bot & Channel Hub (Owner only) */}
+        {/* ============================================================== */}
+        {isOwner && activeAdminTab === 'telegram_hub' && (
+          <TelegramHubTab
+            properties={properties}
+            showToast={showToast}
+          />
+        )}
+
       </div>
 
       {/* ============================================================== */}
@@ -3598,6 +3696,95 @@ export const AdminDashboard: React.FC = () => {
                 alt="Receipt screenshot"
                 className="w-full max-h-[75vh] object-contain rounded-2xl border border-slate-200"
               />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Erase All Properties Confirmation Modal */}
+      {showEraseAllModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-red-200 relative animate-in zoom-in-95 duration-200 space-y-5">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 pb-3 border-b border-red-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-red-100 text-red-600 rounded-2xl border border-red-200">
+                  <Trash2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-red-600">
+                    Erase All Property Listings
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Critical database action for System Owner / Admin
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEraseAllModal(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Warning Body */}
+            <div className="p-4 bg-red-50 border border-red-200 rounded-2xl text-xs text-red-800 space-y-2">
+              <div className="flex items-center gap-2 font-bold text-red-700">
+                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                <span>Permanent Database Purge</span>
+              </div>
+              <p className="leading-relaxed text-red-700">
+                You are about to permanently delete all <strong className="underline font-black">{properties.length} property listings</strong> from the Bete Finder database and cloud storage.
+              </p>
+              <ul className="list-disc list-inside space-y-1 text-[11px] text-red-600 font-medium">
+                <li>All active listing records, uploaded pictures, and amenities will be erased.</li>
+                <li>Users visiting the site will find no properties until new ones are posted.</li>
+                <li>This operation is irreversible.</li>
+              </ul>
+            </div>
+
+            {/* Confirmation input */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                Type <span className="font-mono text-red-600 font-black bg-red-50 px-1 py-0.5 rounded border border-red-200">ERASE</span> or <span className="font-mono text-red-600 font-black bg-red-50 px-1 py-0.5 rounded border border-red-200">DELETE</span> to confirm:
+              </label>
+              <input
+                type="text"
+                value={eraseConfirmText}
+                onChange={(e) => setEraseConfirmText(e.target.value)}
+                placeholder="Type ERASE or DELETE"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 text-sm font-mono font-bold uppercase focus:bg-white focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-hidden transition-all"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowEraseAllModal(false)}
+                disabled={isErasingAll}
+                className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleEraseAllPropertiesAdmin}
+                disabled={
+                  isErasingAll ||
+                  (eraseConfirmText.trim().toUpperCase() !== 'ERASE' &&
+                    eraseConfirmText.trim().toUpperCase() !== 'DELETE')
+                }
+                className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-extrabold text-xs rounded-xl shadow-xs cursor-pointer flex items-center justify-center gap-1.5 transition-colors disabled:cursor-not-allowed"
+              >
+                <Trash2 className={`w-4 h-4 ${isErasingAll ? 'animate-spin' : ''}`} />
+                <span>
+                  {isErasingAll
+                    ? 'Erasing...'
+                    : `Permanently Erase (${properties.length}) Properties`}
+                </span>
+              </button>
             </div>
           </div>
         </div>

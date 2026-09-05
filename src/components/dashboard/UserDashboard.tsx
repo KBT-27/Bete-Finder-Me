@@ -116,9 +116,9 @@ export const UserDashboard: React.FC = () => {
                       ? 'bg-purple-100 text-purple-900 border-purple-300' 
                       : user.activePlan === 'basic'
                       ? 'bg-blue-100 text-blue-900 border-blue-300'
-                      : 'bg-slate-100 text-slate-700 border-slate-200'
+                      : 'bg-emerald-50 text-emerald-800 border-emerald-200'
                   }`}>
-                    {user.activePlan === 'vip' ? '👑 VIP TOP+ Package' : user.activePlan === 'premium' ? '⭐ Premium Package' : user.activePlan === 'basic' ? '⚡ Basic Package' : 'Free Basic Plan'}
+                    {user.activePlan === 'vip' ? '👑 VIP TOP+ Package' : user.activePlan === 'premium' ? '⭐ Premium Package' : user.activePlan === 'basic' ? '⚡ Basic Package' : '🌱 Free Plan'}
                   </span>
 
                   {daysRemaining !== null && daysRemaining > 0 && (

@@ -101,9 +101,10 @@ export const verifyRegisteredAccountAndPhone = (
 
   // 1. Check Owner Account
   const owner = getOwnerCredentials();
-  const cleanOwnerEmail = (owner.email || '').split('/')[0].toLowerCase();
+  const ownerEmail = (owner.email || '').toLowerCase();
+  const cleanOwnerEmail = ownerEmail.split('/')[0];
   if (
-    normEmail === owner.email.toLowerCase() ||
+    normEmail === ownerEmail ||
     normEmail === cleanOwnerEmail ||
     normEmail === `${cleanOwnerEmail}/owner` ||
     normEmail === 'kalebbereket49@gmail.com/owner' ||
@@ -129,9 +130,10 @@ export const verifyRegisteredAccountAndPhone = (
 
   // 2. Check Admin Account
   const admin = getAdminCredentials();
-  const cleanAdminEmail = (admin.email || '').split('/')[0].toLowerCase();
+  const adminEmail = (admin.email || '').toLowerCase();
+  const cleanAdminEmail = adminEmail.split('/')[0];
   if (
-    normEmail === admin.email.toLowerCase() ||
+    normEmail === adminEmail ||
     normEmail === cleanAdminEmail ||
     normEmail === `${cleanAdminEmail}/admin` ||
     normEmail === 'kalebbereket49@gmail.com/admin'
@@ -154,7 +156,7 @@ export const verifyRegisteredAccountAndPhone = (
 
   // 3. Check Registered Users
   const registered = getRegisteredUsers();
-  const foundUser = registered.find(u => u.email.toLowerCase() === normEmail);
+  const foundUser = registered.find(u => (u.email || '').trim().toLowerCase() === normEmail);
 
   if (foundUser) {
     const userPhoneNorm = normalizePhoneNumber(foundUser.phone || '');
@@ -241,7 +243,8 @@ export const getRegisteredUsers = (): RegisteredAccount[] => {
 
 export const saveRegisteredUser = (account: RegisteredAccount) => {
   const accounts = getRegisteredUsers();
-  const existingIndex = accounts.findIndex(a => a.email.toLowerCase() === account.email.toLowerCase());
+  const accEmail = (account.email || '').trim().toLowerCase();
+  const existingIndex = accounts.findIndex(a => (a.email || '').trim().toLowerCase() === accEmail);
   let updated: RegisteredAccount[];
   if (existingIndex >= 0) {
     updated = [...accounts];
@@ -255,8 +258,8 @@ export const saveRegisteredUser = (account: RegisteredAccount) => {
 
 export const deleteRegisteredAccount = (emailOrId: string): RegisteredAccount[] => {
   const accounts = getRegisteredUsers();
-  const target = emailOrId.trim().toLowerCase();
-  const updated = accounts.filter(a => a.id !== emailOrId && a.email.toLowerCase() !== target);
+  const target = (emailOrId || '').trim().toLowerCase();
+  const updated = accounts.filter(a => a.id !== emailOrId && (a.email || '').trim().toLowerCase() !== target);
   localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
   // Call server deletion
   fetch(`/api/users/${encodeURIComponent(emailOrId)}`, { method: 'DELETE' }).catch(() => {});
@@ -265,9 +268,9 @@ export const deleteRegisteredAccount = (emailOrId: string): RegisteredAccount[] 
 
 export const stopRegisteredUserPlan = (email: string): RegisteredAccount[] => {
   const accounts = getRegisteredUsers();
-  const target = email.trim().toLowerCase();
+  const target = (email || '').trim().toLowerCase();
   const updated = accounts.map(a => {
-    if (a.email.toLowerCase() === target) {
+    if ((a.email || '').trim().toLowerCase() === target) {
       return {
         ...a,
         activePlan: 'free' as any,
@@ -292,12 +295,12 @@ export const updateRegisteredUserPlanTier = (
   durationMonths: number = 1
 ): RegisteredAccount[] => {
   const accounts = getRegisteredUsers();
-  const target = email.trim().toLowerCase();
+  const target = (email || '').trim().toLowerCase();
   const durationDays = plan === 'vip' || plan === 'premium' ? durationMonths * 30 : 0;
   const expiresAt = durationDays > 0 ? new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString() : undefined;
   
   const updated = accounts.map(a => {
-    if (a.email.toLowerCase() === target) {
+    if ((a.email || '').trim().toLowerCase() === target) {
       return {
         ...a,
         activePlan: plan,
@@ -410,21 +413,21 @@ export const updateAccountPasswordByEmail = (email: string, newPass: string): { 
 
   // 1. Check Owner account
   const owner = getOwnerCredentials();
-  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com' || normalizedEmail === 'kalebbereket49@gmail.com/owner') {
+  if ((owner.email || '').toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com' || normalizedEmail === 'kalebbereket49@gmail.com/owner') {
     saveOwnerCredentials({ password: cleanPass });
     return { success: true, message: 'Owner password updated successfully!' };
   }
 
   // 2. Check Admin account
   const admin = getAdminCredentials();
-  if (admin.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
+  if ((admin.email || '').toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
     saveAdminCredentials({ password: cleanPass });
     return { success: true, message: 'Admin password updated successfully!' };
   }
 
   // 3. Check Registered users
   const registered = getRegisteredUsers();
-  const foundIndex = registered.findIndex(u => u.email.toLowerCase() === normalizedEmail);
+  const foundIndex = registered.findIndex(u => (u.email || '').trim().toLowerCase() === normalizedEmail);
 
   if (foundIndex >= 0) {
     registered[foundIndex].password = cleanPass;
@@ -486,7 +489,7 @@ export const changeAccountPassword = (
 
   // 1. Check Owner account
   const owner = getOwnerCredentials();
-  if (owner.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/owner' || normalizedEmail === 'kalebbereket49@gmail.com') {
+  if ((owner.email || '').toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/owner' || normalizedEmail === 'kalebbereket49@gmail.com') {
     const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '+251995406697');
     if (ownerPhoneNorm !== inputPhoneNorm) {
       return { success: false, message: 'Provided phone number does not match registered Owner phone number.' };
@@ -503,7 +506,7 @@ export const changeAccountPassword = (
 
   // 2. Check Admin account
   const admin = getAdminCredentials();
-  if (admin.email.toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
+  if ((admin.email || '').toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
     const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
     if (adminPhoneNorm !== inputPhoneNorm) {
       return { success: false, message: 'Provided phone number does not match registered Admin phone number.' };
@@ -520,7 +523,7 @@ export const changeAccountPassword = (
 
   // 3. Check Registered accounts
   const registered = getRegisteredUsers();
-  const foundIndex = registered.findIndex(u => u.email.toLowerCase() === normalizedEmail);
+  const foundIndex = registered.findIndex(u => (u.email || '').trim().toLowerCase() === normalizedEmail);
 
   if (foundIndex >= 0) {
     const userAcc = registered[foundIndex];

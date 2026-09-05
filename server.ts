@@ -30,11 +30,9 @@ app.use((req, res, next) => {
 
 // URL Rewrite normalization for Vercel Serverless Function proxying
 app.use((req, res, next) => {
-  const forwarded = req.headers['x-forwarded-uri'] || req.headers['x-matched-path'] || req.headers['x-now-route-matches'];
-  if (forwarded && typeof forwarded === 'string') {
-    if (req.url === '/api/index' || req.url === '/api/index.ts' || req.url.startsWith('/api/index?') || req.url === '/api' || req.url === '/api/') {
-      req.url = forwarded;
-    }
+  const forwardedUri = req.headers['x-forwarded-uri'] || req.headers['x-now-route-matches'];
+  if (forwardedUri && typeof forwardedUri === 'string' && !forwardedUri.startsWith('/api/index') && !forwardedUri.startsWith('/dist/server')) {
+    req.url = forwardedUri;
   }
   next();
 });
@@ -179,6 +177,13 @@ function getCleanInitialState() {
     telebirrSettings: {
       accountNumber: '0995406697',
       accountName: 'Kaleb Bereket (Owner)'
+    },
+    telegramSettings: {
+      botToken: '8716860236:AAEiN5kJednAaFVvy03wCaveNyq71C-LZWo',
+      channelId: '@Bete_Finder',
+      botUsername: 'BeteFinder_bot',
+      channelUsername: 'Bete_Finder',
+      autoPublishProperties: true
     },
     paymentRequests: []
   };
@@ -351,6 +356,16 @@ function getMailTransporter() {
     socketTimeout: 15000,
   });
 }
+
+// API Root & Health Check endpoint
+app.get(['/api', '/api/health', '/api/index', '/api/index.ts'], (req, res) => {
+  res.json({
+    status: 'ok',
+    message: 'Bete Finder API is operational',
+    timestamp: new Date().toISOString(),
+    environment: process.env.VERCEL ? 'vercel' : (process.env.NODE_ENV || 'development')
+  });
+});
 
 // Check SMTP configuration status
 app.get('/api/auth/smtp-status', (req, res) => {
@@ -1142,6 +1157,423 @@ Key features include:
   }
 });
 
+// ==========================================
+// TELEGRAM BOT & CHANNEL NOTIFICATIONS
+// ==========================================
+interface TelegramNotificationOptions {
+  chatId?: string;
+  botToken?: string;
+}
+
+const escapeHtmlForTelegram = (text: string): string => {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+};
+
+/**
+ * Fetches dynamic Telegram settings stored in database with fallback to environment defaults.
+ */
+export async function getTelegramConfig(): Promise<{
+  botToken: string;
+  chatId: string;
+  botUsername: string;
+  channelUsername: string;
+  autoPublishProperties: boolean;
+}> {
+  try {
+    const currentData = await fetchMasterData();
+    const settings = currentData?.telegramSettings || {};
+    return {
+      botToken: (settings.botToken || process.env.TELEGRAM_BOT_TOKEN || '8716860236:AAEiN5kJednAaFVvy03wCaveNyq71C-LZWo').trim(),
+      chatId: (settings.channelId || process.env.TELEGRAM_CHANNEL_ID || '@Bete_Finder').trim(),
+      botUsername: (settings.botUsername || 'BeteFinder_bot').trim().replace('@', ''),
+      channelUsername: (settings.channelUsername || 'Bete_Finder').trim().replace('@', ''),
+      autoPublishProperties: settings.autoPublishProperties !== false
+    };
+  } catch (e) {
+    return {
+      botToken: process.env.TELEGRAM_BOT_TOKEN || '8716860236:AAEiN5kJednAaFVvy03wCaveNyq71C-LZWo',
+      chatId: process.env.TELEGRAM_CHANNEL_ID || '@Bete_Finder',
+      botUsername: 'BeteFinder_bot',
+      channelUsername: 'Bete_Finder',
+      autoPublishProperties: true
+    };
+  }
+}
+
+/**
+ * Sends a raw text message to the designated Telegram chat/channel using the Telegram Bot API.
+ */
+export async function sendTelegramMessage(
+  text: string, 
+  options?: TelegramNotificationOptions
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const dynamicCfg = await getTelegramConfig();
+  const token = options?.botToken || dynamicCfg.botToken;
+  const chatId = options?.chatId || dynamicCfg.chatId;
+
+  if (!token || !chatId) {
+    console.warn('[Telegram] Missing TELEGRAM_BOT_TOKEN or TELEGRAM_CHANNEL_ID');
+    return { success: false, error: 'Missing Telegram configuration' };
+  }
+
+  try {
+    const url = `https://api.telegram.org/bot${token}/sendMessage`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: false
+      })
+    });
+
+    const data: any = await response.json();
+    if (!response.ok || !data.ok) {
+      console.error('[Telegram] Error sending message:', data);
+      return { success: false, error: data.description || 'Telegram API error', data };
+    }
+
+    return { success: true, data };
+  } catch (err: any) {
+    console.error('[Telegram] Network/Fetch error:', err);
+    return { success: false, error: err?.message || 'Network error' };
+  }
+}
+
+/**
+ * Dispatches a formatted new property notification (with photo if available) to the Telegram channel.
+ */
+export async function sendTelegramPropertyNotification(
+  property: any,
+  options?: TelegramNotificationOptions
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  const dynamicCfg = await getTelegramConfig();
+  const token = options?.botToken || dynamicCfg.botToken;
+  const chatId = options?.chatId || dynamicCfg.chatId;
+
+  if (!token || !chatId) {
+    console.warn('[Telegram] Missing token or channel ID');
+    return { success: false, error: 'Missing Telegram configuration' };
+  }
+
+  const title = escapeHtmlForTelegram(property.title || 'New Property Listing');
+  const titleAm = property.titleAm ? escapeHtmlForTelegram(property.titleAm) : '';
+  const pType = escapeHtmlForTelegram(property.propertyType || 'Residential');
+  const lType = property.listingType === 'sale' ? 'ለሽያጭ (For Sale)' : 'ለኪራይ (For Rent)';
+  const currency = property.currency || 'ETB';
+  const price = Number(property.price || 0).toLocaleString();
+  const period = property.pricePeriod === 'year' 
+    ? '/ዓመት (/year)' 
+    : (property.listingType === 'sale' ? '' : '/ወር (/month)');
+  
+  const subcity = property.subcity || '';
+  const neighborhood = property.neighborhood || '';
+  const city = property.city || 'Addis Ababa';
+  const location = escapeHtmlForTelegram([neighborhood, subcity, city].filter(Boolean).join(', ') || 'Addis Ababa, Ethiopia');
+
+  const beds = property.bedrooms ?? 0;
+  const baths = property.bathrooms ?? 0;
+  const area = property.areaSqm ? `${property.areaSqm} m²` : '';
+  const floor = property.floor ? `ፎቅ ${property.floor} (Floor ${property.floor})` : (property.floorSize || '');
+
+  const ownerName = escapeHtmlForTelegram(property.owner?.name || 'Bete Finder Verified Agent');
+  const ownerPhone = escapeHtmlForTelegram(property.owner?.phone || '+251995406697');
+  const ownerTg = property.owner?.telegram ? property.owner.telegram.replace('@', '').trim() : '';
+
+  const caption = [
+    `🏠 <b>አዲስ የተመዘገበ ቤት (NEW PROPERTY LISTING)</b>`,
+    titleAm ? `🇪🇹 <i>${titleAm}</i>` : '',
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `📌 <b>${title}</b>`,
+    `💰 <b>ዋጋ (Price):</b> <b>${price} ${currency}</b> ${period}`,
+    `🏷️ <b>አይነት (Type):</b> ${pType} • ${lType}`,
+    `📍 <b>አድራሻ (Location):</b> ${location}`,
+    `🛏️ <b>ክፍሎች (Specs):</b> ${beds} መኝታ (Beds) | 🚿 ${baths} መታጠቢያ (Baths) ${area ? `| 📐 ${area}` : ''}`,
+    floor ? `🏢 <b>ወለል/አወቃቀር:</b> ${escapeHtmlForTelegram(floor)}` : '',
+    property.isFurnished ? `✨ <b>የቤት ዕቃ (Furnished):</b> ሙሉ በሙሉ የተሟላለት (Yes)` : '',
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `📞 <b>ያነጋግሩ (Contact):</b>`,
+    `👤 <b>${ownerName}</b>: <code>${ownerPhone}</code>`,
+    ownerTg ? `💬 <b>Telegram:</b> @${ownerTg}` : '',
+    `\n🌐 <b>በድረ-ገጻችን ይመልከቱ (Website):</b>\nhttps://bete-finder-one.vercel.app`,
+    `\n#BeteFinder #Ethiopia #AddisAbaba #${pType.replace(/\s+/g, '')} #${property.listingType === 'sale' ? 'Sale' : 'Rent'}`
+  ].filter(Boolean).join('\n');
+
+  // If the property has a valid remote HTTP/HTTPS photo, attempt to send via sendPhoto
+  const primaryImage = Array.isArray(property.images) && property.images.length > 0 ? property.images[0] : null;
+  const isValidHttpImage = primaryImage && typeof primaryImage === 'string' && (primaryImage.startsWith('http://') || primaryImage.startsWith('https://'));
+
+  if (isValidHttpImage) {
+    try {
+      const photoUrl = `https://api.telegram.org/bot${token}/sendPhoto`;
+      const response = await fetch(photoUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          photo: primaryImage,
+          caption: caption.slice(0, 1024), // Telegram caption limit
+          parse_mode: 'HTML'
+        })
+      });
+
+      const data: any = await response.json();
+      if (response.ok && data.ok) {
+        console.log(`[Telegram] Successfully posted photo property notification to ${chatId}`);
+        return { success: true, data };
+      }
+      console.warn('[Telegram] sendPhoto failed, falling back to text message:', data.description);
+    } catch (err: any) {
+      console.warn('[Telegram] sendPhoto error, falling back to text message:', err?.message);
+    }
+  }
+
+  // Fallback to text sendMessage
+  return sendTelegramMessage(caption, { chatId, botToken: token });
+}
+
+// Telegram Integration Test Route
+app.post('/api/telegram/test', async (req, res) => {
+  try {
+    const testResult = await sendTelegramMessage(
+      `🔔 <b>Bete Finder Telegram Integration Active!</b>\n\n` +
+      `Your Telegram bot is successfully connected to <b>@Bete_Finder</b>.\n` +
+      `Whenever a new property is published, an automatic notification with photos and details will be posted here.\n\n` +
+      `⏰ <i>Server Time: ${new Date().toISOString()}</i>`
+    );
+    res.json({ success: testResult.success, result: testResult });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// Telegram Integration Live Status
+app.get('/api/telegram/status', async (req, res) => {
+  try {
+    const config = await getTelegramConfig();
+    const token = config.botToken;
+    const chatId = config.chatId;
+
+    const [botRes, chatRes, membersRes] = await Promise.all([
+      fetch(`https://api.telegram.org/bot${token}/getMe`).then(r => r.json()).catch(() => null),
+      fetch(`https://api.telegram.org/bot${token}/getChat?chat_id=${encodeURIComponent(chatId)}`).then(r => r.json()).catch(() => null),
+      fetch(`https://api.telegram.org/bot${token}/getChatMemberCount?chat_id=${encodeURIComponent(chatId)}`).then(r => r.json()).catch(() => null)
+    ]);
+
+    const isBotOk = Boolean(botRes && botRes.ok);
+    const isChatOk = Boolean(chatRes && chatRes.ok);
+
+    const tokenMasked = token.length > 16 
+      ? `${token.slice(0, 10)}...${token.slice(-6)}` 
+      : '••••••••••••';
+
+    res.json({
+      success: Boolean(isBotOk && isChatOk),
+      bot: isBotOk ? {
+        id: botRes.result.id,
+        is_bot: botRes.result.is_bot,
+        first_name: botRes.result.first_name,
+        username: botRes.result.username,
+        link: `https://t.me/${botRes.result.username}`,
+        can_join_groups: botRes.result.can_join_groups,
+      } : null,
+      channel: isChatOk ? {
+        id: chatRes.result.id,
+        title: chatRes.result.title,
+        username: chatRes.result.username || config.channelUsername,
+        description: chatRes.result.description,
+        invite_link: chatRes.result.invite_link || `https://t.me/${chatRes.result.username || config.channelUsername}`,
+        members_count: membersRes?.ok ? membersRes.result : null,
+        link: chatRes.result.username ? `https://t.me/${chatRes.result.username}` : `https://t.me/${config.channelUsername}`
+      } : null,
+      config: {
+        chatId,
+        channelUsername: config.channelUsername,
+        botUsername: config.botUsername,
+        botTokenMasked: tokenMasked,
+        rawBotToken: token,
+        autoPublishProperties: config.autoPublishProperties
+      },
+      error: !isBotOk 
+        ? (botRes?.description || 'Failed to authenticate Bot with token.') 
+        : (!isChatOk ? (chatRes?.description || 'Failed to resolve Telegram Channel. Ensure the bot is added as an Administrator to the channel.') : null),
+      timestamp: Date.now()
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Server error querying Telegram API' });
+  }
+});
+
+// Update Telegram Settings (Channel handle/ID, Bot Token, Bot Username, Auto-publish)
+app.post('/api/telegram/config', async (req, res) => {
+  try {
+    const { botToken, chatId, botUsername, channelUsername, autoPublishProperties } = req.body || {};
+    const currentData = await fetchMasterData();
+    const existing = currentData.telegramSettings || {};
+
+    let formattedChatId = (chatId !== undefined ? chatId : (existing.channelId || '@Bete_Finder')).trim();
+    if (formattedChatId && !formattedChatId.startsWith('@') && !formattedChatId.startsWith('-')) {
+      formattedChatId = `@${formattedChatId}`;
+    }
+
+    let formattedChannelUsername = (
+      channelUsername !== undefined 
+        ? channelUsername 
+        : (existing.channelUsername || formattedChatId.replace('@', ''))
+    ).trim().replace('@', '');
+
+    let formattedBotUsername = (
+      botUsername !== undefined 
+        ? botUsername 
+        : (existing.botUsername || 'BeteFinder_bot')
+    ).trim().replace('@', '');
+
+    let finalToken = (
+      botToken !== undefined && botToken.trim().length > 0 
+        ? botToken.trim() 
+        : (existing.botToken || process.env.TELEGRAM_BOT_TOKEN || '8716860236:AAEiN5kJednAaFVvy03wCaveNyq71C-LZWo')
+    ).trim();
+
+    // Verify token with Telegram getMe
+    const testBotRes = await fetch(`https://api.telegram.org/bot${finalToken}/getMe`)
+      .then(r => r.json())
+      .catch((e: any) => ({ ok: false, description: e.message }));
+
+    if (testBotRes.ok && testBotRes.result?.username) {
+      formattedBotUsername = testBotRes.result.username;
+    }
+
+    // Verify chat with Telegram getChat
+    const testChatRes = await fetch(`https://api.telegram.org/bot${finalToken}/getChat?chat_id=${encodeURIComponent(formattedChatId)}`)
+      .then(r => r.json())
+      .catch((e: any) => ({ ok: false, description: e.message }));
+
+    if (testChatRes.ok && testChatRes.result?.username) {
+      formattedChannelUsername = testChatRes.result.username;
+    }
+
+    const updatedSettings = {
+      botToken: finalToken,
+      channelId: formattedChatId,
+      botUsername: formattedBotUsername,
+      channelUsername: formattedChannelUsername,
+      autoPublishProperties: autoPublishProperties !== undefined ? Boolean(autoPublishProperties) : (existing.autoPublishProperties !== false)
+    };
+
+    currentData.telegramSettings = updatedSettings;
+    await persistMasterData(currentData);
+
+    const isConnected = Boolean(testBotRes.ok && testChatRes.ok);
+
+    res.json({
+      success: true,
+      message: isConnected
+        ? 'Telegram bot and channel configuration updated and verified successfully!'
+        : 'Telegram settings saved, but connection check returned a warning.',
+      config: updatedSettings,
+      verification: {
+        botOk: Boolean(testBotRes.ok),
+        chatOk: Boolean(testChatRes.ok),
+        botError: !testBotRes.ok ? testBotRes.description : null,
+        chatError: !testChatRes.ok ? testChatRes.description : null
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to save Telegram settings' });
+  }
+});
+
+// Reset Telegram Settings to Official Bete Finder Defaults
+app.post('/api/telegram/reset-config', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    const defaultSettings = {
+      botToken: '8716860236:AAEiN5kJednAaFVvy03wCaveNyq71C-LZWo',
+      channelId: '@Bete_Finder',
+      botUsername: 'BeteFinder_bot',
+      channelUsername: 'Bete_Finder',
+      autoPublishProperties: true
+    };
+    currentData.telegramSettings = defaultSettings;
+    await persistMasterData(currentData);
+    res.json({
+      success: true,
+      message: 'Telegram settings restored to official Bete Finder defaults.',
+      config: defaultSettings
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// Telegram Custom Announcement Broadcast
+app.post('/api/telegram/broadcast', async (req, res) => {
+  try {
+    const { title, message, author, actionUrl } = req.body || {};
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: 'Broadcast message content is required.' });
+    }
+    const header = title && title.trim() ? `📢 <b>${escapeHtmlForTelegram(title.trim())}</b>\n\n` : `📢 <b>Bete Finder Official Announcement</b>\n\n`;
+    const body = escapeHtmlForTelegram(message.trim());
+    const authorLine = author ? `\n\n👤 <i>Author: ${escapeHtmlForTelegram(author)}</i>` : '';
+    const linkLine = actionUrl ? `\n\n🔗 <a href="${actionUrl}">Open Link</a>` : `\n\n🌐 https://bete-finder-one.vercel.app`;
+    const fullText = `${header}${body}${authorLine}\n━━━━━━━━━━━━━━━━━━━━${linkLine}`;
+
+    const result = await sendTelegramMessage(fullText);
+    res.json({ success: result.success, result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
+// Telegram Test Property Broadcast
+app.post('/api/telegram/test-property', async (req, res) => {
+  try {
+    const { propertyId } = req.body || {};
+    let propToSend;
+    if (propertyId) {
+      const currentData = await fetchMasterData();
+      propToSend = (currentData.properties || []).find((p: any) => p.id === propertyId);
+    }
+    if (!propToSend) {
+      propToSend = {
+        id: 'sample-tg-prop',
+        title: 'Modern Luxury 3-Bedroom Apartment in Bole Atlas',
+        titleAm: 'በቦሌ አትላስ ዘመናዊ ባለ 3 መኝታ አፓርትመንት',
+        propertyType: 'Apartment',
+        listingType: 'rent',
+        price: 85000,
+        currency: 'ETB',
+        pricePeriod: 'month',
+        city: 'Addis Ababa',
+        subcity: 'Bole',
+        neighborhood: 'Atlas',
+        bedrooms: 3,
+        bathrooms: 3,
+        areaSqm: 180,
+        floor: '4',
+        isFurnished: true,
+        images: ['https://images.unsplash.com/photo-1600596542815-ffad4c1539a9?auto=format&fit=crop&w=1200&q=80'],
+        owner: {
+          name: 'Kaleb Bereket (Bete Finder Founder)',
+          phone: '+251995406697',
+          telegram: '@Bete_Finder'
+        }
+      };
+    }
+    const result = await sendTelegramPropertyNotification(propToSend);
+    res.json({ success: result.success, result, property: propToSend });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message });
+  }
+});
+
 // Property Upsert (Add or Update)
 app.post('/api/properties', async (req, res) => {
   try {
@@ -1154,7 +1586,9 @@ app.post('/api/properties', async (req, res) => {
     const existingIndex = (currentData.properties || []).findIndex((p: any) => p.id === prop.id);
     let updatedProperties = [...(currentData.properties || [])];
 
-    if (existingIndex >= 0) {
+    const isNew = existingIndex < 0;
+
+    if (!isNew) {
       updatedProperties[existingIndex] = { ...updatedProperties[existingIndex], ...prop };
     } else {
       updatedProperties = [prop, ...updatedProperties];
@@ -1163,13 +1597,62 @@ app.post('/api/properties', async (req, res) => {
     currentData.properties = updatedProperties;
     await persistMasterData(currentData);
 
+    // Automatically send Telegram channel notification for newly posted properties
+    if (isNew) {
+      getTelegramConfig().then(tgCfg => {
+        if (tgCfg.autoPublishProperties) {
+          sendTelegramPropertyNotification(prop).catch(err => {
+            console.error('[Telegram] Error sending property notification:', err);
+          });
+        }
+      }).catch(() => {});
+    }
+
     res.json({ success: true, property: prop, totalProperties: updatedProperties.length });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error?.message });
   }
 });
 
-// Property Delete
+// Erase / Delete All Properties (Owner Only)
+app.delete('/api/properties', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    const countBefore = (currentData.properties || []).length;
+    currentData.properties = [];
+    await persistMasterData(currentData);
+    console.log(`[Properties] Erased all ${countBefore} listing properties.`);
+    res.json({ 
+      success: true, 
+      message: `All properties have been successfully erased (${countBefore} properties deleted).`,
+      deletedCount: countBefore,
+      totalProperties: 0
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Clear-All Properties Alias for HTTP Post
+app.post('/api/properties/clear-all', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    const countBefore = (currentData.properties || []).length;
+    currentData.properties = [];
+    await persistMasterData(currentData);
+    console.log(`[Properties] Cleared all ${countBefore} listing properties.`);
+    res.json({ 
+      success: true, 
+      message: `All properties have been successfully erased (${countBefore} properties deleted).`,
+      deletedCount: countBefore,
+      totalProperties: 0
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Single Property Delete
 app.delete('/api/properties/:id', async (req, res) => {
   try {
     const { id } = req.params;
@@ -1208,14 +1691,14 @@ app.post('/api/users', async (req, res) => {
     const email = userData.email.trim().toLowerCase();
     const currentData = await fetchMasterData();
     let users = [...(currentData.users || [])];
-    const existingIndex = users.findIndex((u: any) => u.email.toLowerCase() === email);
+    const existingIndex = users.findIndex((u: any) => (u.email || '').toLowerCase() === email);
 
     const fullRecord = {
       ...userData,
       email,
       registeredAt: userData.registeredAt || (existingIndex >= 0 ? users[existingIndex].registeredAt : new Date().toISOString()),
       lastActiveAt: new Date().toISOString(),
-      activePlan: userData.activePlan || (existingIndex >= 0 ? users[existingIndex].activePlan : 'basic'),
+      activePlan: userData.activePlan || (existingIndex >= 0 ? users[existingIndex].activePlan : 'free'),
       provider: userData.provider || (email.includes('@gmail.com') ? 'google' : 'local'),
       role: userData.role || (existingIndex >= 0 ? users[existingIndex].role : 'tenant')
     };
@@ -1248,7 +1731,7 @@ app.delete('/api/users/:emailOrId', async (req, res) => {
     const currentData = await fetchMasterData();
     const beforeCount = (currentData.users || []).length;
     currentData.users = (currentData.users || []).filter((u: any) => 
-      u.id !== emailOrId && u.email.toLowerCase() !== target
+      u.id !== emailOrId && (u.email || '').toLowerCase() !== target
     );
     await persistMasterData(currentData);
     res.json({ 
@@ -1274,7 +1757,7 @@ app.post('/api/users/stop-plan', async (req, res) => {
 
     // 1. Update user
     currentData.users = (currentData.users || []).map((u: any) => {
-      if (u.email.toLowerCase() === targetEmail) {
+      if ((u.email || '').toLowerCase() === targetEmail) {
         return {
           ...u,
           activePlan: 'free',
@@ -1341,7 +1824,7 @@ app.post('/api/users/set-plan', async (req, res) => {
     if (userEmail) {
       const targetEmail = userEmail.trim().toLowerCase();
       currentData.users = (currentData.users || []).map((u: any) => {
-        if (u.email.toLowerCase() === targetEmail) {
+        if ((u.email || '').toLowerCase() === targetEmail) {
           return {
             ...u,
             activePlan: targetPlan,
@@ -1430,7 +1913,7 @@ app.post('/api/user/update-profile', async (req, res) => {
     const targetEmail = email.trim().toLowerCase();
     const currentData = await fetchMasterData();
     const users = currentData.users || [];
-    const index = users.findIndex((u: any) => u.email.toLowerCase() === targetEmail);
+    const index = users.findIndex((u: any) => (u.email || '').toLowerCase() === targetEmail);
 
     if (index === 0 || index > 0) {
       const user = users[index];
@@ -1693,7 +2176,7 @@ app.post('/api/auth/change-password', async (req, res) => {
 
     // 3. Check registered users
     const users = currentData.users || [];
-    const userIndex = users.findIndex((u: any) => u.email.toLowerCase() === inputEmail);
+    const userIndex = users.findIndex((u: any) => (u.email || '').toLowerCase() === inputEmail);
 
     if (userIndex >= 0) {
       const targetUser = users[userIndex];
@@ -1788,7 +2271,7 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     let matchedAccountName = 'User';
 
     // 1. Owner Check
-    if (inputEmail === ownerCreds.email.toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/owner' || inputEmail === 'kalebbereket49@gmail.com') {
+    if (inputEmail === (ownerCreds.email || '').toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/owner' || inputEmail === 'kalebbereket49@gmail.com') {
       const ownerPhoneNorm = normalizePhone(ownerCreds.phone || '+251995406697');
       if (ownerPhoneNorm === inputPhoneNorm) {
         isMatched = true;
@@ -1801,7 +2284,7 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
       }
     }
     // 2. Admin Check
-    else if (inputEmail === adminCreds.email.toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/admin') {
+    else if (inputEmail === (adminCreds.email || '').toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/admin') {
       const adminPhoneNorm = normalizePhone(adminCreds.phone || '+251995406697');
       if (adminPhoneNorm === inputPhoneNorm) {
         isMatched = true;
@@ -1815,7 +2298,7 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     }
     // 3. Registered Users Check
     else {
-      const foundUser = users.find((u: any) => u.email.toLowerCase() === inputEmail);
+      const foundUser = users.find((u: any) => (u.email || '').toLowerCase() === inputEmail);
       if (!foundUser) {
         return res.status(400).json({
           success: false,
@@ -2068,17 +2551,17 @@ app.post('/api/auth/reset-password', async (req, res) => {
     const normalized = targetEmail.trim().toLowerCase();
 
     // 1. Owner
-    if (normalized === 'kalebbereket49@gmail.com/owner' || normalized === currentData.ownerCredentials?.email.toLowerCase()) {
+    if (normalized === 'kalebbereket49@gmail.com/owner' || normalized === (currentData.ownerCredentials?.email || '').toLowerCase()) {
       currentData.ownerCredentials = { ...currentData.ownerCredentials, password: newPassword.trim() };
     }
     // 2. Admin
-    else if (normalized === 'kalebbereket49@gmail.com/admin' || normalized === currentData.adminCredentials?.email.toLowerCase()) {
+    else if (normalized === 'kalebbereket49@gmail.com/admin' || normalized === (currentData.adminCredentials?.email || '').toLowerCase()) {
       currentData.adminCredentials = { ...currentData.adminCredentials, password: newPassword.trim() };
     }
     // 3. Registered users
     else {
       const users = currentData.users || [];
-      const idx = users.findIndex((u: any) => u.email.toLowerCase() === normalized);
+      const idx = users.findIndex((u: any) => (u.email || '').toLowerCase() === normalized);
       if (idx >= 0) {
         users[idx].password = newPassword.trim();
       } else {

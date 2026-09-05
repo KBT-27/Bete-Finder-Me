@@ -94,7 +94,7 @@ export const PropertyCategories: React.FC = () => {
             const count = properties.filter(p => p.propertyType === cat.type).length;
             return (
               <button
-                id={`category-btn-${cat.type.toLowerCase().replace(/\s+/g, '-')}`}
+                id={`category-btn-${(cat.type || '').toLowerCase().replace(/\s+/g, '-')}`}
                 key={cat.type}
                 onClick={() => handleCategorySelect(cat.type)}
                 className="group flex flex-col items-center justify-center p-4 rounded-2xl border border-slate-200 hover:border-emerald-500 bg-white hover:bg-emerald-50/40 transition-all duration-200 shadow-2xs hover:shadow-md cursor-pointer text-center"

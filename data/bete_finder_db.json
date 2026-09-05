@@ -1,6 +1,22 @@
 {
   "users": [
     {
+      "id": "user-1788523512807",
+      "name": "Darartu Tadesse",
+      "role": "tenant",
+      "email": "sebendesgin21@gmail.com",
+      "phone": "0900620263",
+      "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+      "password": "123456",
+      "provider": "local",
+      "activePlan": "basic",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-04T12:05:15.131Z",
+      "registeredAt": "2026-09-04T12:05:12.807Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
       "id": "usr-owner-master",
       "name": "Kaleb Bereket (Owner)",
       "role": "owner",
@@ -15,7 +31,7 @@
     }
   ],
   "properties": [],
-  "lastUpdated": 1788434149776,
+  "lastUpdated": 1788525240240,
   "paymentRequests": [],
   "adminCredentials": {
     "name": "Admin (Kaleb Bereket)",

@@ -37,16 +37,22 @@ export const PopularLocations: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {ETHIOPIAN_LOCATIONS.map((loc) => {
             // Truthful, dynamic property count for this city from active database listings
-            const realCount = properties.filter(
-              p => p.city?.trim().toLowerCase() === loc.city.trim().toLowerCase() ||
-                   loc.city.toLowerCase().includes(p.city?.trim().toLowerCase()) ||
-                   (p.city?.trim().toLowerCase().includes('bishoftu') && loc.city.toLowerCase().includes('bishoftu')) ||
-                   (p.city?.trim().toLowerCase().includes('adama') && loc.city.toLowerCase().includes('adama'))
-            ).length;
+            const locCity = (loc.city || '').trim().toLowerCase();
+            const realCount = properties.filter(p => {
+              const pCity = (p.city || '').trim().toLowerCase();
+              if (!pCity || !locCity) return false;
+              return (
+                pCity === locCity ||
+                locCity.includes(pCity) ||
+                pCity.includes(locCity) ||
+                (pCity.includes('bishoftu') && locCity.includes('bishoftu')) ||
+                (pCity.includes('adama') && locCity.includes('adama'))
+              );
+            }).length;
 
             return (
               <div
-                id={`location-card-${loc.city.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                id={`location-card-${locCity.replace(/[^a-z0-9]/g, '-')}`}
                 key={loc.city}
                 onClick={() => handleLocationClick(loc.city)}
                 className="group relative h-72 rounded-3xl overflow-hidden cursor-pointer shadow-xs hover:shadow-2xl transition-all duration-300 border border-slate-200/90 hover:border-emerald-500/50 flex flex-col justify-between"

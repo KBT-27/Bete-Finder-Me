@@ -64,7 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const parsed = JSON.parse(saved) as UserProfile;
         if (parsed.planExpiresAt && new Date(parsed.planExpiresAt).getTime() <= Date.now()) {
-          parsed.activePlan = undefined;
+          parsed.activePlan = 'free';
           parsed.planExpiresAt = undefined;
         }
         return parsed;
@@ -377,7 +377,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       password: data.password.trim(),
       provider: 'local',
       registeredAt: new Date().toISOString(),
-      activePlan: 'basic',
+      activePlan: 'free',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
       savedPropertyIds: [],
       postedPropertyIds: [],
@@ -495,7 +495,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password: 'google-oauth-auth',
         provider: 'google',
         registeredAt: new Date().toISOString(),
-        activePlan: 'basic',
+        activePlan: 'free',
         avatar: googleAvatar || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
         savedPropertyIds: [],
         postedPropertyIds: [],
@@ -734,7 +734,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!prev) return null;
         const updated = { ...prev, ...data };
         const registered = getRegisteredUsers();
-        const existing = registered.find(u => u.id === prev.id || u.email.toLowerCase() === prev.email.toLowerCase());
+        const prevEmail = (prev.email || '').trim().toLowerCase();
+        const existing = registered.find(u => {
+          const uEmail = (u.email || '').trim().toLowerCase();
+          return (u.id && prev.id && u.id === prev.id) || (uEmail && prevEmail && uEmail === prevEmail);
+        });
         if (existing) {
           const updatedAcc = { ...existing, ...data };
           saveRegisteredUser(updatedAcc);

@@ -172,9 +172,9 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
     if (auditSearch.trim()) {
       const q = auditSearch.toLowerCase();
       return (
-        log.actor.toLowerCase().includes(q) ||
-        log.action.toLowerCase().includes(q) ||
-        log.details.toLowerCase().includes(q)
+        (log.actor || '').toLowerCase().includes(q) ||
+        (log.action || '').toLowerCase().includes(q) ||
+        (log.details || '').toLowerCase().includes(q)
       );
     }
     return true;

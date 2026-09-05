@@ -259,7 +259,7 @@ export const PostPropertyView: React.FC = () => {
     const newProp = addProperty({
       title: generatedTitle,
       titleAm: generatedTitleAm,
-      description: description.trim() || (isAmharic ? `በ${locLabel} የሚገኝ ${propertyType}።` : `Well maintained ${propertyType.toLowerCase()} in ${locLabel}.`),
+      description: description.trim() || (isAmharic ? `በ${locLabel} የሚገኝ ${propertyType}።` : `Well maintained ${(propertyType || '').toLowerCase()} in ${locLabel}.`),
       descriptionAm: descriptionAm.trim() || description.trim() || `በ${locLabel} የሚገኝ ${propertyType === 'Floor House' ? 'ፎቅ ቤት' : propertyType}።`,
       price: Number(price),
       pricePeriod: listingType === 'rent' ? 'month' : 'total',

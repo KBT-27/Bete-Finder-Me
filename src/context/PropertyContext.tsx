@@ -44,6 +44,7 @@ interface PropertyContextType {
   userPostedProperties: Property[];
   addProperty: (propertyData: Omit<Property, 'id' | 'postedDate' | 'viewsCount' | 'favoritesCount'>) => Property;
   deleteProperty: (propertyId: string) => void;
+  clearAllProperties: () => Promise<boolean>;
   updateProperty: (propertyId: string, updates: Partial<Property>) => void;
   verifyProperty: (propertyId: string, isVerified: boolean) => void;
   bookTour: (propertyId: string, date: string, time: string, notes?: string) => boolean;
@@ -301,8 +302,8 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (activeListingType !== 'all' && prop.listingType !== activeListingType) return false;
       if (filters.listingType !== 'all' && prop.listingType !== filters.listingType) return false;
       if (filters.propertyType !== 'all' && prop.propertyType !== filters.propertyType) return false;
-      if (filters.city !== 'all' && prop.city.toLowerCase() !== filters.city.toLowerCase()) return false;
-      if (filters.subcity !== 'all' && prop.subcity.toLowerCase() !== filters.subcity.toLowerCase()) return false;
+      if (filters.city !== 'all' && (prop.city || '').toLowerCase() !== (filters.city || '').toLowerCase()) return false;
+      if (filters.subcity !== 'all' && (prop.subcity || '').toLowerCase() !== (filters.subcity || '').toLowerCase()) return false;
       if (prop.price < filters.minPrice || prop.price > filters.maxPrice) return false;
 
       if (filters.minBedrooms !== 'all') {
@@ -326,9 +327,9 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (filters.searchQuery.trim()) {
         const q = filters.searchQuery.toLowerCase();
-        const matchTitle = prop.title.toLowerCase().includes(q) || prop.titleAm.toLowerCase().includes(q);
-        const matchDesc = prop.description.toLowerCase().includes(q) || prop.descriptionAm.toLowerCase().includes(q);
-        const matchLoc = prop.city.toLowerCase().includes(q) || prop.subcity.toLowerCase().includes(q) || prop.neighborhood.toLowerCase().includes(q);
+        const matchTitle = (prop.title || '').toLowerCase().includes(q) || (prop.titleAm || '').toLowerCase().includes(q);
+        const matchDesc = (prop.description || '').toLowerCase().includes(q) || (prop.descriptionAm || '').toLowerCase().includes(q);
+        const matchLoc = (prop.city || '').toLowerCase().includes(q) || (prop.subcity || '').toLowerCase().includes(q) || (prop.neighborhood || '').toLowerCase().includes(q);
         if (!matchTitle && !matchDesc && !matchLoc) return false;
       }
 
@@ -402,13 +403,23 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const userPostedProperties = useMemo(() => {
     if (!user) return [];
-    return properties.filter(p => p.owner.id === user.id || p.owner.email.toLowerCase() === user.email.toLowerCase());
+    return properties.filter(p => {
+      const pEmail = (p.owner?.email || '').trim().toLowerCase();
+      const uEmail = (user.email || '').trim().toLowerCase();
+      return (p.owner?.id && user.id && p.owner.id === user.id) || (pEmail && uEmail && pEmail === uEmail);
+    });
   }, [properties, user]);
 
   // Add Property (Syncs to DB)
   const addProperty = (propertyData: Omit<Property, 'id' | 'postedDate' | 'viewsCount' | 'favoritesCount'>): Property => {
     const isVipOrPremium = user?.activePlan === 'vip' || user?.activePlan === 'premium';
-    const planName = user?.activePlan === 'vip' ? 'VIP Spotlight Plan' : (user?.activePlan === 'premium' ? 'Premium 24hr Auto-Renew' : 'Basic Listing');
+    const planName = user?.activePlan === 'vip' 
+      ? 'VIP Spotlight Plan' 
+      : user?.activePlan === 'premium' 
+      ? 'Premium 24hr Auto-Renew' 
+      : user?.activePlan === 'basic' 
+      ? 'Basic Listing' 
+      : 'Free Plan';
 
     const newProperty: Property = {
       ...propertyData,
@@ -418,7 +429,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       favoritesCount: 0,
       isVerified: user?.role === 'owner' || user?.role === 'admin' || isVipOrPremium,
       isFeatured: isVipOrPremium || propertyData.isFeatured || false,
-      payPlan: (user?.activePlan as any) || 'basic',
+      payPlan: (user?.activePlan as any) || 'free',
       payPlanName: planName
     };
 
@@ -447,6 +458,31 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setSelectedProperty(null);
     }
     fetch(`/api/properties/${propertyId}`, { method: 'DELETE' }).catch(console.error);
+  };
+
+  // Erase / Clear All Properties (Syncs to DB)
+  const clearAllProperties = async (): Promise<boolean> => {
+    setProperties([]);
+    setSelectedProperty(null);
+    try {
+      localStorage.setItem('bete_finder_properties', JSON.stringify([]));
+    } catch {}
+
+    try {
+      const res = await fetch('/api/properties', { method: 'DELETE' });
+      const data = await res.json();
+      return Boolean(data && data.success);
+    } catch (err) {
+      console.error('[Properties] Error clearing all properties:', err);
+      // Fallback try clear-all POST
+      try {
+        const fallbackRes = await fetch('/api/properties/clear-all', { method: 'POST' });
+        const fallbackData = await fallbackRes.json();
+        return Boolean(fallbackData && fallbackData.success);
+      } catch {
+        return true;
+      }
+    }
   };
 
   // Update Property (Syncs to DB)
@@ -598,7 +634,10 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const isPremium = resolvedPlanId === 'premium';
     const isBasic = resolvedPlanId === 'basic';
 
-    if (user && (user.id === req.userId || user.email.toLowerCase() === req.userEmail.toLowerCase())) {
+    const reqUserEmail = (req.userEmail || '').trim().toLowerCase();
+    const currUserEmail = (user?.email || '').trim().toLowerCase();
+
+    if (user && (user.id === req.userId || (reqUserEmail && currUserEmail && reqUserEmail === currUserEmail))) {
       updateUser({
         activePlan: (isVip ? 'vip' : isPremium ? 'premium' : 'basic') as any,
         planExpiresAt: expiresAt,
@@ -607,7 +646,8 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
 
     setProperties(prev => prev.map(p => {
-      if (p.owner.email.toLowerCase() === req.userEmail.toLowerCase() || (user && p.owner.id === req.userId)) {
+      const ownerEmail = (p.owner?.email || '').trim().toLowerCase();
+      if ((ownerEmail && reqUserEmail && ownerEmail === reqUserEmail) || (user && p.owner?.id === req.userId)) {
         return {
           ...p,
           isVerified: true,
@@ -662,7 +702,11 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const userPaymentRequests = useMemo(() => {
     if (!user) return [];
-    return paymentRequests.filter(r => r.userId === user.id || r.userEmail.toLowerCase() === user.email.toLowerCase());
+    return paymentRequests.filter(r => {
+      const rEmail = (r.userEmail || '').trim().toLowerCase();
+      const uEmail = (user.email || '').trim().toLowerCase();
+      return r.userId === user.id || (rEmail && uEmail && rEmail === uEmail);
+    });
   }, [paymentRequests, user]);
 
   return (
@@ -688,6 +732,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         userPostedProperties,
         addProperty,
         deleteProperty,
+        clearAllProperties,
         updateProperty,
         verifyProperty,
         bookTour,

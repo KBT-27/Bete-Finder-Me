@@ -132,12 +132,13 @@ export const AuthModal: React.FC = () => {
 
     try {
       const { email: gEmail, name: gName, avatar: gAvatar } = profile;
+      const gEmailNorm = (gEmail || '').trim().toLowerCase();
       const registered = getRegisteredUsers();
-      const existing = registered.find(u => u.email.toLowerCase() === gEmail.toLowerCase());
+      const existing = registered.find(u => (u.email || '').trim().toLowerCase() === gEmailNorm);
 
       const isOwnerEmail = 
-        gEmail.toLowerCase() === 'kalebbereket49@gmail.com' ||
-        gEmail.toLowerCase() === 'kalebbereker49@gmail.com';
+        gEmailNorm === 'kalebbereket49@gmail.com' ||
+        gEmailNorm === 'kalebbereker49@gmail.com';
 
       if (existing || isOwnerEmail) {
         // Existing user or owner - log in directly with their profile role
@@ -528,6 +529,16 @@ export const AuthModal: React.FC = () => {
               </button>
             </div>
 
+            <div className="mb-4 p-2.5 bg-emerald-50/60 border border-emerald-200/70 rounded-xl flex items-center justify-between text-[11px]">
+              <span className="text-slate-600 font-medium">
+                {language === 'am' ? 'የመጀመሪያ ፕላን፡' : 'Initial Membership Plan:'}
+              </span>
+              <span className="inline-flex items-center gap-1 font-bold text-emerald-700">
+                <span>🌱</span>
+                <span>{language === 'am' ? 'ነፃ ፕላን (Free Plan)' : 'Free Plan (0 ETB / No fee)'}</span>
+              </span>
+            </div>
+
             <button
               type="button"
               id="google-reg-confirm-btn"
@@ -641,6 +652,16 @@ export const AuthModal: React.FC = () => {
                     <span>🏢</span>
                     <span className="truncate">{language === 'am' ? 'አከራይ / ባለቤት' : 'Landlord / Owner'}</span>
                   </button>
+                </div>
+
+                <div className="mt-2.5 pt-2 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 font-medium">
+                    {language === 'am' ? 'የምዝገባ ፕላን (Plan):' : 'Starting Membership:'}
+                  </span>
+                  <span className="inline-flex items-center gap-1 font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                    <span>🌱</span>
+                    <span>{language === 'am' ? 'ነፃ ፕላን (Free Plan - 0 ETB)' : 'Free Plan (0 ETB - Free forever)'}</span>
+                  </span>
                 </div>
               </div>
             )}
