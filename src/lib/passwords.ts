@@ -557,38 +557,29 @@ export const updateAdminProfileByOwner = (
   email: string,
   phone: string,
   password: string
-): { success: boolean; message: string; updatedCreds?: StoredCredentials } => {
+): { success: boolean; message: string } => {
   try {
-    let cleanEmail = email.trim();
+    const cleanEmail = email.trim();
     const cleanPassword = password.trim();
     const cleanName = name.trim();
     const cleanPhone = phone.trim();
 
-    if (!cleanEmail) {
-      return { success: false, message: 'Admin login email/username cannot be empty.' };
-    }
-
-    // Auto-append /admin if not present for compliance with admin security rules
     if (!cleanEmail.endsWith('/admin')) {
-      cleanEmail = `${cleanEmail}/admin`;
+      return { success: false, message: 'Admin email/username must end with "/admin" (e.g. kalebbereket49@gmail.com/admin)' };
     }
 
     if (!cleanPassword) {
       return { success: false, message: 'Admin password cannot be empty.' };
     }
 
-    if (cleanPassword.length < 4) {
-      return { success: false, message: 'Admin password must be at least 4 characters long.' };
-    }
-
-    const updatedCreds = saveAdminCredentials({
+    saveAdminCredentials({
       email: cleanEmail,
       password: cleanPassword,
       name: cleanName || 'Admin (Kaleb Bereket)',
       phone: cleanPhone || '+251995406697'
     });
 
-    // Send to dedicated server endpoint
+    // Send to server
     fetch('/api/admin/update-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -600,20 +591,9 @@ export const updateAdminProfileByOwner = (
       })
     }).catch(err => console.error('Server admin profile update error:', err));
 
-    // Also sync to master db
-    fetch('/api/db/sync', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminCredentials: updatedCreds })
-    }).catch(() => {});
-
-    return { 
-      success: true, 
-      message: 'Admin profile & credentials updated successfully by Owner across all sessions!',
-      updatedCreds 
-    };
+    return { success: true, message: 'Admin profile & credentials updated successfully by Owner!' };
   } catch (err: any) {
-    return { success: false, message: err?.message || 'Failed to update Admin profile.' };
+    return { success: false, message: err.message || 'Failed to update Admin profile.' };
   }
 };
 

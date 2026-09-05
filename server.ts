@@ -862,60 +862,6 @@ app.post('/api/admin/controller-config', async (req, res) => {
   }
 });
 
-// Update Admin Profile & Credentials by Owner
-app.post('/api/admin/update-profile', async (req, res) => {
-  try {
-    const { email, password, name, phone, avatar, bio } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'Admin email and password are required.' });
-    }
-
-    const currentData = await fetchMasterData();
-    const updatedCreds = {
-      ...(currentData.adminCredentials || {}),
-      email: email.trim(),
-      password: password.trim(),
-      name: (name || currentData.adminCredentials?.name || 'Admin (Kaleb Bereket)').trim(),
-      phone: (phone || currentData.adminCredentials?.phone || '+251995406697').trim(),
-      avatar: avatar || currentData.adminCredentials?.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-      bio: bio || currentData.adminCredentials?.bio || 'System Administrator',
-      updatedAt: new Date().toISOString()
-    };
-
-    currentData.adminCredentials = updatedCreds;
-    currentData.lastUpdated = Date.now();
-    await persistMasterData(currentData);
-
-    console.log(`[Admin Update] Owner updated admin credentials: ${updatedCreds.email}`);
-    res.json({
-      success: true,
-      message: 'Admin profile & credentials successfully updated in database.',
-      adminCredentials: updatedCreds
-    });
-  } catch (error: any) {
-    console.error('[Admin Update Error]:', error);
-    res.status(500).json({ success: false, message: error?.message || 'Failed to update admin credentials.' });
-  }
-});
-
-// Fetch current Admin Credentials
-app.get('/api/admin/credentials', async (req, res) => {
-  try {
-    const currentData = await fetchMasterData();
-    res.json({
-      success: true,
-      adminCredentials: currentData.adminCredentials || {
-        email: 'kalebbereket49@gmail.com/admin',
-        password: 'Kaleb5873',
-        name: 'Admin (Kaleb Bereket)',
-        phone: '+251995406697'
-      }
-    });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: error?.message });
-  }
-});
-
 // ----------------------------------------------------
 // Bete AI Intelligent Virtual Assistant & Gemini Routes
 // ----------------------------------------------------

@@ -2821,13 +2821,6 @@ export const AdminDashboard: React.FC = () => {
           <AdminControllerTab
             onShowToast={showToast}
             adminCredentials={adminCredentials}
-            onAdminCredentialsUpdated={(newCreds) => {
-              updateAdminSecurity(newCreds.email, newCreds.password || '', newCreds.name, newCreds.phone);
-              setAdminMgmtEmail(newCreds.email);
-              setAdminMgmtName(newCreds.name);
-              setAdminMgmtPhone(newCreds.phone);
-              if (newCreds.password) setAdminMgmtPassword(newCreds.password);
-            }}
           />
         )}
 
