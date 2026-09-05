@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, 
   ShieldCheck, 
@@ -26,7 +26,13 @@ import {
   Check,
   Building2,
   DollarSign,
-  Database
+  Database,
+  Eye,
+  EyeOff,
+  Save,
+  Sparkles,
+  Key,
+  RotateCcw
 } from 'lucide-react';
 import { AdminPermissions, SubAdmin, AdminAuditLog, AdminControllerConfig } from '../../types';
 import { 
@@ -42,20 +48,42 @@ import {
   clearAuditLogs,
   logAdminActivity
 } from '../../lib/adminController';
+import { updateAdminProfileByOwner } from '../../lib/passwords';
 
 interface AdminControllerTabProps {
   onShowToast: (msg: string) => void;
   adminCredentials: { email: string; name: string; phone: string; password?: string };
+  onAdminCredentialsUpdated?: (newCreds: { email: string; name: string; phone: string; password?: string }) => void;
 }
 
 export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
   onShowToast,
-  adminCredentials
+  adminCredentials,
+  onAdminCredentialsUpdated
 }) => {
   const [config, setConfig] = useState<AdminControllerConfig>(getAdminControllerConfig());
   const [noticeInput, setNoticeInput] = useState(config.adminBroadcastNotice || '');
   const [auditFilter, setAuditFilter] = useState<'all' | 'payment' | 'property' | 'user' | 'security' | 'system'>('all');
   const [auditSearch, setAuditSearch] = useState('');
+
+  // Primary Admin Credentials & Identity Controller State (Owner Management)
+  const [adminName, setAdminName] = useState(adminCredentials.name || 'Admin (Kaleb Bereket)');
+  const [adminEmail, setAdminEmail] = useState(adminCredentials.email || 'kalebbereket49@gmail.com/admin');
+  const [adminPhone, setAdminPhone] = useState(adminCredentials.phone || '+251995406697');
+  const [adminPassword, setAdminPassword] = useState(adminCredentials.password || 'Kaleb5873');
+  const [showAdminPassword, setShowAdminPassword] = useState(false);
+  const [adminSaveLoading, setAdminSaveLoading] = useState(false);
+  const [adminSaveSuccess, setAdminSaveSuccess] = useState<string | null>(null);
+  const [adminSaveError, setAdminSaveError] = useState<string | null>(null);
+  const [copiedLoginCard, setCopiedLoginCard] = useState(false);
+
+  // Sync internal form state if adminCredentials changes from parent
+  useEffect(() => {
+    if (adminCredentials.name) setAdminName(adminCredentials.name);
+    if (adminCredentials.email) setAdminEmail(adminCredentials.email);
+    if (adminCredentials.phone) setAdminPhone(adminCredentials.phone);
+    if (adminCredentials.password) setAdminPassword(adminCredentials.password);
+  }, [adminCredentials.email, adminCredentials.name, adminCredentials.phone, adminCredentials.password]);
   
   // Add SubAdmin Modal/Form state
   const [isAddSubAdminOpen, setIsAddSubAdminOpen] = useState(false);
@@ -93,11 +121,84 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
   };
 
   const handleResetAdminPassword = () => {
-    if (window.confirm('Reset primary admin password to default "Kaleb5873"?')) {
+    if (window.confirm('Reset primary admin credentials to factory default ("kalebbereket49@gmail.com/admin" / "Kaleb5873")?')) {
       resetAdminPasswordToDefault();
+      const defaultName = 'Admin (Kaleb Bereket)';
+      const defaultEmail = 'kalebbereket49@gmail.com/admin';
+      const defaultPhone = '+251995406697';
+      const defaultPass = 'Kaleb5873';
+      const result = updateAdminProfileByOwner(defaultName, defaultEmail, defaultPhone, defaultPass);
+      if (result.success && result.updatedCreds) {
+        setAdminName(defaultName);
+        setAdminEmail(defaultEmail);
+        setAdminPhone(defaultPhone);
+        setAdminPassword(defaultPass);
+        onAdminCredentialsUpdated?.(result.updatedCreds);
+      }
       refreshConfig();
-      onShowToast('🔑 Admin password reset to default "Kaleb5873".');
+      onShowToast('🔑 Admin password and credentials reset to factory default "Kaleb5873".');
     }
+  };
+
+  // Handler to Save Admin Profile, Email and Password
+  const handleSaveAdminCredentials = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminSaveError(null);
+    setAdminSaveSuccess(null);
+    setAdminSaveLoading(true);
+
+    try {
+      const result = updateAdminProfileByOwner(
+        adminName,
+        adminEmail,
+        adminPhone,
+        adminPassword
+      );
+
+      if (result.success && result.updatedCreds) {
+        setAdminName(result.updatedCreds.name);
+        setAdminEmail(result.updatedCreds.email);
+        setAdminPhone(result.updatedCreds.phone);
+        setAdminPassword(result.updatedCreds.password);
+        
+        onAdminCredentialsUpdated?.(result.updatedCreds);
+        setAdminSaveSuccess(`Admin credentials updated successfully! New login email: "${result.updatedCreds.email}". Admin can now sign in immediately.`);
+        onShowToast(`✅ Admin access updated: ${result.updatedCreds.email}`);
+        logAdminActivity(
+          'Owner (Kaleb Bereket)',
+          'Admin Credentials Updated',
+          `Updated primary admin login email to ${result.updatedCreds.email} and credentials`,
+          'security',
+          'warning'
+        );
+        refreshConfig();
+      } else {
+        setAdminSaveError(result.message || 'Failed to update admin credentials.');
+      }
+    } catch (err: any) {
+      setAdminSaveError(err?.message || 'Unexpected error updating admin credentials.');
+    } finally {
+      setAdminSaveLoading(false);
+    }
+  };
+
+  // Generate strong temporary password for Admin
+  const handleGenerateStrongPassword = () => {
+    const randDigits = Math.floor(1000 + Math.random() * 9000);
+    const newPass = `BeteAdmin${randDigits}!`;
+    setAdminPassword(newPass);
+    setShowAdminPassword(true);
+    onShowToast(`🎲 Generated strong admin password: ${newPass}`);
+  };
+
+  // Copy complete admin login credentials to clipboard
+  const handleCopyAdminLoginDetails = () => {
+    const formattedEmail = adminEmail.trim().endsWith('/admin') ? adminEmail.trim() : `${adminEmail.trim()}/admin`;
+    const details = `Bete Finder Admin Login Credentials:\nUser / Full Name: ${adminName}\nEmail / Username: ${formattedEmail}\nPassword: ${adminPassword}\nPhone: ${adminPhone}`;
+    navigator.clipboard.writeText(details);
+    setCopiedLoginCard(true);
+    onShowToast('📋 Admin login credentials copied to clipboard.');
+    setTimeout(() => setCopiedLoginCard(false), 2500);
   };
 
   const handleCreateSubAdmin = (e: React.FormEvent) => {
@@ -239,17 +340,19 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
         {/* Primary Admin Quick Credentials & Reset */}
         <div className="mt-6 pt-6 border-t border-purple-800/40 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
           <div className="bg-white/5 rounded-xl p-3 border border-white/10">
-            <span className="text-slate-400 text-[11px] font-medium block">Assigned Admin Account</span>
-            <span className="text-white font-mono font-bold">{adminCredentials.email || 'kalebbereket49@gmail.com/admin'}</span>
+            <span className="text-slate-400 text-[11px] font-medium block">Active Admin Login Identifier</span>
+            <span className="text-white font-mono font-bold truncate block">{adminEmail || 'kalebbereket49@gmail.com/admin'}</span>
           </div>
           <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex items-center justify-between">
             <div>
-              <span className="text-slate-400 text-[11px] font-medium block">Default Primary Password</span>
-              <span className="text-amber-400 font-mono font-bold">Kaleb5873</span>
+              <span className="text-slate-400 text-[11px] font-medium block">Active Sign-In Password</span>
+              <span className="text-amber-400 font-mono font-bold">
+                {showAdminPassword ? adminPassword : '••••••••'}
+              </span>
             </div>
             <button
               onClick={() => {
-                navigator.clipboard.writeText('Kaleb5873');
+                navigator.clipboard.writeText(adminPassword);
                 setCopiedKey(true);
                 setTimeout(() => setCopiedKey(false), 2000);
               }}
@@ -262,7 +365,7 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
           <div className="bg-white/5 rounded-xl p-3 border border-white/10 flex items-center justify-between">
             <div>
               <span className="text-slate-400 text-[11px] font-medium block">Credentials Recovery</span>
-              <span className="text-slate-200 font-bold">Quick Reset</span>
+              <span className="text-slate-200 font-bold">Factory Default</span>
             </div>
             <button
               onClick={handleResetAdminPassword}
@@ -274,7 +377,248 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
         </div>
       </div>
 
-      {/* 2. Owner Directive / Broadcast System */}
+      {/* 2. Primary Administrator Identity, Access & Login Credentials Management */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border-2 border-purple-200/90 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 pb-4 border-b border-purple-100">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 flex items-center justify-center shadow-xs">
+              <ShieldAlert className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-black text-purple-950">
+                  Admin Login User, Email & Password Controller
+                </h3>
+                <span className="text-[10px] bg-purple-200 text-purple-900 px-2.5 py-0.5 rounded-full font-extrabold uppercase tracking-wide">
+                  Owner Privilege
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Change the administrator's display name/username, sign-in email, phone number, and password used to access the Bete Finder Admin Controller.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopyAdminLoginDetails}
+              className="px-3.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-800 border border-purple-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title="Copy complete credentials"
+            >
+              {copiedLoginCard ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-purple-600" />}
+              <span>{copiedLoginCard ? 'Copied!' : 'Copy Login Details'}</span>
+            </button>
+          </div>
+        </div>
+
+        {adminSaveSuccess && (
+          <div className="p-4 mb-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs font-bold flex items-center gap-3 animate-in fade-in">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <p className="font-extrabold">{adminSaveSuccess}</p>
+              <p className="text-[11px] text-emerald-700 font-normal mt-0.5">
+                The updated credentials are live on the server, saved in the database, and ready for immediate sign-in.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {adminSaveError && (
+          <div className="p-4 mb-6 rounded-2xl bg-rose-50 border border-rose-200 text-rose-900 text-xs font-bold flex items-center gap-3 animate-in fade-in">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0" />
+            <span>{adminSaveError}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleSaveAdminCredentials} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            {/* 1. Admin Full Name / Username */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Admin Full Name / User Title *
+              </label>
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
+                <input
+                  type="text"
+                  required
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  placeholder="Admin (Kaleb Bereket)"
+                  className="w-full pl-10 pr-3.5 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Displayed in the admin dashboard header, activity logs, and system audit trails.
+              </p>
+            </div>
+
+            {/* 2. Admin Login Email / Username */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5 flex items-center justify-between">
+                <span>Admin Login Email / Username *</span>
+                <span className="text-[10px] text-purple-700 font-mono font-bold bg-purple-100 px-2 py-0.5 rounded-md">
+                  Ends with /admin
+                </span>
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
+                <input
+                  type="text"
+                  required
+                  value={adminEmail}
+                  onChange={(e) => setAdminEmail(e.target.value)}
+                  placeholder="kalebbereket49@gmail.com/admin"
+                  className="w-full pl-10 pr-3.5 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
+                />
+              </div>
+              <p className="text-[11px] text-purple-900 font-medium mt-1">
+                🔑 <strong>Required for sign-in:</strong> Type this exact email/username into the Login screen to get into the Admin Controller.
+              </p>
+            </div>
+
+            {/* 3. Admin Phone Number */}
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                Admin Phone Number (Verification & Recovery) *
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
+                <input
+                  type="text"
+                  required
+                  value={adminPhone}
+                  onChange={(e) => setAdminPhone(e.target.value)}
+                  placeholder="+251995406697"
+                  className="w-full pl-10 pr-3.5 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Used to verify administrator identity during password recovery and security inquiries.
+              </p>
+            </div>
+
+            {/* 4. Admin Sign-In Password */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-800">
+                  Admin Sign-In Password (የይለፍ ቃል) *
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleGenerateStrongPassword}
+                    className="text-[11px] text-amber-700 hover:text-amber-800 font-bold flex items-center gap-1 cursor-pointer"
+                    title="Generate secure password"
+                  >
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Generate Strong</span>
+                  </button>
+                </div>
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-purple-600" />
+                <input
+                  type={showAdminPassword ? "text" : "password"}
+                  required
+                  value={adminPassword}
+                  onChange={(e) => setAdminPassword(e.target.value)}
+                  placeholder="Enter admin password"
+                  className="w-full pl-10 pr-20 py-3 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-mono font-bold focus:ring-2 focus:ring-purple-500 focus:bg-white transition-all"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminPassword(!showAdminPassword)}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                    title={showAdminPassword ? "Hide password" : "Show password"}
+                  >
+                    {showAdminPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(adminPassword);
+                      onShowToast('📋 Password copied to clipboard.');
+                    }}
+                    className="p-1.5 text-slate-400 hover:text-slate-700 rounded-lg cursor-pointer"
+                    title="Copy password"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Must be at least 4 characters. Admin passwords can include standard characters or numbers.
+              </p>
+            </div>
+          </div>
+
+          {/* Real-time Login Simulation Badge */}
+          <div className="p-4 bg-gradient-to-r from-purple-50 via-slate-50 to-indigo-50 rounded-2xl border border-purple-200/80">
+            <div className="flex items-center gap-2 mb-2">
+              <KeyRound className="w-4 h-4 text-purple-700" />
+              <span className="text-xs font-black text-purple-950 uppercase tracking-wider">
+                Live Admin Controller Sign-In Simulator
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+              <div className="bg-white p-2.5 rounded-xl border border-purple-100 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">Login Email / Identifier</span>
+                <span className="font-mono font-black text-purple-900 truncate block">
+                  {adminEmail.trim().endsWith('/admin') ? adminEmail.trim() : `${adminEmail.trim()}/admin`}
+                </span>
+              </div>
+              <div className="bg-white p-2.5 rounded-xl border border-purple-100 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">Sign-In Password</span>
+                <span className="font-mono font-black text-amber-700 truncate block">
+                  {showAdminPassword ? adminPassword : '••••••••••••'}
+                </span>
+              </div>
+              <div className="bg-white p-2.5 rounded-xl border border-purple-100 shadow-2xs">
+                <span className="text-[10px] text-slate-400 font-bold block uppercase">Designated Role</span>
+                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Platform Administrator</span>
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleResetAdminPassword}
+              className="w-full sm:w-auto px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 border border-slate-200"
+            >
+              <RotateCcw className="w-4 h-4 text-slate-500" />
+              <span>Reset to Default (Kaleb5873)</span>
+            </button>
+
+            <button
+              type="submit"
+              disabled={adminSaveLoading}
+              className="w-full sm:w-auto px-6 py-3 bg-purple-700 hover:bg-purple-800 active:scale-98 text-white font-black text-xs rounded-xl shadow-md hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              {adminSaveLoading ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-purple-200" />
+                  <span>Updating Credentials...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 text-purple-200" />
+                  <span>Save & Apply Admin Credentials</span>
+                </>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* 3. Owner Directive / Broadcast System */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs">
         <div className="flex items-center gap-3 mb-4 pb-3 border-b border-slate-100">
           <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 flex items-center justify-center">

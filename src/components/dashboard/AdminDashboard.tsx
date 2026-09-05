@@ -58,7 +58,8 @@ import {
   Radio,
   Share2,
   HelpCircle,
-  Send
+  Send,
+  Bot
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -75,6 +76,8 @@ import {
 import { PaymentRequest, Property } from '../../types';
 import { AdminControllerTab } from './AdminControllerTab';
 import { TelegramHubTab } from './TelegramHubTab';
+import { TelegramChannelTab } from './TelegramChannelTab';
+import { TelegramBotTab } from './TelegramBotTab';
 import { getAdminControllerConfig, logAdminActivity } from '../../lib/adminController';
 import { safeFetchJson } from '../../lib/apiHelper';
 
@@ -123,7 +126,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Navigation tab state
   const [activeAdminTab, setActiveAdminTab] = useState<
-    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'admin_controller' | 'pricing_settings' | 'security' | 'sync' | 'telegram_hub'
+    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'admin_controller' | 'pricing_settings' | 'security' | 'sync' | 'telegram_hub' | 'telegram_channel' | 'telegram_bot'
   >('payments');
 
   // Search states for all modules
@@ -1190,115 +1193,164 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex items-center gap-2 border-b border-slate-200 pb-3 mb-8 overflow-x-auto scrollbar-none">
+        {/* Professional Executive Tab Navigation Menu */}
+        <div className="bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/90 shadow-2xs mb-8 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
           {/* Tab 1: Payments */}
           <button
+            id="admin-tab-payments"
             onClick={() => setActiveAdminTab('payments')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'payments' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'payments'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
             }`}
           >
             <Smartphone className="w-4 h-4 text-emerald-400" />
-            <span>Payment Approvals & Requests ({paymentRequests.length})</span>
+            <span>Payments</span>
             {pendingPayments.length > 0 && (
-              <span className="ml-1 bg-amber-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded-full">
-                {pendingPayments.length} new
+              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
+                {pendingPayments.length}
               </span>
             )}
           </button>
 
-          {/* Tab 2: Property Verification & Pay Plan Tier */}
+          {/* Tab 2: Property Verification & Management */}
           <button
+            id="admin-tab-properties"
             onClick={() => setActiveAdminTab('properties')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'properties' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'properties'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
             }`}
           >
             <Building2 className="w-4 h-4 text-amber-400" />
-            <span>Owner Property Verification & Management ({unverifiedProperties.length} pending)</span>
+            <span>Properties</span>
+            {unverifiedProperties.length > 0 && (
+              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
+                {unverifiedProperties.length}
+              </span>
+            )}
           </button>
 
-          {/* Tab 3: NEW Paid Users & Plan Control */}
+          {/* Tab 3: Paid Subscribers */}
           <button
+            id="admin-tab-subscribers"
             onClick={() => setActiveAdminTab('paid_subscribers')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'paid_subscribers' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'paid_subscribers'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
             }`}
           >
-            <Crown className="w-4 h-4 text-amber-500" />
-            <span>Paid Users & Plan Control ({allPaidSubscribers.length})</span>
+            <Crown className="w-4 h-4 text-amber-400" />
+            <span>Subscribers ({allPaidSubscribers.length})</span>
           </button>
 
-          {/* Tab 4: NEW Database & Registered Users (Owner Mode Only) */}
+          {/* Tab 4: Database Users (Owner only) */}
           {isOwner && (
             <button
+              id="admin-tab-database-users"
               onClick={() => setActiveAdminTab('database_users')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-                activeAdminTab === 'database_users' ? 'bg-amber-500 text-slate-950 font-black shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'database_users'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
-              <Database className="w-4 h-4 text-slate-950" />
-              <span>Database Registered Users ({usersList.length})</span>
+              <Database className="w-4 h-4 text-purple-400" />
+              <span>Registered Users ({usersList.length})</span>
             </button>
           )}
 
-          {/* Tab: Admin Controller Suite (Owner only) */}
+          {/* Tab 5: Admin Controller Suite (Owner only) */}
           {isOwner && (
             <button
+              id="admin-tab-controller"
               onClick={() => setActiveAdminTab('admin_controller')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-                activeAdminTab === 'admin_controller' ? 'bg-purple-700 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'admin_controller'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
-              <Sliders className="w-4 h-4 text-purple-300" />
-              <span>Admin Controller</span>
+              <Sliders className="w-4 h-4 text-indigo-400" />
+              <span>Controller Suite</span>
             </button>
           )}
 
-          {/* Tab 5: Pricing & Telebirr Settings (Owner only) */}
+          {/* Tab 6: Pricing & Telebirr Settings (Owner only) */}
           {isOwner && (
             <button
+              id="admin-tab-pricing"
               onClick={() => setActiveAdminTab('pricing_settings')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-                activeAdminTab === 'pricing_settings' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'pricing_settings'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
               <DollarSign className="w-4 h-4 text-amber-400" />
-              <span>Pricing & Telebirr Settings</span>
+              <span>Pricing & Telebirr</span>
             </button>
           )}
 
-          {/* Tab: Telegram Bot & Channel Hub (Owner only) */}
+          {/* SEPARATED TAB 7: Telegram Channel (Owner only) */}
           {isOwner && (
             <button
-              id="admin-tab-telegram-hub"
-              onClick={() => setActiveAdminTab('telegram_hub')}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-                activeAdminTab === 'telegram_hub' ? 'bg-cyan-600 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+              id="admin-tab-telegram-channel"
+              onClick={() => setActiveAdminTab('telegram_channel')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'telegram_channel' || activeAdminTab === 'telegram_hub'
+                  ? 'bg-slate-900 text-white shadow-xs ring-1 ring-cyan-500/50'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
               }`}
             >
-              <Send className="w-4 h-4 text-cyan-300 transform -rotate-12" />
-              <span>Telegram Bot & Channel</span>
+              <Radio className="w-4 h-4 text-cyan-400" />
+              <span>Telegram Channel</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse"></span>
             </button>
           )}
 
-          {/* Tab 6: Security & Profile Settings */}
+          {/* SEPARATED TAB 8: Telegram Bot (Owner only) */}
+          {isOwner && (
+            <button
+              id="admin-tab-telegram-bot"
+              onClick={() => setActiveAdminTab('telegram_bot')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'telegram_bot'
+                  ? 'bg-slate-900 text-white shadow-xs ring-1 ring-purple-500/50'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Bot className="w-4 h-4 text-purple-400" />
+              <span>Telegram Bot</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+            </button>
+          )}
+
+          {/* Tab 9: Security & Profile Settings */}
           <button
+            id="admin-tab-security"
             onClick={() => setActiveAdminTab('security')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'security' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'security'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
             }`}
           >
             <Lock className="w-4 h-4 text-amber-500" />
-            <span>Security & Profile Settings</span>
+            <span>Security & Profile</span>
           </button>
 
-          {/* Tab 7: Cross-Device Database Sync */}
+          {/* Tab 10: Cross-Device Database Sync */}
           <button
+            id="admin-tab-sync"
             onClick={() => setActiveAdminTab('sync')}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'sync' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeAdminTab === 'sync'
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
             }`}
           >
             <RefreshCw className="w-4 h-4 text-blue-400" />
@@ -2769,6 +2821,13 @@ export const AdminDashboard: React.FC = () => {
           <AdminControllerTab
             onShowToast={showToast}
             adminCredentials={adminCredentials}
+            onAdminCredentialsUpdated={(newCreds) => {
+              updateAdminSecurity(newCreds.email, newCreds.password || '', newCreds.name, newCreds.phone);
+              setAdminMgmtEmail(newCreds.email);
+              setAdminMgmtName(newCreds.name);
+              setAdminMgmtPhone(newCreds.phone);
+              if (newCreds.password) setAdminMgmtPassword(newCreds.password);
+            }}
           />
         )}
 
@@ -3576,12 +3635,24 @@ export const AdminDashboard: React.FC = () => {
         })()}
 
         {/* ============================================================== */}
-        {/* TAB: Telegram Bot & Channel Hub (Owner only) */}
+        {/* TAB: Telegram Channel Broadcaster (Owner only) */}
         {/* ============================================================== */}
-        {isOwner && activeAdminTab === 'telegram_hub' && (
-          <TelegramHubTab
+        {isOwner && (activeAdminTab === 'telegram_channel' || activeAdminTab === 'telegram_hub') && (
+          <TelegramChannelTab
             properties={properties}
             showToast={showToast}
+            onSwitchToBot={() => setActiveAdminTab('telegram_bot')}
+          />
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB: Telegram Bot Management Console (Owner only) */}
+        {/* ============================================================== */}
+        {isOwner && activeAdminTab === 'telegram_bot' && (
+          <TelegramBotTab
+            properties={properties}
+            showToast={showToast}
+            onSwitchToChannel={() => setActiveAdminTab('telegram_channel')}
           />
         )}
 
