@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   ShieldCheck, 
   Crown,
@@ -73,7 +73,7 @@ import {
   getAdminCredentials,
   getOwnerCredentials
 } from '../../lib/passwords';
-import { PaymentRequest, Property } from '../../types';
+import { PaymentRequest, Property, AdminPermissions } from '../../types';
 import { AdminControllerTab } from './AdminControllerTab';
 import { TelegramHubTab } from './TelegramHubTab';
 import { TelegramChannelTab } from './TelegramChannelTab';
@@ -123,6 +123,72 @@ export const AdminDashboard: React.FC = () => {
   useEffect(() => {
     setControllerConfig(getAdminControllerConfig());
   }, [lastDbSyncTimestamp]);
+
+  // Identify whether signed-in administrator is the First Admin (Primary Admin) or a Secondary Admin
+  const isPrimaryAdmin = !isOwner && (
+    user?.id === 'admin-kaleb' || 
+    (user?.email && (adminCredentials.email || '').toLowerCase().includes(user.email.toLowerCase())) ||
+    !controllerConfig.subAdmins.some(s => s.email.toLowerCase() === user?.email?.toLowerCase() || s.id === user?.id)
+  );
+
+  const matchedSubAdmin = !isOwner && !isPrimaryAdmin ? controllerConfig.subAdmins.find(
+    s => s.email.toLowerCase() === user?.email?.toLowerCase() || s.id === user?.id
+  ) : null;
+
+  const isSecondaryAdmin = !isOwner && !isPrimaryAdmin;
+
+  // Resolve Effective Permissions Matrix based on active configuration set by Owner
+  const effectivePermissions = useMemo<AdminPermissions>(() => {
+    if (isOwner) {
+      return {
+        isSuspended: false,
+        canApprovePayments: true,
+        canDeleteProperties: true,
+        canVerifyProperties: true,
+        canViewUserDatabase: true,
+        canExportBackups: true,
+        canBroadcastNotices: true,
+      };
+    }
+
+    if (isPrimaryAdmin) {
+      return controllerConfig.firstAdminPermissions || {
+        isSuspended: false,
+        canApprovePayments: true,
+        canDeleteProperties: true,
+        canVerifyProperties: true,
+        canViewUserDatabase: true,
+        canExportBackups: true,
+        canBroadcastNotices: true,
+      };
+    }
+
+    // Secondary Admin Matrix (with individual subAdmin overrides if active)
+    const baseSecondary = controllerConfig.adminPermissions || {
+      isSuspended: false,
+      canApprovePayments: true,
+      canDeleteProperties: true,
+      canVerifyProperties: true,
+      canViewUserDatabase: true,
+      canExportBackups: true,
+      canBroadcastNotices: true,
+    };
+
+    if (matchedSubAdmin) {
+      const isSubSuspended = baseSecondary.isSuspended || matchedSubAdmin.status === 'suspended' || Boolean(matchedSubAdmin.permissions?.isSuspended);
+      return {
+        isSuspended: isSubSuspended,
+        canApprovePayments: !isSubSuspended && (baseSecondary.canApprovePayments || Boolean(matchedSubAdmin.permissions?.canApprovePayments)),
+        canDeleteProperties: !isSubSuspended && (baseSecondary.canDeleteProperties || Boolean(matchedSubAdmin.permissions?.canDeleteProperties)),
+        canVerifyProperties: !isSubSuspended && (baseSecondary.canVerifyProperties || Boolean(matchedSubAdmin.permissions?.canVerifyProperties)),
+        canViewUserDatabase: !isSubSuspended && (baseSecondary.canViewUserDatabase || Boolean(matchedSubAdmin.permissions?.canViewUserDatabase)),
+        canExportBackups: !isSubSuspended && (baseSecondary.canExportBackups || Boolean(matchedSubAdmin.permissions?.canExportBackups)),
+        canBroadcastNotices: !isSubSuspended && (baseSecondary.canBroadcastNotices || Boolean(matchedSubAdmin.permissions?.canBroadcastNotices)),
+      };
+    }
+
+    return baseSecondary;
+  }, [isOwner, isPrimaryAdmin, matchedSubAdmin, controllerConfig]);
 
   // Navigation tab state
   const [activeAdminTab, setActiveAdminTab] = useState<
@@ -2144,6 +2210,13 @@ export const AdminDashboard: React.FC = () => {
                         </p>
                       )}
 
+                      {u.lastLogin && (
+                        <p className="text-[10px] text-emerald-700 font-bold flex items-center gap-1 mt-0.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                          <span>Last Sign In: {new Date(u.lastLogin).toLocaleDateString()} {new Date(u.lastLogin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </p>
+                      )}
+
                       <div className="pt-1">
                         {isOwnerUser ? (
                           <span className="text-xs text-slate-400 italic">Owner Protected</span>
@@ -2170,6 +2243,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="px-4 py-3.5">User Identity</th>
                       <th className="px-4 py-3.5">Gmail / Email</th>
                       <th className="px-4 py-3.5">Phone</th>
+                      <th className="px-4 py-3.5">Last Sign In</th>
                       <th className="px-4 py-3.5">Provider</th>
                       <th className="px-4 py-3.5">Role</th>
                       <th className="px-4 py-3.5">Active Plan</th>
@@ -2213,6 +2287,22 @@ export const AdminDashboard: React.FC = () => {
 
                           <td className="px-4 py-4 font-mono text-slate-700">
                             {u.phone || '—'}
+                          </td>
+
+                          <td className="px-4 py-4 text-[11px]">
+                            {u.lastLogin ? (
+                              <div>
+                                <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse"></span>
+                                  <span>{new Date(u.lastLogin).toLocaleDateString()}</span>
+                                </span>
+                                <span className="text-[10px] text-slate-400 block font-mono mt-0.5">
+                                  {new Date(u.lastLogin).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 font-mono text-[10px]">Active</span>
+                            )}
                           </td>
 
                           <td className="px-4 py-4">
@@ -2821,6 +2911,20 @@ export const AdminDashboard: React.FC = () => {
           <AdminControllerTab
             onShowToast={showToast}
             adminCredentials={adminCredentials}
+            onAdminCredentialsUpdated={(newCreds) => {
+              updateAdminSecurity(
+                newCreds.email,
+                newCreds.password || adminCredentials.password || 'Kaleb5873',
+                newCreds.name,
+                newCreds.phone
+              );
+            }}
+            onNavigateTab={(tab) => setActiveAdminTab(tab as any)}
+            onOpenEraseAllModal={() => {
+              setShowEraseAllModal(true);
+              setEraseConfirmText('');
+            }}
+            totalPropertiesCount={properties.length}
           />
         )}
 

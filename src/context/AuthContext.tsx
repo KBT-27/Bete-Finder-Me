@@ -18,10 +18,13 @@ import {
   extractDestinationEmail,
   verifyRegisteredAccountAndPhone,
   normalizePhoneNumber,
-  isSlashAllowedForPassword
+  isSlashAllowedForPassword,
+  isRevokedAdminEmail,
+  isRevokedAdminPassword
 } from '../lib/passwords';
 import { authenticateWithGoogle } from '../lib/googleAuth';
 import { safeFetchJson } from '../lib/apiHelper';
+import { getAdminControllerConfig } from '../lib/adminController';
 
 export type AuthModalMode = 'signin' | 'signup' | 'forgot' | 'reset' | 'change';
 
@@ -43,6 +46,9 @@ interface AuthContextType {
   ownerCredentials: StoredCredentials;
   updateAdminSecurity: (newEmail: string, newPass: string, name?: string, phone?: string, avatar?: string, bio?: string) => boolean;
   updateOwnerSecurity: (newEmail: string, newPass: string, name?: string, phone?: string, avatar?: string, bio?: string) => boolean;
+  registeredUsers: RegisteredAccount[];
+  registeredUsersCount: number;
+  refreshRegisteredUsers: () => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   authModalInitialMode: AuthModalMode;
@@ -57,6 +63,23 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [adminCreds, setAdminCreds] = useState<StoredCredentials>(getAdminCredentials);
   const [ownerCreds, setOwnerCreds] = useState<StoredCredentials>(getOwnerCredentials);
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredAccount[]>(getRegisteredUsers);
+
+  const refreshRegisteredUsers = useCallback(() => {
+    setRegisteredUsers(getRegisteredUsers());
+  }, []);
+
+  useEffect(() => {
+    const handleAccountsChanged = () => {
+      setRegisteredUsers(getRegisteredUsers());
+    };
+    window.addEventListener('bete_accounts_changed', handleAccountsChanged);
+    window.addEventListener('storage', handleAccountsChanged);
+    return () => {
+      window.removeEventListener('bete_accounts_changed', handleAccountsChanged);
+      window.removeEventListener('storage', handleAccountsChanged);
+    };
+  }, []);
 
   const [user, setUser] = useState<UserProfile | null>(() => {
     const saved = localStorage.getItem('bete_finder_user');
@@ -87,6 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const d = result.data.data;
         if (d.users && Array.isArray(d.users)) {
           localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(d.users));
+          setRegisteredUsers(d.users);
         }
         if (d.adminCredentials) {
           setAdminCreds(d.adminCredentials);
@@ -252,16 +276,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
-    // 2. Admin Login Check
+    // 2. Admin Login Check with Credential Invalidation Enforced
+    if (isRevokedAdminEmail(cleanEmail)) {
+      return { 
+        success: false, 
+        message: 'This previous Admin email address was changed and can no longer access the system. Access with the old email is permanently invalidated. Please sign in using the updated Admin email address.' 
+      };
+    }
+
     const currentAdmin = getAdminCredentials();
     const cleanAdminEmail = (currentAdmin.email || '').split('/')[0].toLowerCase();
-    if (
+    const isAdminEmailMatch =
       cleanEmail === currentAdmin.email.toLowerCase() ||
       cleanEmail === cleanAdminEmail ||
-      cleanEmail === `${cleanAdminEmail}/admin` ||
-      cleanEmail === 'kalebbereket49@gmail.com/admin'
-    ) {
+      cleanEmail === `${cleanAdminEmail}/admin`;
+
+    if (isAdminEmailMatch) {
       if (password && cleanPass !== currentAdmin.password) {
+        if (isRevokedAdminPassword(cleanPass)) {
+          return {
+            success: false,
+            message: 'Incorrect password. Your Admin password was changed and the previous password can no longer access this account. Please use your new Admin password.'
+          };
+        }
         return { success: false, message: 'Invalid password for Admin account.' };
       }
       const adminUser: UserProfile = {
@@ -280,51 +317,71 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: true };
     }
 
+    // 2b. Secondary Admin / Sub-Admin Login Check
+    const controllerConfig = getAdminControllerConfig();
+    const matchedSubAdmin = (controllerConfig.subAdmins || []).find(s => {
+      const sEmail = (s.email || '').trim().toLowerCase();
+      const sClean = sEmail.split('/')[0];
+      return cleanEmail === sEmail || cleanEmail === sClean || cleanEmail === `${sClean}/admin`;
+    });
+
+    if (matchedSubAdmin) {
+      if (password && cleanPass !== matchedSubAdmin.password) {
+        return { success: false, message: 'Invalid password for Secondary Admin account.' };
+      }
+      const subAdminUser: UserProfile = {
+        id: matchedSubAdmin.id,
+        name: matchedSubAdmin.name,
+        email: matchedSubAdmin.email,
+        phone: matchedSubAdmin.phone,
+        role: 'admin',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        bio: `Secondary Admin (${matchedSubAdmin.role.replace(/_/g, ' ')}) - ${matchedSubAdmin.assignedSubcity}`,
+        savedPropertyIds: [],
+        postedPropertyIds: [],
+        toursBooked: []
+      };
+      setUser(subAdminUser);
+      return { success: true };
+    }
+
     // 3. Registered User Check
     const registered = getRegisteredUsers();
     const foundUser = registered.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (foundUser) {
       if (password && foundUser.password && cleanPass !== foundUser.password) {
-        return { success: false, message: 'Incorrect password. Please try again or use Forgot/Change Password.' };
+        return { success: false, message: 'Incorrect password. Please try again or use Forgot Password to reset.' };
       }
-      const { password: _, ...profile } = foundUser;
+      const updatedUser: RegisteredAccount = {
+        ...foundUser,
+        lastLogin: new Date().toISOString(),
+        lastActiveAt: new Date().toISOString()
+      };
+      saveRegisteredUser(updatedUser);
+      // Synchronize sign-in event immediately to Master Database for Owner Dashboard visibility
+      fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedUser)
+      }).catch(() => {});
+
+      const { password: _, ...profile } = updatedUser;
       setUser(profile);
       return { success: true };
     }
 
-    // 4. Default Mock/New local user
-    const inputPassword = password || 'password123';
-    const newAccount: RegisteredAccount = {
-      id: `user-${Date.now()}`,
-      name: email.split('@')[0],
-      email: email.trim(),
-      phone: '+251995406697',
-      role: 'tenant',
-      password: inputPassword,
-      provider: 'local',
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
-      savedPropertyIds: [],
-      postedPropertyIds: [],
-      toursBooked: []
+    // Strict security rule: Any person CANNOT register in the Sign In part. Must register first.
+    return {
+      success: false,
+      message: 'Account not found with this email. You must register first in the "Sign Up" tab before signing in. (መለያ አልተገኘም፤ እባክዎ መጀመሪያ ይመዝገቡ)'
     };
-
-    saveRegisteredUser(newAccount);
-    // Push to server database asynchronously
-    fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newAccount)
-    }).catch(() => {});
-
-    const { password: _, ...newProfile } = newAccount;
-    setUser(newProfile);
-    return { success: true };
   };
 
-  // Sign up handler
+  // Sign up handler - Enforces: 1 account can only register 1
   const signup = (data: { name: string; email: string; phone: string; password: string; role?: UserRole }): { success: boolean; message?: string } => {
     const email = data.email.trim().toLowerCase();
+    const cleanPhone = (data.phone || '').trim();
 
     // Check slash symbol constraint
     if (email.includes('/')) {
@@ -342,41 +399,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const registered = getRegisteredUsers();
-    const existing = registered.find(u => u.email.toLowerCase() === email);
+    const existingEmail = registered.find(u => u.email.toLowerCase() === email);
 
-    if (existing) {
-      const updatedAccount: RegisteredAccount = {
-        ...existing,
-        name: data.name.trim() || existing.name,
-        phone: data.phone.trim() || existing.phone,
-        password: data.password.trim(),
-        role: data.role || existing.role,
-        provider: 'local',
-        registeredAt: existing.registeredAt || new Date().toISOString()
+    // Rule: 1 account can only register only 1. Disallow duplicate email registrations.
+    if (existingEmail) {
+      return {
+        success: false,
+        message: 'This email is already registered. 1 account can only register 1. Please sign in with your password.'
       };
-      saveRegisteredUser(updatedAccount);
-      fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updatedAccount)
-      }).then(() => {
-        syncAuthWithDatabase().catch(() => {});
-      }).catch(() => {});
-
-      const { password: _, ...profile } = updatedAccount;
-      setUser(profile);
-      return { success: true };
     }
 
+    // Rule: Check if phone number is already registered to another account
+    if (cleanPhone) {
+      const existingPhone = registered.find(u => u.phone && u.phone.trim() === cleanPhone);
+      if (existingPhone) {
+        return {
+          success: false,
+          message: 'This phone number is already registered to an account. 1 account can only register 1.'
+        };
+      }
+    }
+
+    const nowIso = new Date().toISOString();
     const newAccount: RegisteredAccount = {
       id: `user-${Date.now()}`,
       name: data.name.trim() || email.split('@')[0],
       email: data.email.trim(),
-      phone: data.phone.trim() || '+251995406697',
+      phone: cleanPhone || '+251995406697',
       role: data.role || 'tenant',
       password: data.password.trim(),
       provider: 'local',
-      registeredAt: new Date().toISOString(),
+      registeredAt: nowIso,
+      lastLogin: nowIso,
+      lastActiveAt: nowIso,
       activePlan: 'free',
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
       savedPropertyIds: [],
@@ -385,6 +440,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     saveRegisteredUser(newAccount);
+    window.dispatchEvent(new Event('bete_accounts_changed'));
     fetch('/api/users', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -475,17 +531,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const existing = registered.find(u => u.email.toLowerCase() === googleEmail);
 
       if (existing) {
-        const { password: _, ...profile } = existing;
-        setUser(profile);
-        // Refresh last active timestamp in server
+        const nowIso = new Date().toISOString();
+        const updatedExisting: RegisteredAccount = {
+          ...existing,
+          lastLogin: nowIso,
+          lastActiveAt: nowIso
+        };
+        saveRegisteredUser(updatedExisting);
         fetch('/api/users', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...existing, lastActiveAt: new Date().toISOString() })
+          body: JSON.stringify(updatedExisting)
         }).catch(() => {});
+        const { password: _, ...profile } = updatedExisting;
+        setUser(profile);
         return { success: true };
       }
 
+      const nowIso = new Date().toISOString();
       const newGoogleAccount: RegisteredAccount = {
         id: `google-${Date.now()}`,
         name: googleName || 'Google User',
@@ -494,7 +557,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         role: userRole,
         password: 'google-oauth-auth',
         provider: 'google',
-        registeredAt: new Date().toISOString(),
+        registeredAt: nowIso,
+        lastLogin: nowIso,
+        lastActiveAt: nowIso,
         activePlan: 'free',
         avatar: googleAvatar || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
         savedPropertyIds: [],
@@ -831,6 +896,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ownerCredentials: ownerCreds,
         updateAdminSecurity,
         updateOwnerSecurity,
+        registeredUsers,
+        registeredUsersCount: registeredUsers.length,
+        refreshRegisteredUsers,
         isAuthModalOpen,
         setIsAuthModalOpen,
         authModalInitialMode,

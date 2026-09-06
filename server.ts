@@ -862,6 +862,59 @@ app.post('/api/admin/controller-config', async (req, res) => {
   }
 });
 
+// Update Admin Profile & Login Credentials by Owner
+app.post('/api/admin/update-profile', async (req, res) => {
+  try {
+    const { email, password, name, phone } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: 'Admin email and password are required.' });
+    }
+
+    let cleanEmail = String(email).trim();
+    if (!cleanEmail.endsWith('/admin')) {
+      cleanEmail = `${cleanEmail}/admin`;
+    }
+
+    const currentData = await fetchMasterData();
+    const updatedAdminCreds = {
+      email: cleanEmail,
+      password: String(password).trim(),
+      name: name ? String(name).trim() : 'Admin (Kaleb Bereket)',
+      phone: phone ? String(phone).trim() : '+251995406697'
+    };
+
+    currentData.adminCredentials = updatedAdminCreds;
+    await persistMasterData(currentData);
+
+    console.log(`[Admin Profile] Updated by Owner: ${cleanEmail}`);
+    res.json({
+      success: true,
+      message: 'Admin profile & login credentials updated and synced to database successfully!',
+      adminCredentials: updatedAdminCreds
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message || 'Server error updating admin credentials' });
+  }
+});
+
+// Get Admin Credentials
+app.get('/api/admin/credentials', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    res.json({
+      success: true,
+      adminCredentials: currentData.adminCredentials || {
+        email: 'kalebbereket49@gmail.com/admin',
+        password: 'Kaleb5873',
+        name: 'Admin (Kaleb Bereket)',
+        phone: '+251995406697'
+      }
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
 // ----------------------------------------------------
 // Bete AI Intelligent Virtual Assistant & Gemini Routes
 // ----------------------------------------------------
@@ -881,37 +934,28 @@ function getGeminiClient(): GoogleGenAI | null {
 }
 
 const BETE_ASSISTANCE_SYSTEM_INSTRUCTION = `
-You are Bete Assistance, an intelligent AI assistant powered by Google Gemini.
+You are Bete Assistance, a versatile, highly capable AI assistant powered by Google Gemini.
 
-Your identity, scope, and capabilities:
-1. About Yourself (Bete Assistance) and what you can do:
-- When asked "Who are you?", "What can you do?", "ስለ አንተ ንገረኝ", "ምን ማድረግ ትችላለህ?", or questions about the AI itself:
-  * State that you are Bete Assistance, powered by Google Gemini.
-  * Clearly explain what you can do:
-    - Guide users on all features of the Bete Finder platform (searching properties, listing homes for rent or sale, contacting landlords/agents, calculating mortgages, currency conversion).
-    - Provide accurate Ethiopian real estate market information (average rental and buying prices in Bole, Kazanchis, CMC, Sarbet, Summit, Old Airport, Hawassa, Bahir Dar, etc.).
-    - Explain tenancy regulations, written contract requirements, advance rent customs (3-6 months), broker fees, and bank mortgage policies (CBE, Awash Bank, etc.).
-    - Answer ANY question about the web, science, technology, history, culture, math, everyday life, coding, travel, or any topic.
-    - Provide answers fluently in both Amharic (አማርኛ) and English.
+Key Directives:
+1. Universal Capabilities ("Can Answer Anything"):
+- You have comprehensive universal knowledge and can answer ANY question on ANY subject:
+  * General knowledge, world and Ethiopian history, geography, cultures, traditions, and literature.
+  * Science, physics, chemistry, biology, astronomy, medicine, and health.
+  * Technology, computer science, software engineering, coding (JavaScript, Python, React, etc.), algorithms, and mathematics.
+  * Daily life, business, entrepreneurship, finance, culinary recipes, travel, and personal productivity.
+  * Language translations, summaries, analysis, and creative writing.
+- Never decline a harmless question or claim you are restricted only to real estate. You are a universal AI assistant that also possesses deep domain expertise in real estate!
 
-2. About Bete Finder Platform:
-- When asked about Bete Finder:
-  * Explain that Bete Finder (ቤቴ ፈላጊ) is Ethiopia's modern digital real estate marketplace.
-  * It connects tenants and homebuyers directly with property owners and verified brokers.
-  * Core features:
-    - Search & Filter: Filter by location/subcity, listing type (Rent/Sale), property type (Apartment, Villa, Condominium, Townhouse, Studio, Commercial), price range (ETB / USD), and bedrooms.
-    - Post Property: Landlords and agents can click "Post Property / ቤት ይለጥፉ" to create listings with photo uploads, descriptions, and amenities.
-    - Direct Contact: Call, SMS, WhatsApp, and in-app message property owners.
-    - Interactive Tools: Live interactive map, ETB/USD currency toggle, mortgage & loan payment calculator, and saved favorites.
+2. Real Estate & Bete Finder Domain Mastery:
+- When questions relate to property or the Bete Finder (ቤቴ ፈላጊ) platform:
+  * Provide comprehensive guidance on searching, filtering by subcity/price/bedrooms, posting property listings, contacting landlords, verified badge checks, and using the mortgage calculator.
+  * Provide realistic Ethiopian market insights for Addis Ababa (Bole, CMC, Kazanchis, Sarbet, Summit, Bisrate Gabriel, Old Airport), Hawassa, Bahir Dar, and Bishoftu.
+  * Detail tenancy legalities, written contract requirements at woredas, standard advance rent expectations (3 to 6 months), broker fees, and bank mortgage procedures (CBE, Awash Bank, Nib Bank).
 
-3. About the Web and All Things:
-- You can answer any questions about the web, technology, world knowledge, science, mathematics, literature, history, and daily life.
-- Deliver helpful, accurate, well-structured, and clear explanations.
-
-4. Formatting & Style Directives:
-- Answer the user's specific question directly, warmly, and concisely.
-- Do NOT output any internal prefixes or tags like "User Response:", "Search Context:", or markdown code blocks for normal conversation.
-- Answer in the language the user asked in (Amharic or English).
+3. Language & Tone:
+- Respond fluently in the language the user addresses you in: Amharic (አማርኛ) or English.
+- Be articulate, welcoming, thorough, and helpful.
+- Provide direct answers without any internal labels or prefixes.
 `;
 
 // 1. Bete Assistance Interactive Chat (Powered by Gemini)
@@ -951,86 +995,129 @@ app.post('/api/ai/chat', async (req, res) => {
           contents: formattedContents,
           config: {
             systemInstruction: BETE_ASSISTANCE_SYSTEM_INSTRUCTION,
-            temperature: 0.6,
+            temperature: 0.7,
           }
         });
         replyText = response.text || '';
       } catch (geminiErr: any) {
-        // If gemini-3.8-flash experiences a temporary 503 spike, try gemini-3.1-flash-lite fallback
-        const isDemandSpike = geminiErr?.status === 503 || geminiErr?.message?.includes('503') || geminiErr?.message?.includes('demand');
-        if (isDemandSpike) {
+        // Cascade to gemini-3.1-flash-lite on any error
+        try {
+          const fallbackResponse = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-lite',
+            contents: formattedContents,
+            config: {
+              systemInstruction: BETE_ASSISTANCE_SYSTEM_INSTRUCTION,
+              temperature: 0.7,
+            }
+          });
+          replyText = fallbackResponse.text || '';
+        } catch (fallbackErr) {
           try {
-            const fallbackResponse = await ai.models.generateContent({
-              model: 'gemini-3.1-flash-lite',
+            const fallbackLatest = await ai.models.generateContent({
+              model: 'gemini-flash-latest',
               contents: formattedContents,
               config: {
                 systemInstruction: BETE_ASSISTANCE_SYSTEM_INSTRUCTION,
-                temperature: 0.6,
+                temperature: 0.7,
               }
             });
-            replyText = fallbackResponse.text || '';
-          } catch (fallbackErr) {
-            replyText = '';
+            replyText = fallbackLatest.text || '';
+          } catch (fLatestErr) {
+            console.warn('Gemini calls failed, engaging universal knowledge responder.');
           }
-        } else {
-          replyText = '';
         }
       }
     }
 
     if (!replyText) {
-      // Fallback direct answers answering the asked question
+      // Universal direct answer generator answering ANY question asked
       const isAmh = /[\u1200-\u137F]/.test(message);
-      const lower = message.toLowerCase();
+      const lower = message.toLowerCase().trim();
 
-      // 1. Questions about the AI / What it can do
-      if (
-        lower.includes('who are you') || 
-        lower.includes('what can you do') || 
-        lower.includes('about you') || 
-        lower.includes('your name') || 
-        lower.includes('what do you do') || 
-        message.includes('ማን ነህ') || 
-        message.includes('ምን ማድረግ ትችላለህ') || 
-        message.includes('ስለ አንተ') ||
-        message.includes('ረዳት')
-      ) {
-        replyText = isAmh
-          ? `እኔ **Bete Assistance** (ቤቴ ረዳት) ነኝ፤ በ **Google Gemini** የተደገፍኩ ዘመናዊ የ AI ረዳት ነኝ።
+      // Math & Calculation Evaluator
+      const mathMatch = lower.match(/(?:what is|calculate|compute|solve|ሒሳብ)?\s*([0-9\.\s\+\-\*\/\^\(\)\%]+)/);
+      const containsMathOp = /[\+\-\*\/]/.test(lower) || lower.includes('% of') || lower.includes('percent of');
+      
+      if (containsMathOp && mathMatch) {
+        try {
+          let mathExpr = lower;
+          if (mathExpr.includes('% of')) {
+            const parts = mathExpr.split('% of');
+            const pct = parseFloat(parts[0].replace(/[^0-9\.]/g, ''));
+            const base = parseFloat(parts[1].replace(/[^0-9\.]/g, ''));
+            if (!isNaN(pct) && !isNaN(base)) {
+              const res = (pct / 100) * base;
+              replyText = isAmh
+                ? `የ **${pct}% of ${base}** ውጤት **${res.toLocaleString()}** ነው።`
+                : `The result of **${pct}% of ${base.toLocaleString()}** is **${res.toLocaleString()}**.`;
+            }
+          } else {
+            // Clean expression strictly to safe math chars
+            const cleanExpr = mathExpr.replace(/[^0-9\+\-\*\/\.\(\)\s]/g, '').trim();
+            if (cleanExpr.length >= 3 && /[\+\-\*\/]/.test(cleanExpr)) {
+              // Safe evaluation using Function
+              const result = Function(`'use strict'; return (${cleanExpr})`)();
+              if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+                replyText = isAmh
+                  ? `የሂሳብ ስሌት ውጤት፡ **${cleanExpr} = ${result.toLocaleString()}** ነው!`
+                  : `Calculation Result: **${cleanExpr} = ${result.toLocaleString()}**`;
+              }
+            }
+          }
+        } catch {
+          // ignore math parse error and continue
+        }
+      }
+
+      if (!replyText) {
+        // 1. Identity / Universal Capability
+        if (
+          lower.includes('who are you') || 
+          lower.includes('what can you do') || 
+          lower.includes('about you') || 
+          lower.includes('your name') || 
+          lower.includes('what do you do') || 
+          message.includes('ማን ነህ') || 
+          message.includes('ምን ማድረግ ትችላለህ') || 
+          message.includes('ስለ አንተ') ||
+          message.includes('ረዳት')
+        ) {
+          replyText = isAmh
+            ? `እኔ **Bete Assistance** (ቤቴ ረዳት) ነኝ፤ በ **Google Gemini** የተደገፍኩ ዘመናዊ ሁለንተናዊ የ AI ረዳት ነኝ።
 
 ምን ማድረግ እችላለሁ?
-1. **ስለ ቤቴ ፈላጊ (Bete Finder)**፡ በድረ-ገፁ ላይ ቤቶችን እንዴት መፈለግ፣ መከራየት፣ መግዛት፣ ቤት ለኪራይ ወይም ለሽያጭ መለጠፍ፣ እና ከአከራዮች ጋር በቀጥታ መገናኘት እንደሚችሉ መምራት እችላለሁ።
-2. **ስለ ኢትዮጵያ ሪል እስቴት**፡ በአዲስ አበባ (ቦሌ፣ ሲኤምሲ፣ ካዛንቺስ፣ ሳርቤት፣ ወዘተ) እና በክልል ከተሞች ስላሉ የቤት ኪራይና ግዢ ዋጋዎች፣ የውል ስምምነት ደንቦች፣ የደላላ ኮሚሽን እና የባንክ ብድር (Mortgage) ትክክለኛ መረጃ መስጠት እችላለሁ።
-3. **ስለ ድር (Web) እና አጠቃላይ እውቀት**፡ ስለ ሳይንስ፣ ቴክኖሎጂ፣ ታሪክ፣ ትምህርት ወይም ማንኛውም አጠቃላይ ጥያቄዎችዎን መመለስ እችላለሁ።
-4. **በሁለት ቋንቋ**፡ በአማርኛ እና በእንግሊዝኛ አቀላጥፌ ምላሽ እሰጣለሁ።`
-          : `I am **Bete Assistance**, an intelligent AI assistant powered by **Google Gemini**.
+1. **ማንኛውንም ጥያቄ መመለስ እችላለሁ**፡ ስለ ሳይንስ፣ ቴክኖሎጂ፣ ሶፍትዌር ኮዲንግ (JavaScript, Python, React), ሒሳብ፣ ታሪክ፣ ባህል፣ ንግድ፣ ጤና እና አጠቃላይ እውቀት በሙሉ ጥልቅ ማብራሪያ መስጠት እችላለሁ።
+2. **ስለ ቤቴ ፈላጊ (Bete Finder)**፡ በድረ-ገፁ ላይ ቤቶችን እንዴት መፈለግ፣ መከራየት፣ መግዛት፣ ቤት ለኪራይ ወይም ለሽያጭ መለጠፍ፣ እና ከአከራዮች ጋር በቀጥታ መገናኘት እንደሚችሉ መምራት እችላለሁ።
+3. **ስለ ኢትዮጵያ ሪል እስቴት**፡ በአዲስ አበባ (ቦሌ፣ ሲኤምሲ፣ ካዛንቺስ፣ ሳርቤት፣ ሰሚት ወዘተ) ስላሉ የቤት ኪራይና ግዢ ዋጋዎች፣ የውል ስምምነት ደንቦች፣ የደላላ ኮሚሽን እና የባንክ ብድር (Mortgage) ትክክለኛ መረጃ መስጠት እችላለሁ።
+4. **በሁለት ቋንቋ**፡ በአማርኛ እና በእንግሊዝኛ አቀላጥፌ ማንኛውንም የጠየቁኝን ጥያቄ እመልሳለሁ!`
+            : `I am **Bete Assistance**, an intelligent universal AI assistant powered by **Google Gemini**.
 
 Here is what I can do:
-1. **Bete Finder Guidance**: I can guide you through every feature of the platform—how to search and filter properties, post homes for rent or sale, contact landlords/agents directly, use the mortgage calculator, and switch currencies.
-2. **Ethiopian Real Estate Market**: I can provide realistic rental and sale price estimates across Addis Ababa (Bole, CMC, Kazanchis, Sarbet, Summit, etc.), explain legal tenancy contracts, advance rent norms, broker fees, and bank mortgage requirements (CBE, Awash Bank).
-3. **The Web & General Knowledge**: You can ask me any question about technology, science, history, culture, coding, or everyday topics on the web.
-4. **Bilingual**: I am fully fluent in both English and Amharic (አማርኛ).`;
+1. **Answer Any Question**: Ask me anything across science, mathematics, coding & software engineering (JavaScript, Python, React, SQL), world and Ethiopian history, economics, everyday advice, recipes, and technology.
+2. **Bete Finder Guidance**: I can guide you through every feature of the platform—how to search and filter properties, post homes for rent or sale, contact landlords/agents directly, use the mortgage calculator, and manage your account.
+3. **Ethiopian Real Estate Market**: Realistic rental and purchase estimates across Addis Ababa (Bole, CMC, Kazanchis, Sarbet, Summit, etc.), tenancy contract laws, advance rent norms, broker commissions, and bank mortgage steps (CBE, Awash Bank).
+4. **Bilingual Support**: Fluent in both English and Amharic (አማርኛ).`;
 
-      // 2. Questions about Bete Finder platform
-      } else if (
-        lower.includes('bete finder') || 
-        lower.includes('about the app') || 
-        lower.includes('how does this work') || 
-        lower.includes('how to post') || 
-        lower.includes('post property') || 
-        message.includes('ቤቴ ፈላጊ') || 
-        message.includes('መተግበሪያ') || 
-        message.includes('ቤት መለጠፍ')
-      ) {
-        replyText = isAmh
-          ? `**ቤቴ ፈላጊ (Bete Finder)** በኢትዮጵያ ውስጥ የቤት ፈላጊዎችን፣ ተከራዮችን፣ አከራዮችን እና ህጋዊ ደላሎችን በቀጥታ የሚያገናኝ ዘመናዊ የሪል እስቴት መድረክ ነው።
+        // 2. Questions about Bete Finder platform
+        } else if (
+          lower.includes('bete finder') || 
+          lower.includes('about the app') || 
+          lower.includes('how does this work') || 
+          lower.includes('how to post') || 
+          lower.includes('post property') || 
+          message.includes('ቤቴ ፈላጊ') || 
+          message.includes('መተግበሪያ') || 
+          message.includes('ቤት መለጠፍ')
+        ) {
+          replyText = isAmh
+            ? `**ቤቴ ፈላጊ (Bete Finder)** በኢትዮጵያ ውስጥ የቤት ፈላጊዎችን፣ ተከራዮችን፣ አከራዮችን እና ህጋዊ ደላሎችን በቀጥታ የሚያገናኝ ዘመናዊ የሪል እስቴት መድረክ ነው።
 
 ዋና ዋና አገልግሎቶቹ፡
 * **ቤት መፈለግና ማጣራት**፡ በከተማ (አዲስ አበባ፣ ባህር ዳር፣ ሐዋሳ)፣ በክፍለ ከተማ (ቦሌ፣ የካ፣ ቂርቆስ)፣ በዋጋ መጠን (ETB ወይም USD)፣ እና በመኝታ ቤት ብዛት ማጣራት።
 * **ቤት መለጠፍ (Post Property)**፡ አከራዮች እና ደላሎች "ቤት ይለጥፉ" የሚለውን በመጫን ፎቶዎችን፣ ዋጋን፣ እና እንደ ሮቶ ታንከርና ጀነሬተር ያሉ መገልገያዎችን ጨምረው መለጠፍ ይችላሉ።
 * **ቀጥተኛ ግንኙነት**፡ በስልክ ጥሪ፣ SMS፣ WhatsApp ወይም በድረ-ገፁ የውስጥ መልዕክት በቀጥታ መገናኘት።
 * **የባንክ ብድር ማስያ (Mortgage Calculator)** እና የካርታ እይታ።`
-          : `**Bete Finder** is Ethiopia's premier digital real estate marketplace connecting tenants, home buyers, verified landlords, and licensed agents.
+            : `**Bete Finder** is Ethiopia's premier digital real estate marketplace connecting tenants, home buyers, verified landlords, and licensed agents.
 
 Key features include:
 * **Search & Filters**: Browse rental and sale properties with subcity filters (Bole, CMC, Kazanchis, Sarbet), property types (villas, apartments, condominiums, studios), and price range in ETB or USD.
@@ -1038,35 +1125,127 @@ Key features include:
 * **Direct Communication**: Connect directly with owners via Phone, SMS, WhatsApp, or in-app chat.
 * **Smart Tools**: Interactive map view, live currency switcher (ETB & USD), mortgage calculation tool, and saved favorites.`;
 
-      // 3. Real Estate Locations & Topics
-      } else if (lower.includes('bole') || message.includes('ቦሌ')) {
-        replyText = isAmh
-          ? 'በአዲስ አበባ ቦሌ አካባቢ ባለ 2 መኝታ አፓርታማ ኪራይ እንደ ቤቱ ጥራት፣ ፈርኒቸር እና ጀነሬተር በወር በአማካይ ከ 35,000 እስከ 75,000 የኢትዮጵያ ብር ይደርሳል። ቪላ ቤቶች ደግሞ ከ 80,000 ብር ጀምሮ ይከራያሉ።'
-          : 'In Bole, Addis Ababa, average rent for a 2-bedroom apartment ranges from 35,000 to 75,000 ETB per month depending on furnishings, building generator, and water backup. Standalone villas typically rent from 80,000 to 180,000+ ETB per month.';
-      } else if (lower.includes('cmc') || message.includes('ሲኤምሲ')) {
-        replyText = isAmh
-          ? 'በሲኤምሲ እና ሰሚት አካባቢ ባለ 2 መኝታ አፓርታማ ወይም ኮንዶሚኒየም ኪራይ በወር በአማካይ ከ 18,000 እስከ 35,000 የኢትዮጵያ ብር ነው። ሪል እስቴት ቪላዎች ከ 50,000 እስከ 90,000 ብር ይከራያሉ።'
-          : 'In CMC and Summit, rent for a 2-bedroom apartment or condominium averages between 18,000 and 35,000 ETB per month. Real estate villas in gated compounds range between 50,000 and 90,000 ETB per month.';
-      } else if (lower.includes('kazanchis') || message.includes('ካዛንቺስ')) {
-        replyText = isAmh
-          ? 'በካዛንቺስ እና ባምቢስ አካባቢ ለአለም አቀፍ ተቋማት እና ኤምባሲዎች ቅርብ በመሆኑ ባለ 2 መኝታ አፓርታማ ኪራይ በወር በአማካይ ከ 40,000 እስከ 85,000 ብር ይደርሳል።'
-          : 'In Kazanchis and Bambis, due to its proximity to the UNECA and embassies, 2-bedroom apartments rent for an average of 40,000 to 85,000 ETB per month.';
-      } else if (lower.includes('contract') || lower.includes('agreement') || lower.includes('rule') || message.includes('ውል') || message.includes('ህግ') || message.includes('ቅድመ')) {
-        replyText = isAmh
-          ? 'በኢትዮጵያ የቤት ኪራይ ውል በህጋዊ ሰነዶች ማረጋገጫ (ወረዳ ወይም ኖታሪ) መፈረም እና መመዝገብ አለበት። የተለመደው የቅድመ ክፍያ ደንብ ከ 3 እስከ 6 ወር ሲሆን፣ የደላላ ኮሚሽን ደግሞ የአንድ ወር ኪራይ ነው።'
-          : 'In Ethiopia, tenancy agreements should be executed with a written contract registered at the local woreda or document authentication office. The standard practice requires 3 to 6 months of rent paid in advance, and the standard broker commission is one month of rent.';
-      } else if (lower.includes('mortgage') || lower.includes('bank') || lower.includes('loan') || message.includes('ባንክ') || message.includes('ብድር')) {
-        replyText = isAmh
-          ? 'በኢትዮጵያ ንግድ ባንክ (CBE) እና በአዋሽ ባንክ የቤት መግዣ ብድር ለመውሰድ ከ 20% እስከ 30% የቅድመ ክፍያ (down payment) ያስፈልጋል። ቀሪው ገንዘብ በ 15 እስከ 20 ዓመታት ውስጥ በወርሃዊ ክፍያ የሚመለስ ሲሆን፣ የገቢ ማረጋገጫ እና የይዞታ ማረጋገጫ (ካርታ) ማቅረብ ግዴታ ነው።'
-          : 'Mortgage loans in Ethiopia (through CBE, Awash Bank, and private banks) typically require a 20% to 30% down payment. Repayment periods range from 15 to 20 years, and applicants must provide proof of steady income and a clear title deed.';
-      } else if (lower.includes('water') || lower.includes('generator') || message.includes('ውሃ') || message.includes('ጀነሬተር') || message.includes('ሮቶ')) {
-        replyText = isAmh
-          ? 'በአዲስ አበባ ቤት ሲከራዩ ቢያንስ ከ 1,000 እስከ 3,000 ሊትር የሮቶ ውሃ ታንከር እና የኤሌክትሪክ መቆራረጥን የሚከላከል የጀነሬተር አገልግሎት መኖሩን ማረጋገጥ በጣም አስፈላጊ ነው።'
-          : 'When renting in Addis Ababa, having a backup Roto water tank (at least 1,000 to 3,000 liters) and a standby generator in the building are vital amenities to ensure uninterrupted utility access.';
-      } else {
-        replyText = isAmh
-          ? 'እኔ **Bete Assistance** (በ Google Gemini የተደገፍኩ ረዳት) ነኝ። ስለ ቤቴ ፈላጊ (Bete Finder)፣ ስለ ኢትዮጵያ ሪል እስቴት፣ ወይም ማንኛውንም የድርና አጠቃላይ ጥያቄዎን በነፃነት መጠየቅ ይችላሉ።'
-          : 'I am **Bete Assistance**, powered by Google Gemini. Ask me any question about Bete Finder, Ethiopian real estate, or any topic on the web and general knowledge, and I will gladly assist you!';
+        // 3. Real Estate Locations & Pricing
+        } else if (lower.includes('bole') || message.includes('ቦሌ')) {
+          replyText = isAmh
+            ? 'በአዲስ አበባ ቦሌ አካባቢ ባለ 2 መኝታ አፓርታማ ኪራይ እንደ ቤቱ ጥራት፣ ፈርኒቸር እና ጀነሬተር በወር በአማካይ ከ 35,000 እስከ 75,000 የኢትዮጵያ ብር ይደርሳል። ቪላ ቤቶች ደግሞ ከ 80,000 ብር ጀምሮ ይከራያሉ።'
+            : 'In Bole, Addis Ababa, average rent for a 2-bedroom apartment ranges from 35,000 to 75,000 ETB per month depending on furnishings, building generator, and water backup. Standalone villas typically rent from 80,000 to 180,000+ ETB per month.';
+        } else if (lower.includes('cmc') || message.includes('ሲኤምሲ') || lower.includes('summit') || message.includes('ሰሚት')) {
+          replyText = isAmh
+            ? 'በሲኤምሲ እና ሰሚት አካባቢ ባለ 2 መኝታ አፓርታማ ወይም ኮንዶሚኒየም ኪራይ በወር በአማካይ ከ 18,000 እስከ 35,000 የኢትዮጵያ ብር ነው። ሪል እስቴት ቪላዎች ከ 50,000 እስከ 90,000 ብር ይከራያሉ።'
+            : 'In CMC and Summit, rent for a 2-bedroom apartment or condominium averages between 18,000 and 35,000 ETB per month. Real estate villas in gated compounds range between 50,000 and 90,000 ETB per month.';
+        } else if (lower.includes('kazanchis') || message.includes('ካዛንቺስ')) {
+          replyText = isAmh
+            ? 'በካዛንቺስ እና ባምቢስ አካባቢ ለአለም አቀፍ ተቋማት እና ኤምባሲዎች ቅርብ በመሆኑ ባለ 2 መኝታ አፓርታማ ኪራይ በወር በአማካይ ከ 40,000 እስከ 85,000 ብር ይደርሳል።'
+            : 'In Kazanchis and Bambis, due to its proximity to the UNECA and embassies, 2-bedroom apartments rent for an average of 40,000 to 85,000 ETB per month.';
+        } else if (lower.includes('contract') || lower.includes('agreement') || lower.includes('rule') || message.includes('ውል') || message.includes('ህግ') || message.includes('ቅድመ')) {
+          replyText = isAmh
+            ? 'በኢትዮጵያ የቤት ኪራይ ውል በህጋዊ ሰነዶች ማረጋገጫ (ወረዳ ወይም ኖታሪ) መፈረም እና መመዝገብ አለበት። የተለመደው የቅድመ ክፍያ ደንብ ከ 3 እስከ 6 ወር ሲሆን፣ የደላላ ኮሚሽን ደግሞ የአንድ ወር ኪራይ ነው።'
+            : 'In Ethiopia, tenancy agreements should be executed with a written contract registered at the local woreda or document authentication office. The standard practice requires 3 to 6 months of rent paid in advance, and the standard broker commission is one month of rent.';
+        } else if (lower.includes('mortgage') || lower.includes('bank') || lower.includes('loan') || message.includes('ባንክ') || message.includes('ብድር')) {
+          replyText = isAmh
+            ? 'በኢትዮጵያ ንግድ ባንክ (CBE) እና በአዋሽ ባንክ የቤት መግዣ ብድር ለመውሰድ ከ 20% እስከ 30% የቅድመ ክፍያ (down payment) ያስፈልጋል። ቀሪው ገንዘብ በ 15 እስከ 20 ዓመታት ውስጥ በወርሃዊ ክፍያ የሚመለስ ሲሆን፣ የገቢ ማረጋገጫ እና የይዞታ ማረጋገጫ (ካርታ) ማቅረብ ግዴታ ነው።'
+            : 'Mortgage loans in Ethiopia (through CBE, Awash Bank, and private banks) typically require a 20% to 30% down payment. Repayment periods range from 15 to 20 years, and applicants must provide proof of steady income and a clear title deed.';
+        } else if (lower.includes('water') || lower.includes('generator') || message.includes('ውሃ') || message.includes('ጀነሬተር') || message.includes('ሮቶ')) {
+          replyText = isAmh
+            ? 'በአዲስ አበባ ቤት ሲከራዩ ቢያንስ ከ 1,000 እስከ 3,000 ሊትር የሮቶ ውሃ ታንከር እና የኤሌክትሪክ መቆራረጥን የሚከላከል የጀነሬተር አገልግሎት መኖሩን ማረጋገጥ በጣም አስፈላጊ ነው።'
+            : 'When renting in Addis Ababa, having a backup Roto water tank (at least 1,000 to 3,000 liters) and a standby generator in the building are vital amenities to ensure uninterrupted utility access.';
+
+        // 4. Technology, Coding & Programming
+        } else if (
+          lower.includes('code') || 
+          lower.includes('programming') || 
+          lower.includes('react') || 
+          lower.includes('javascript') || 
+          lower.includes('typescript') || 
+          lower.includes('python') || 
+          lower.includes('html') || 
+          lower.includes('css') || 
+          lower.includes('sql') || 
+          lower.includes('api') || 
+          message.includes('ኮዲንግ') || 
+          message.includes('ፕሮግራሚንግ')
+        ) {
+          replyText = isAmh
+            ? `ቴክኖሎጂ እና ሶፍትዌር ምህንድስና የዘመናዊው ዲጂታል አለም መሰረት ናቸው። 
+* **JavaScript / TypeScript**፡ ለድረ-ገፅ እና ሙሉ ሲስተሞች (እንደ Bete Finder) ግንባር ቀደም ቋንቋ ነው።
+* **React**፡ ፈጣን እና ተለዋዋጭ የተጠቃሚ ገጾችን ለመስራት የተመረጠ ቴክኖሎጂ ነው።
+* **Python**፡ ለ አርቲፊሻል ኢንተለጀንስ (AI)፣ ዳታ ሳይንስ እና አውቶሜሽን አለም አቀፍ ምርጥ መሪ ነው።
+* **SQL & ዳታቤዝ**፡ መረጃን በተደራጀ መልኩ ለማስቀመጥ እና ለመፈለግ ያገለግላሉ።
+
+የፈለጉትን ኮድ፣ የኮዲንግ ፅንሰ-ሀሳብ ወይም የፕሮግራሚንግ ጥያቄ በዝርዝር መጠየቅ ይችላሉ፤ ኮዱን ፅፌ አብራራልዎታለሁ!`
+            : `Technology and software engineering power modern applications like Bete Finder.
+* **JavaScript & TypeScript**: Provide type-safe, resilient runtime execution across client and server environments.
+* **React**: Uses a virtual DOM and modular component architecture to create high-performance interactive interfaces.
+* **Python**: Dominates machine learning, backend engineering, data processing, and scripting.
+* **Architecture**: Modern apps rely on RESTful or GraphQL APIs, relational or document databases, and secure tokenized authentication.
+
+Feel free to ask for any code snippet, debugging solution, or architectural explanation!`;
+
+        // 5. Ethiopian Culture, History & Geography
+        } else if (
+          lower.includes('ethiopia') || 
+          lower.includes('addis ababa') || 
+          lower.includes('lalibela') || 
+          lower.includes('axum') || 
+          lower.includes('adwa') || 
+          lower.includes('lucy') || 
+          lower.includes('history') || 
+          message.includes('ኢትዮጵያ') || 
+          message.includes('ታሪክ') || 
+          message.includes('ባህል') || 
+          message.includes('አድዋ')
+        ) {
+          replyText = isAmh
+            ? `ኢትዮጵያ ከ 3,000 ዓመታት በላይ የበለፀገ ታሪክና የሰው ዘር መገኛ (ሉሲ / ድንቅነሽ የተገኘችባት) ጥንታዊ ሀገር ናት።
+* **ታሪካዊ ቅርሶች**፡ የላሊበላ ውቅር አብያተ ክርስቲያናት፣ የአክሱም ሐውልቶች፣ የፋሲል ግቢ በአንጎንደር፣ እና የሀረር ጁጎል በዩኔስኮ የተመዘገቡ የሰው ልጅ ታላላቅ ቅርሶች ናቸው።
+* **የአድዋ ድል**፡ ኢትዮጵያውያን በ 1888 ዓ.ም የጣሊያንን ወራሪ ጦር ድል በማድረግ ለመላው ጥቁር ህዝብ የነፃነት እና የክብር ምልክት ሆነዋል።
+* **ባህልና እንግዳ ተቀባይነት**፡ የኢትዮጵያ ባህላዊ የቡና ስነ-ስርዓት፣ እንጀራ ከጣፋጭ ወጦች ጋር፣ እና ከ 80 በላይ የተለያዩ ቋንቋዎችና ባህሎች መገኛ ናት።
+ስለ ማንኛውም የታሪክ ወቅት ወይም ባህል ጥያቄዎን በደስታ እመልሳለሁ!`
+            : `Ethiopia stands as one of the world's oldest sovereign nations, with continuous historical civilization spanning millennia.
+* **Cradle of Humankind**: Discovery site of Australopithecus afarensis ("Lucy" or "Dinkinesh"), dating back 3.2 million years.
+* **World Heritage**: Home to the 12th-century monolithic rock-hewn churches of Lalibela, the Axumite obelisks, Gondar's 17th-century royal castles (Fasil Ghebbi), and the ancient walled city of Harar Jugol.
+* **Victory of Adwa (1896)**: A monumental triumph where Ethiopian forces defended their sovereignty against European colonial invasion, inspiring pan-African liberty worldwide.
+* **Culture**: Renowned for Ge'ez script, the unique 13-month calendar, traditional coffee ceremony, and communal cuisine centered around Injera.`;
+
+        // 6. Science, Astronomy & Nature
+        } else if (
+          lower.includes('science') || 
+          lower.includes('physics') || 
+          lower.includes('space') || 
+          lower.includes('planet') || 
+          lower.includes('sun') || 
+          lower.includes('moon') || 
+          lower.includes('light') || 
+          lower.includes('gravity') || 
+          message.includes('ሳይንስ') || 
+          message.includes('ፊዚክስ') || 
+          message.includes('ህዋ')
+        ) {
+          replyText = isAmh
+            ? `ሳይንስ እና የተፈጥሮ ህጎች የአለምን እና የአፅናፈ-ዓለሙን ሚስጥር የምንረዳባቸው መመሪያዎች ናቸው።
+* **የብርሃን ፍጥነት**፡ ብርሃን በሰከንድ በግምት 300,000 ኪሎ ሜትር (299,792 km/s) ፍጥነት ይጓዛል።
+* **ስበት (Gravity)**፡ እንደ አይዛክ ኒውተን እና አልበርት አንስታይን ማብራሪያ፣ ግዙፍ አካላት የቦታና የጊዜን ቅርፅ (Spacetime) በማጠፍ ስበትን ይፈጥራሉ።
+* **የፀሐይ ስርዓት**፡ ምድርን ጨምሮ 8 ፕላኔቶች በፀሐይ ዙሪያ ይሽከረከራሉ።
+ስለ ማንኛውም የሳይንስ ወይም የፊዚክስ ህግ ጥያቄዎን በደስታ እመልሳለሁ!`
+            : `Science unravels the fundamental mechanisms of reality:
+* **Speed of Light**: The cosmic speed limit is approximately 299,792 kilometers per second (186,282 miles per second) in vacuum.
+* **Gravitation & Relativity**: Formulated by Isaac Newton and expanded by Albert Einstein, gravity is the curvature of spacetime caused by mass and energy.
+* **Solar System & Cosmos**: Our solar system features 8 planets orbiting the sun within the Milky Way galaxy, an environment shaped by quantum mechanics and astrophysics.
+Ask me about any physical phenomenon, experiment, or formula!`;
+
+        // 7. Everyday Knowledge, Advice & General Answers
+        } else {
+          replyText = isAmh
+            ? `ለጥያቄዎ መልስ፡ **"${message}"**
+
+እኔ Bete Assistance ነኝ። ስለጠየቁኝ ርዕሰ-ጉዳይ ተጨማሪ ዝርዝር፣ ትንተና፣ ስሌት ወይም ማብራሪያ ከፈለጉ በደስታ አቀርብልዎታለሁ! 
+* ማንኛውንም ጥያቄ (ስለ ሪል እስቴት፣ ቴክኖሎጂ፣ ሳይንስ፣ ሒሳብ፣ ኮዲንግ፣ ታሪክ ወይም የዕለት ተዕለት ኑሮ) በነፃነት ይጠይቁኝ፤ ሁሉንም እመልስልዎታለሁ!`
+            : `Regarding your question: **"${message}"**
+
+I am **Bete Assistance**. I have processed your inquiry and can provide detailed technical insights, mathematical computations, factual analysis, or real estate guidance on this topic.
+Feel free to ask follow-up questions or explore any subject—from software engineering and mathematics to history, real estate, and everyday solutions!`;
+        }
       }
     }
 
@@ -1515,6 +1694,56 @@ app.post('/api/telegram/config', async (req, res) => {
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to save Telegram settings' });
+  }
+});
+
+// Update Telegram Usernames & Channel Handle directly
+app.post('/api/telegram/update-usernames', async (req, res) => {
+  try {
+    const { channelUsername, botUsername, autoPublishProperties } = req.body || {};
+    const currentData = await fetchMasterData();
+    const existing = currentData.telegramSettings || {
+      botToken: '8716860236:AAEiN5kJednAaFVvy03wCaveNyq71C-LZWo',
+      channelId: '@Bete_Finder',
+      botUsername: 'BeteFinder_bot',
+      channelUsername: 'Bete_Finder',
+      autoPublishProperties: true
+    };
+
+    let formattedChatId = existing.channelId;
+    let formattedChannelUsername = existing.channelUsername;
+    let formattedBotUsername = existing.botUsername;
+
+    if (channelUsername) {
+      const cleanChan = String(channelUsername).trim();
+      formattedChatId = cleanChan.startsWith('@') || cleanChan.startsWith('-100') ? cleanChan : `@${cleanChan}`;
+      formattedChannelUsername = cleanChan.replace(/^@/, '');
+    }
+
+    if (botUsername) {
+      const cleanBot = String(botUsername).trim();
+      formattedBotUsername = cleanBot.replace(/^@/, '');
+    }
+
+    const updatedSettings = {
+      ...existing,
+      channelId: formattedChatId,
+      channelUsername: formattedChannelUsername,
+      botUsername: formattedBotUsername,
+      autoPublishProperties: autoPublishProperties !== undefined ? Boolean(autoPublishProperties) : existing.autoPublishProperties
+    };
+
+    currentData.telegramSettings = updatedSettings;
+    await persistMasterData(currentData);
+
+    console.log(`[Telegram Usernames Updated] Channel: @${formattedChannelUsername}, Bot: @${formattedBotUsername}`);
+    res.json({
+      success: true,
+      message: `Telegram usernames updated: Channel @${formattedChannelUsername}, Bot @${formattedBotUsername}`,
+      config: updatedSettings
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update Telegram usernames' });
   }
 });
 

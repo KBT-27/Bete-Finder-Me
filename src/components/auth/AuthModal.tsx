@@ -136,52 +136,24 @@ export const AuthModal: React.FC = () => {
       const registered = getRegisteredUsers();
       const existing = registered.find(u => (u.email || '').trim().toLowerCase() === gEmailNorm);
 
-      const isOwnerEmail = 
-        gEmailNorm === 'kalebbereket49@gmail.com' ||
-        gEmailNorm === 'kalebbereker49@gmail.com';
-
-      if (existing || isOwnerEmail) {
-        // Existing user or owner - log in directly with their profile role
-        const targetRole = isOwnerEmail ? 'owner' : (existing?.role || 'tenant');
-        const res = await loginWithGoogle(targetRole, profile);
-        if (res.success) {
-          setSuccessMessage(
-            language === 'am' 
-              ? `በ Google (${gEmail}) በተሳካ ሁኔታ ገብተዋል!` 
-              : `Successfully signed in as ${gName || gEmail}!`
-          );
-          setTimeout(() => {
-            handleClose();
-          }, 600);
-        } else {
-          setErrorMessage(res.message || 'Google login failed.');
-        }
-      } else {
-        // New user registering with Google!
-        if (mode === 'signup') {
-          // In Sign Up mode, the user has selected their "I am a..." role
-          const res = await loginWithGoogle(selectedRole, profile);
-          if (res.success) {
-            setSuccessMessage(
-              language === 'am'
-                ? `በ Google (${gEmail}) እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} በተሳካ ሁኔታ ተመዝግበዋል!`
-                : `Successfully registered with Google as ${selectedRole === 'tenant' ? 'Tenant / Buyer' : 'Landlord'}!`
-            );
-            setTimeout(() => {
-              handleClose();
-            }, 600);
-          } else {
-            setErrorMessage(res.message || 'Google registration failed.');
-          }
-        } else {
-          // Clicked from Sign In tab, ask "I am a..." to complete registration
-          setPendingGoogleProfile({
-            name: gName || 'Google User',
-            email: gEmail,
-            avatar: gAvatar || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c'
-          });
-        }
+      // Rule: 1 account can only register only 1
+      if (existing) {
+        setErrorMessage(
+          language === 'am'
+            ? 'ይህ የ Google መለያ አስቀድሞ ተመዝግቧል። 1 መለያ 1 ጊዜ ብቻ ነው መመዝገብ የሚችለው። እባክዎ በመግቢያ ገፅ በይለፍ ቃልዎ ይግቡ።'
+            : 'This Google account is already registered. 1 account can only register 1. Please switch to Sign In and enter your password.'
+        );
+        setIsGoogleLoading(false);
+        return;
       }
+
+      // First when a person signs up with Google, ask for their phone number
+      setPendingGoogleProfile({
+        name: gName || 'Google User',
+        email: gEmail,
+        avatar: gAvatar || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c'
+      });
+      setPhone(''); // Prompt for phone number
     } catch (err: any) {
       setErrorMessage(err?.message || 'Google Sign-In error.');
     } finally {
@@ -191,12 +163,38 @@ export const AuthModal: React.FC = () => {
 
   const handleCompleteGoogleRegistration = async () => {
     if (!pendingGoogleProfile) return;
-    setIsLoading(true);
     setErrorMessage(null);
     setSuccessMessage(null);
 
+    const cleanPhone = phone.trim();
+    if (!cleanPhone || cleanPhone.length < 9) {
+      setErrorMessage(
+        language === 'am'
+          ? 'እባክዎ ትክክለኛ ስልክ ቁጥር ያስገቡ (ለምሳሌ 09... ወይም +251...)። ስልክ ቁጥር ግዴታ ነው።'
+          : 'Please enter a valid phone number (e.g. 09... or +251...). Phone number is required.'
+      );
+      return;
+    }
+
+    // Rule: 1 account can only register only 1 - check if phone is already registered
+    const registered = getRegisteredUsers();
+    const existingPhone = registered.find(u => u.phone && u.phone.trim() === cleanPhone);
+    if (existingPhone) {
+      setErrorMessage(
+        language === 'am'
+          ? 'ይህ ስልክ ቁጥር አስቀድሞ በሌላ መለያ ተመዝግቧል። 1 መለያ 1 ጊዜ ብቻ ነው መመዝገብ የሚችለው።'
+          : 'This phone number is already registered to another account. 1 account can only register 1.'
+      );
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      const res = await loginWithGoogle(selectedRole, pendingGoogleProfile);
+      const res = await loginWithGoogle(selectedRole, {
+        ...pendingGoogleProfile,
+        phone: cleanPhone
+      });
       if (res.success) {
         setSuccessMessage(
           language === 'am'
@@ -205,7 +203,7 @@ export const AuthModal: React.FC = () => {
         );
         setTimeout(() => {
           handleClose();
-        }, 600);
+        }, 700);
       } else {
         setErrorMessage(res.message || 'Registration failed.');
       }
@@ -529,6 +527,27 @@ export const AuthModal: React.FC = () => {
               </button>
             </div>
 
+            <div className="mb-4 text-left">
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {language === 'am' ? 'የስልክ ቁጥር * (ግዴታ ነው)' : 'Phone Number * (Required)'}
+              </label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="tel"
+                  required
+                  id="google-phone-input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="09... or +251..."
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                />
+              </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                {language === 'am' ? 'ለአከራይና ለደንበኞች ቀጥታ ግንኙነትና ማረጋገጫ የሚያገለግል' : 'Used for verified landlord & tenant direct contact'}
+              </p>
+            </div>
+
             <div className="mb-4 p-2.5 bg-emerald-50/60 border border-emerald-200/70 rounded-xl flex items-center justify-between text-[11px]">
               <span className="text-slate-600 font-medium">
                 {language === 'am' ? 'የመጀመሪያ ፕላን፡' : 'Initial Membership Plan:'}
@@ -666,8 +685,8 @@ export const AuthModal: React.FC = () => {
               </div>
             )}
 
-            {/* Google One-Click Auth */}
-            {mode !== 'forgot' && mode !== 'change' && (
+            {/* Google One-Click Registration ONLY in signup mode (erased from sign in) */}
+            {mode === 'signup' && (
               <div className="mb-4">
                 <button
                   type="button"
@@ -682,11 +701,9 @@ export const AuthModal: React.FC = () => {
                     <>
                       <GoogleIcon />
                       <span>
-                        {mode === 'signup'
-                          ? (language === 'am' 
-                              ? `በ Google እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} ይመዝገቡ` 
-                              : `Sign Up with Google as ${selectedRole === 'tenant' ? 'Tenant / Buyer' : 'Landlord'}`)
-                          : t('authGoogleContinue')}
+                        {language === 'am' 
+                          ? `በ Google እንደ ${selectedRole === 'tenant' ? 'ተከራይ/ገዢ' : 'አከራይ'} ይመዝገቡ` 
+                          : `Sign Up with Google as ${selectedRole === 'tenant' ? 'Tenant / Buyer' : 'Landlord'}`}
                       </span>
                     </>
                   )}
@@ -695,9 +712,7 @@ export const AuthModal: React.FC = () => {
                 <div className="relative my-4 flex items-center justify-center">
                   <div className="border-t border-slate-200 w-full" />
                   <span className="bg-white px-2 text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0">
-                    {mode === 'signup' 
-                      ? (language === 'am' ? 'ወይም በኢሜይል ይመዝገቡ' : 'OR REGISTER WITH EMAIL')
-                      : t('authOrEmail')}
+                    {language === 'am' ? 'ወይም በኢሜይል ይመዝገቡ' : 'OR REGISTER WITH EMAIL'}
                   </span>
                   <div className="border-t border-slate-200 w-full" />
                 </div>
@@ -843,33 +858,18 @@ export const AuthModal: React.FC = () => {
                       {t('authPasswordLabel')}
                     </label>
                     {mode === 'signin' && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          id="forgot-password-link-btn"
-                          onClick={() => {
-                            setMode('forgot');
-                            setErrorMessage(null);
-                            setSuccessMessage(null);
-                          }}
-                          className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-                        >
-                          {t('authForgotPasswordLink')}
-                        </button>
-                        <span className="text-slate-300 text-xs">|</span>
-                        <button
-                          type="button"
-                          id="change-password-link-btn"
-                          onClick={() => {
-                            setMode('change');
-                            setErrorMessage(null);
-                            setSuccessMessage(null);
-                          }}
-                          className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
-                        >
-                          {language === 'am' ? 'ይለፍ ቃል ቀይር' : 'Change Password'}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        id="forgot-password-link-btn"
+                        onClick={() => {
+                          setMode('forgot');
+                          setErrorMessage(null);
+                          setSuccessMessage(null);
+                        }}
+                        className="text-[11px] font-semibold text-emerald-700 hover:text-emerald-800 hover:underline cursor-pointer"
+                      >
+                        {t('authForgotPasswordLink')}
+                      </button>
                     )}
                   </div>
                   <div className="relative">

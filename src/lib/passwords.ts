@@ -199,8 +199,60 @@ export const getAdminCredentials = (): StoredCredentials => {
   return DEFAULT_ADMIN_CREDENTIALS;
 };
 
+export const getRevokedAdminEmails = (): string[] => {
+  try {
+    const raw = localStorage.getItem('bete_finder_revoked_admin_emails');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const getRevokedAdminPasswords = (): string[] => {
+  try {
+    const raw = localStorage.getItem('bete_finder_revoked_admin_passwords');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const isRevokedAdminEmail = (email: string): boolean => {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  const revoked = getRevokedAdminEmails();
+  return revoked.some(rev => rev.toLowerCase() === normalized);
+};
+
+export const isRevokedAdminPassword = (password: string): boolean => {
+  if (!password) return false;
+  const revoked = getRevokedAdminPasswords();
+  return revoked.includes(password.trim());
+};
+
 export const saveAdminCredentials = (creds: Partial<StoredCredentials>) => {
   const current = getAdminCredentials();
+
+  // If email is changing, record previous email as revoked so old credentials cannot access
+  if (creds.email && creds.email.trim().toLowerCase() !== current.email.trim().toLowerCase()) {
+    const revokedEmails = getRevokedAdminEmails();
+    const oldEmail = current.email.trim().toLowerCase();
+    if (!revokedEmails.includes(oldEmail)) {
+      revokedEmails.push(oldEmail);
+      localStorage.setItem('bete_finder_revoked_admin_emails', JSON.stringify(revokedEmails));
+    }
+  }
+
+  // If password is changing, record previous password as revoked
+  if (creds.password && creds.password.trim() !== current.password.trim()) {
+    const revokedPasswords = getRevokedAdminPasswords();
+    const oldPass = current.password.trim();
+    if (!revokedPasswords.includes(oldPass)) {
+      revokedPasswords.push(oldPass);
+      localStorage.setItem('bete_finder_revoked_admin_passwords', JSON.stringify(revokedPasswords));
+    }
+  }
+
   const updated = { ...current, ...creds };
   localStorage.setItem('bete_finder_admin_creds', JSON.stringify(updated));
   return updated;
@@ -557,22 +609,26 @@ export const updateAdminProfileByOwner = (
   email: string,
   phone: string,
   password: string
-): { success: boolean; message: string } => {
+): { success: boolean; message: string; updatedCreds?: StoredCredentials } => {
   try {
-    const cleanEmail = email.trim();
+    let cleanEmail = email.trim();
     const cleanPassword = password.trim();
     const cleanName = name.trim();
     const cleanPhone = phone.trim();
 
+    if (!cleanEmail) {
+      return { success: false, message: 'Admin email/username cannot be empty.' };
+    }
+
     if (!cleanEmail.endsWith('/admin')) {
-      return { success: false, message: 'Admin email/username must end with "/admin" (e.g. kalebbereket49@gmail.com/admin)' };
+      cleanEmail = `${cleanEmail}/admin`;
     }
 
     if (!cleanPassword) {
       return { success: false, message: 'Admin password cannot be empty.' };
     }
 
-    saveAdminCredentials({
+    const updated = saveAdminCredentials({
       email: cleanEmail,
       password: cleanPassword,
       name: cleanName || 'Admin (Kaleb Bereket)',
@@ -591,7 +647,11 @@ export const updateAdminProfileByOwner = (
       })
     }).catch(err => console.error('Server admin profile update error:', err));
 
-    return { success: true, message: 'Admin profile & credentials updated successfully by Owner!' };
+    return { 
+      success: true, 
+      message: 'Admin profile & credentials updated successfully by Owner!',
+      updatedCreds: updated
+    };
   } catch (err: any) {
     return { success: false, message: err.message || 'Failed to update Admin profile.' };
   }

@@ -20,38 +20,54 @@ import { PropertyType } from '../../types';
 export const HeroSection: React.FC = () => {
   const { t, isAmharic } = useLanguage();
   const { 
-    properties,
+    properties, 
     filters, 
     updateFilter, 
     setCurrentView, 
     activeListingType, 
     setActiveListingType 
   } = useProperties();
-  const { users } = useAuth();
+  const { registeredUsers, registeredUsersCount } = useAuth();
 
   const [localSearch, setLocalSearch] = useState(filters.searchQuery);
   const [selectedCity, setSelectedCity] = useState<string>('all');
   const [selectedType, setSelectedType] = useState<PropertyType | 'all'>('all');
   const [selectedMaxPrice, setSelectedMaxPrice] = useState<number>(2000000);
 
-  // Derive genuine real-time metrics for trust & honesty
+  // 1. Exact total active listings in database (0 when erased, increments when added, decrements when removed)
   const totalRealProperties = properties.length;
   
-  // Real count of distinct verified landlords/owners
+  // 2. Real count of distinct verified landlords/owners from database
   const verifiedOwnersSet = new Set<string>();
   properties.forEach(p => {
     if (p.isVerified || p.owner?.isVerified) {
-      verifiedOwnersSet.add(p.owner?.email || p.owner?.id || p.id);
+      if (p.owner?.email) {
+        verifiedOwnersSet.add(p.owner.email.toLowerCase().trim());
+      } else if (p.owner?.id) {
+        verifiedOwnersSet.add(p.owner.id);
+      } else {
+        verifiedOwnersSet.add(p.id);
+      }
+    }
+  });
+  // Also include registered users with landlord or owner role
+  (registeredUsers || []).forEach(u => {
+    if (u.role === 'landlord' || u.role === 'owner') {
+      verifiedOwnersSet.add(u.email.toLowerCase().trim());
     }
   });
   const verifiedLandlordsCount = verifiedOwnersSet.size;
 
-  // Real count of Ethiopian cities represented in listings or active hubs
-  const citiesWithListings = new Set(properties.map(p => p.city.trim()).filter(Boolean));
-  const activeCitiesCount = Math.max(citiesWithListings.size, ETHIOPIAN_LOCATIONS.length);
+  // 3. Exact count of Ethiopian cities represented in active listings (0 if database is empty/erased)
+  const citiesWithListings = new Set(
+    properties
+      .map(p => p.city?.trim())
+      .filter(Boolean)
+  );
+  const activeCitiesCount = citiesWithListings.size;
 
-  // Real registered users count (or total authenticated community members)
-  const registeredUsersCount = (users && users.length > 0) ? users.length : 1;
+  // 4. Exact registered database users count (strictly tracks accounts added or deleted)
+  const trueRegisteredUsersCount = registeredUsersCount ?? (registeredUsers ? registeredUsers.length : 0);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,7 +293,7 @@ export const HeroSection: React.FC = () => {
             <div className="flex items-center justify-center gap-1.5 mb-0.5">
               <ShieldCheck className="w-4 h-4 text-amber-400" />
               <p className="text-2xl sm:text-3xl font-black text-amber-400">
-                {verifiedLandlordsCount > 0 ? verifiedLandlordsCount : (totalRealProperties > 0 ? 1 : 0)}
+                {verifiedLandlordsCount}
               </p>
             </div>
             <p className="text-xs text-slate-300">{isAmharic ? 'የተረጋገጡ አከራዮች' : 'Verified Landlords'}</p>
@@ -300,7 +316,7 @@ export const HeroSection: React.FC = () => {
           <div className="bg-white/5 backdrop-blur-xs rounded-2xl p-4 border border-white/10 hover:border-emerald-500/40 transition-colors">
             <div className="flex items-center justify-center gap-1.5 mb-0.5">
               <Users className="w-4 h-4 text-emerald-300" />
-              <p className="text-2xl sm:text-3xl font-black text-emerald-300">{registeredUsersCount}</p>
+              <p className="text-2xl sm:text-3xl font-black text-emerald-300">{trueRegisteredUsersCount}</p>
             </div>
             <p className="text-xs text-slate-300">{isAmharic ? 'የተመዘገቡ ተጠቃሚዎች' : 'Registered Users'}</p>
             <span className="text-[10px] text-emerald-300 font-semibold block mt-0.5">

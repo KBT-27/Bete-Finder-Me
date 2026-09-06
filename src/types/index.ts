@@ -20,6 +20,8 @@ export interface PropertyAmenity {
   icon: string;
 }
 
+export type PropertyAvailabilityStatus = 'available' | 'rented' | 'sold';
+
 export interface Property {
   id: string;
   title: string;
@@ -31,6 +33,7 @@ export interface Property {
   currency: 'ETB' | 'USD';
   listingType: ListingType;
   propertyType: PropertyType;
+  availabilityStatus?: PropertyAvailabilityStatus; // 'available' | 'rented' | 'sold'
   floorSize?: string; // e.g. G+1, G+2, G+3, G+4, G+5, G+6+
   finishingStatus?: 'finished' | 'unfinished'; // Finished or Unfinished
   city: string;
@@ -149,6 +152,8 @@ export interface UserProfile {
   planExpiresAt?: string;
   planStartedAt?: string;
   registeredAt?: string;
+  lastLogin?: string;
+  lastActiveAt?: string;
   bio?: string;
 }
 
@@ -249,6 +254,7 @@ export interface AdminAuditLog {
 }
 
 export interface AdminControllerConfig {
+  firstAdminPermissions?: AdminPermissions;
   adminPermissions: AdminPermissions;
   adminBroadcastNotice: string;
   subAdmins: SubAdmin[];

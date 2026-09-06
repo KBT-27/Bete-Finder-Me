@@ -9,7 +9,9 @@ import {
   Zap, 
   Droplets,
   ArrowRight,
-  Phone
+  Phone,
+  KeyRound,
+  CheckCircle
 } from 'lucide-react';
 import { Property } from '../../types';
 import { useLanguage } from '../../context/LanguageContext';
@@ -64,15 +66,53 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onSelect }
           {/* Gradient Overlay for badges */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
 
+          {/* Rented or Sold Banner Overlay */}
+          {property.availabilityStatus === 'rented' && (
+            <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none z-10">
+              <div className="bg-rose-600/95 text-white px-4 py-1.5 rounded-xl shadow-lg border border-rose-400/50 flex items-center gap-2 font-black text-xs uppercase tracking-widest -rotate-6 shadow-rose-900/50">
+                <KeyRound className="w-4 h-4" />
+                <span>{isAmharic ? 'ተከራይቷል (RENTED)' : 'RENTED / LEASED'}</span>
+              </div>
+            </div>
+          )}
+          {property.availabilityStatus === 'sold' && (
+            <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center pointer-events-none z-10">
+              <div className="bg-purple-700/95 text-white px-4 py-1.5 rounded-xl shadow-lg border border-purple-400/50 flex items-center gap-2 font-black text-xs uppercase tracking-widest -rotate-6 shadow-purple-900/50">
+                <CheckCircle className="w-4 h-4" />
+                <span>{isAmharic ? 'ተሸጧል (SOLD)' : 'BOUGHT / SOLD'}</span>
+              </div>
+            </div>
+          )}
+
           {/* Top Badges */}
           <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
             <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Rent or Sale Badge */}
-              <span className={`text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-lg text-white shadow-xs ${
-                property.listingType === 'rent' ? 'bg-emerald-600' : 'bg-amber-600'
-              }`}>
-                {property.listingType === 'rent' ? t('cardForRent') : t('cardForSale')}
+            {/* Rent or Sale Badge */}
+            <span className={`text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-lg text-white shadow-xs ${
+              property.listingType === 'rent' ? 'bg-emerald-600' : 'bg-amber-600'
+            }`}>
+              {property.listingType === 'rent' ? t('cardForRent') : t('cardForSale')}
+            </span>
+
+            {/* Availability Status Icon & Badge: Available, Rented, or Bought/Sold */}
+            {property.availabilityStatus === 'rented' && (
+              <span className="flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-lg bg-rose-600 text-white shadow-md animate-pulse">
+                <KeyRound className="w-3.5 h-3.5" />
+                <span>{isAmharic ? 'ተከራይቷል' : 'Rented'}</span>
               </span>
+            )}
+            {property.availabilityStatus === 'sold' && (
+              <span className="flex items-center gap-1 text-[11px] font-black px-2.5 py-1 rounded-lg bg-purple-700 text-white shadow-md animate-pulse">
+                <CheckCircle className="w-3.5 h-3.5" />
+                <span>{isAmharic ? 'ተሸጧል' : 'Sold / Bought'}</span>
+              </span>
+            )}
+            {(!property.availabilityStatus || property.availabilityStatus === 'available') && (
+              <span className="flex items-center gap-1 text-[10px] font-extrabold px-2 py-1 rounded-lg bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 backdrop-blur-xs">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>{isAmharic ? 'ክፍት ነው' : 'Available'}</span>
+              </span>
+            )}
 
               {/* Pay Plan Badge */}
               {property.payPlan === 'vip' && (

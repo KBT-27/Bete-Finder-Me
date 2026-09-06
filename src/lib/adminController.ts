@@ -14,6 +14,7 @@ const DEFAULT_PERMISSIONS: AdminPermissions = {
 };
 
 const DEFAULT_CONFIG: AdminControllerConfig = {
+  firstAdminPermissions: DEFAULT_PERMISSIONS,
   adminPermissions: DEFAULT_PERMISSIONS,
   adminBroadcastNotice: 'System Notice: Please prioritize verifying VIP listing requests submitted within 24 hours.',
   subAdmins: [
@@ -106,6 +107,7 @@ export const getAdminControllerConfig = (): AdminControllerConfig => {
     if (saved) {
       const parsed = JSON.parse(saved);
       return {
+        firstAdminPermissions: { ...DEFAULT_PERMISSIONS, ...(parsed.firstAdminPermissions || {}) },
         adminPermissions: { ...DEFAULT_PERMISSIONS, ...(parsed.adminPermissions || {}) },
         adminBroadcastNotice: parsed.adminBroadcastNotice || DEFAULT_CONFIG.adminBroadcastNotice,
         subAdmins: Array.isArray(parsed.subAdmins) ? parsed.subAdmins : DEFAULT_CONFIG.subAdmins,
@@ -121,6 +123,9 @@ export const getAdminControllerConfig = (): AdminControllerConfig => {
 export const saveAdminControllerConfig = (config: Partial<AdminControllerConfig>): AdminControllerConfig => {
   const current = getAdminControllerConfig();
   const updated: AdminControllerConfig = {
+    firstAdminPermissions: config.firstAdminPermissions !== undefined 
+      ? { ...current.firstAdminPermissions, ...config.firstAdminPermissions } 
+      : (current.firstAdminPermissions || DEFAULT_PERMISSIONS),
     adminPermissions: config.adminPermissions ? { ...current.adminPermissions, ...config.adminPermissions } : current.adminPermissions,
     adminBroadcastNotice: config.adminBroadcastNotice !== undefined ? config.adminBroadcastNotice : current.adminBroadcastNotice,
     subAdmins: config.subAdmins !== undefined ? config.subAdmins : current.subAdmins,
@@ -135,6 +140,46 @@ export const saveAdminControllerConfig = (config: Partial<AdminControllerConfig>
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updated)
   }).catch(() => {});
+
+  return updated;
+};
+
+export const toggleFirstAdminSuspension = (isSuspended: boolean): AdminControllerConfig => {
+  const current = getAdminControllerConfig();
+  const updated = saveAdminControllerConfig({
+    firstAdminPermissions: {
+      ...(current.firstAdminPermissions || DEFAULT_PERMISSIONS),
+      isSuspended
+    }
+  });
+
+  logAdminActivity(
+    'Owner (Kaleb Bereket)',
+    isSuspended ? 'Suspended First Admin Access' : 'Restored First Admin Access',
+    isSuspended ? 'Primary Admin account operations locked.' : 'Primary Admin privileges fully restored.',
+    'security',
+    isSuspended ? 'danger' : 'success'
+  );
+
+  return updated;
+};
+
+export const updateFirstAdminPermissions = (permissions: Partial<AdminPermissions>): AdminControllerConfig => {
+  const current = getAdminControllerConfig();
+  const updated = saveAdminControllerConfig({
+    firstAdminPermissions: {
+      ...(current.firstAdminPermissions || DEFAULT_PERMISSIONS),
+      ...permissions
+    }
+  });
+
+  logAdminActivity(
+    'Owner (Kaleb Bereket)',
+    'Modified First Admin Authority Matrix',
+    `Updated primary admin permissions: ${Object.keys(permissions).join(', ')}`,
+    'security',
+    'warning'
+  );
 
   return updated;
 };

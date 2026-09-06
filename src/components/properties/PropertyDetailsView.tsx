@@ -21,7 +21,9 @@ import {
   Info,
   CheckCircle2,
   Layers,
-  Building2
+  Building2,
+  KeyRound,
+  Tag
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -33,11 +35,13 @@ export const PropertyDetailsView: React.FC = () => {
   const { t, isAmharic } = useLanguage();
   const { 
     selectedProperty, 
+    setSelectedProperty,
     setCurrentView, 
     properties, 
     toggleFavorite, 
     isFavorite,
-    bookTour 
+    bookTour,
+    updateProperty
   } = useProperties();
   const { user, setIsAuthModalOpen } = useAuth();
 
@@ -135,11 +139,25 @@ export const PropertyDetailsView: React.FC = () => {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
             <div>
               <div className="flex items-center gap-2 mb-2 flex-wrap">
-                <span className={`text-xs font-extrabold uppercase tracking-wider px-3 py-1 rounded-lg text-white ${
-                  selectedProperty.listingType === 'rent' ? 'bg-emerald-600' : 'bg-amber-600'
-                }`}>
-                  {selectedProperty.listingType === 'rent' ? t('cardForRent') : t('cardForSale')}
-                </span>
+                {/* Availability Status Badge */}
+                {selectedProperty.availabilityStatus === 'rented' && (
+                  <span className="flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-lg bg-rose-600 text-white shadow-md animate-pulse">
+                    <KeyRound className="w-3.5 h-3.5" />
+                    <span>{isAmharic ? 'ተከራይቷል (Rented)' : 'Status: Rented'}</span>
+                  </span>
+                )}
+                {selectedProperty.availabilityStatus === 'sold' && (
+                  <span className="flex items-center gap-1.5 text-xs font-black px-3 py-1 rounded-lg bg-purple-700 text-white shadow-md animate-pulse">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{isAmharic ? 'ተሸጧል (Sold / Bought)' : 'Status: Sold / Bought'}</span>
+                  </span>
+                )}
+                {(!selectedProperty.availabilityStatus || selectedProperty.availabilityStatus === 'available') && (
+                  <span className="flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse" />
+                    <span>{isAmharic ? 'ክፍት ነው (Available)' : 'Status: Available'}</span>
+                  </span>
+                )}
 
                 {selectedProperty.payPlan === 'vip' && (
                   <span className="flex items-center gap-1 text-xs font-black px-3 py-1 rounded-lg bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 shadow-md">
@@ -207,6 +225,63 @@ export const PropertyDetailsView: React.FC = () => {
               <p className="text-[11px] text-slate-400 mt-1">Direct Landlord Price • No Markup</p>
             </div>
           </div>
+
+          {/* If landlord or admin: allow quick status change */}
+          {user && (user.id === selectedProperty.owner?.id || user.email === selectedProperty.owner?.email || user.role === 'owner' || user.role === 'admin' || user.role === 'landlord') && (
+            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+              <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{isAmharic ? 'የንብረት ሁኔታ ለውጥ (Status Control):' : 'Update Property Availability Status:'}</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  id="status-btn-available"
+                  onClick={() => {
+                    updateProperty(selectedProperty.id, { availabilityStatus: 'available' });
+                    setSelectedProperty({ ...selectedProperty, availabilityStatus: 'available' });
+                  }}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    (!selectedProperty.availabilityStatus || selectedProperty.availabilityStatus === 'available')
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  🟢 {isAmharic ? 'ክፍት ነው' : 'Available'}
+                </button>
+                <button
+                  type="button"
+                  id="status-btn-rented"
+                  onClick={() => {
+                    updateProperty(selectedProperty.id, { availabilityStatus: 'rented' });
+                    setSelectedProperty({ ...selectedProperty, availabilityStatus: 'rented' });
+                  }}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    selectedProperty.availabilityStatus === 'rented'
+                      ? 'bg-rose-600 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  🔑 {isAmharic ? 'ተከራይቷል' : 'Mark as Rented'}
+                </button>
+                <button
+                  type="button"
+                  id="status-btn-sold"
+                  onClick={() => {
+                    updateProperty(selectedProperty.id, { availabilityStatus: 'sold' });
+                    setSelectedProperty({ ...selectedProperty, availabilityStatus: 'sold' });
+                  }}
+                  className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                    selectedProperty.availabilityStatus === 'sold'
+                      ? 'bg-purple-700 text-white shadow-xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  🏷️ {isAmharic ? 'ተሸጧል' : 'Mark as Sold'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Photo Gallery Grid */}
