@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { PropertyProvider, useProperties } from './context/PropertyContext';
@@ -22,6 +22,28 @@ import { ResetPasswordView } from './components/auth/ResetPasswordView';
 import { PaymentModal } from './components/payment/PaymentModal';
 import { FloatingBeteAIButton } from './components/ai/FloatingBeteAIButton';
 import { BeteAIAssistantModal } from './components/ai/BeteAIAssistantModal';
+
+// Google AdSense Banner Component
+const AdSenseBanner: React.FC = () => {
+  useEffect(() => {
+    try {
+      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+    } catch (e) {
+      console.error("AdSense error:", e);
+    }
+  }, []);
+
+  return (
+    <div className="my-6 w-full overflow-hidden flex justify-center px-4">
+      <ins className="adsbygoogle"
+           style={{ display: 'block', width: '100%', maxWidth: '728px' }}
+           data-ad-client="ca-pub-7267372597438656"
+           data-ad-slot="5231098149"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
+    </div>
+  );
+};
 
 const MainContent: React.FC = () => {
   const { currentView, setCurrentView, openAIChatWithPrompt } = useProperties();
@@ -60,6 +82,9 @@ const MainContent: React.FC = () => {
             />
           </div>
         )}
+
+        {/* AdSense Banner displayed across pages right above the footer section */}
+        <AdSenseBanner />
       </div>
 
       <Footer />
