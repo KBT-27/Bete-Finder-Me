@@ -37,9 +37,10 @@ import {
   Zap,
   Globe,
   RefreshCcw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  MessageSquare
 } from 'lucide-react';
-import { AdminPermissions, SubAdmin, AdminAuditLog, AdminControllerConfig } from '../../types';
+import { AdminPermissions, SubAdmin, AdminAuditLog, AdminControllerConfig, MenuVisibilityConfig, AdminTabVisibility, PublicMenuVisibility } from '../../types';
 import { 
   getAdminControllerConfig, 
   saveAdminControllerConfig, 
@@ -56,6 +57,16 @@ import {
   logAdminActivity
 } from '../../lib/adminController';
 import { updateAdminProfileByOwner, getAdminCredentials } from '../../lib/passwords';
+import { 
+  getMenuConfig, 
+  saveMenuConfig, 
+  toggleAdminTabMenu, 
+  togglePublicMenu, 
+  setAllAdminTabsVisibility, 
+  setAllPublicMenusVisibility, 
+  resetMenuConfigToDefaults,
+  syncMenuConfigFromServer
+} from '../../lib/menuConfig';
 
 interface AdminControllerTabProps {
   onShowToast: (msg: string) => void;
@@ -63,6 +74,7 @@ interface AdminControllerTabProps {
   onAdminCredentialsUpdated?: (newCreds: { email: string; name: string; phone: string; password?: string }) => void;
   onNavigateTab?: (tab: 'telegram_channel' | 'telegram_bot' | 'properties') => void;
   onOpenEraseAllModal?: () => void;
+  onOpenMenuControllerModal?: () => void;
   totalPropertiesCount?: number;
 }
 
@@ -72,6 +84,7 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
   onAdminCredentialsUpdated,
   onNavigateTab,
   onOpenEraseAllModal,
+  onOpenMenuControllerModal,
   totalPropertiesCount = 0
 }) => {
   const [config, setConfig] = useState<AdminControllerConfig>(getAdminControllerConfig());
@@ -111,6 +124,46 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
   const [quickBotUsername, setQuickBotUsername] = useState<string>('BeteFinder_bot');
   const [isSavingTelegramUsernames, setIsSavingTelegramUsernames] = useState<boolean>(false);
   const [telegramSaveSuccess, setTelegramSaveSuccess] = useState<string | null>(null);
+
+  // Dynamic Menu Visibility State (Owner Select / Deselect to Come or Erase)
+  const [menuConfig, setMenuConfig] = useState<MenuVisibilityConfig>(getMenuConfig());
+
+  useEffect(() => {
+    const handleConfigChange = (e: any) => {
+      if (e.detail) setMenuConfig(e.detail);
+      else setMenuConfig(getMenuConfig());
+    };
+    window.addEventListener('bete_menu_config_changed', handleConfigChange);
+    syncMenuConfigFromServer().then((cfg) => cfg && setMenuConfig(cfg));
+    return () => {
+      window.removeEventListener('bete_menu_config_changed', handleConfigChange);
+    };
+  }, []);
+
+  const handleToggleAdminTab = (tabKey: keyof AdminTabVisibility) => {
+    const updated = toggleAdminTabMenu(tabKey);
+    setMenuConfig({ ...updated });
+    onShowToast(`Admin Tab "${tabKey}" is now ${updated.adminTabs[tabKey] ? 'Visible (Come)' : 'Erased (Hidden)'}`);
+  };
+
+  const handleTogglePublicMenu = (menuKey: keyof PublicMenuVisibility) => {
+    const updated = togglePublicMenu(menuKey);
+    setMenuConfig({ ...updated });
+    onShowToast(`Public Menu "${menuKey}" is now ${updated.publicMenus[menuKey] ? 'Visible (Come)' : 'Erased (Hidden)'}`);
+  };
+
+  const handleSelectAllMenus = () => {
+    setAllAdminTabsVisibility(true);
+    const updated = setAllPublicMenusVisibility(true);
+    setMenuConfig({ ...updated });
+    onShowToast('✅ All Menus Selected (All Come)!');
+  };
+
+  const handleResetMenus = () => {
+    const updated = resetMenuConfigToDefaults();
+    setMenuConfig({ ...updated });
+    onShowToast('🔄 Menu configurations restored to defaults.');
+  };
 
   // Add SubAdmin Modal/Form state
   const [isAddSubAdminOpen, setIsAddSubAdminOpen] = useState(false);
@@ -839,7 +892,172 @@ export const AdminControllerTab: React.FC<AdminControllerTabProps> = ({
       </div>
 
       {/* ========================================================================= */}
-      {/* 3. TELEGRAM CONNECTED HUB & STATUS INSPECTOR (USER REQUEST #2 & #4)       */}
+      {/* 3. DYNAMIC MENU VISIBILITY CONTROLLER (USER REQUEST #1: ERASE OR COME)   */}
+      {/* ========================================================================= */}
+      <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+              <SlidersHorizontal className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                <span>Dynamic Menu Visibility Controller (Erase / Come Menus)</span>
+                <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                  Owner Exclusive
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500">
+                When you select a menu it comes (shows); when you deselect it, it erases (hides) from navigation and admin views immediately.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={handleSelectAllMenus}
+              className="px-3 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+            >
+              ✅ Select All (Come)
+            </button>
+            <button
+              type="button"
+              onClick={handleResetMenus}
+              className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold cursor-pointer transition-colors"
+            >
+              🔄 Defaults
+            </button>
+            {onOpenMenuControllerModal && (
+              <button
+                type="button"
+                onClick={onOpenMenuControllerModal}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black cursor-pointer shadow-xs transition-colors flex items-center gap-1.5"
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                <span>Modal View</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Column A: Admin Dashboard Tabs */}
+          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                  <Sliders className="w-4 h-4 text-indigo-600" />
+                  <span>Admin Dashboard Tabs</span>
+                </h4>
+                <p className="text-[11px] text-slate-500">Toggle tabs displayed in the owner/admin dashboard navigation bar</p>
+              </div>
+              <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                {Object.values(menuConfig.adminTabs).filter(Boolean).length} / {Object.keys(menuConfig.adminTabs).length} Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {[
+                { key: 'payments', label: 'Payments', desc: 'Telebirr payment slips' },
+                { key: 'properties', label: 'Properties', desc: 'Listing verification' },
+                { key: 'paid_subscribers', label: 'Paid Subscribers', desc: 'VIP & active plans' },
+                { key: 'database_users', label: 'Database Users', desc: 'User accounts database' },
+                { key: 'pricing_settings', label: 'Pricing & Telebirr', desc: 'Plans pricing matrix' },
+                { key: 'telegram_channel', label: 'Telegram Channel', desc: 'Broadcaster tool' },
+                { key: 'telegram_bot', label: 'Telegram Bot', desc: 'Bot status inspector' },
+                { key: 'feedback', label: 'Owner Feedbacks', desc: 'Inbox for suggestions' },
+                { key: 'security', label: 'Security & Profile', desc: 'Profile and password' },
+                { key: 'sync', label: 'Database Sync', desc: 'Cross-device sync' },
+              ].map((item) => {
+                const isSelected = menuConfig.adminTabs[item.key as keyof AdminTabVisibility];
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleToggleAdminTab(item.key as keyof AdminTabVisibility)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-start justify-between gap-2 ${
+                      isSelected
+                        ? 'bg-white border-indigo-300 shadow-2xs text-slate-900 ring-1 ring-indigo-200'
+                        : 'bg-slate-100/80 border-slate-200 text-slate-400 opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-bold text-xs block">{item.label}</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">{item.desc}</span>
+                    </div>
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                        isSelected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                      }`}
+                    >
+                      {isSelected ? 'Come' : 'Erased'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Column B: Public Navigation Menus */}
+          <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="font-extrabold text-sm text-slate-900 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-emerald-600" />
+                  <span>Public Navigation Menus</span>
+                </h4>
+                <p className="text-[11px] text-slate-500">Toggle public header links visible to tenants and landlords</p>
+              </div>
+              <span className="text-[11px] font-bold text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200">
+                {Object.values(menuConfig.publicMenus).filter(Boolean).length} / {Object.keys(menuConfig.publicMenus).length} Active
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {[
+                { key: 'home', label: 'Home Page', desc: 'Main landing view' },
+                { key: 'rent', label: 'For Rent', desc: 'Rental properties' },
+                { key: 'sale', label: 'For Sale', desc: 'Sale properties' },
+                { key: 'pricing', label: 'Pricing Plans', desc: 'VIP and tiers page' },
+                { key: 'dashboard', label: 'User Dashboard', desc: 'Profile and favorites' },
+                { key: 'post_property', label: 'Post Property', desc: 'Property listing button' },
+                { key: 'ai_assistant', label: 'Bete Assistance (Gemini)', desc: 'AI property search' },
+                { key: 'feedback', label: 'Send Feedback to Owner', desc: 'Direct owner contact' },
+              ].map((item) => {
+                const isSelected = menuConfig.publicMenus[item.key as keyof PublicMenuVisibility];
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleTogglePublicMenu(item.key as keyof PublicMenuVisibility)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-start justify-between gap-2 ${
+                      isSelected
+                        ? 'bg-white border-emerald-300 shadow-2xs text-slate-900 ring-1 ring-emerald-200'
+                        : 'bg-slate-100/80 border-slate-200 text-slate-400 opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <div>
+                      <span className="font-bold text-xs block">{item.label}</span>
+                      <span className="text-[10px] text-slate-400 block mt-0.5">{item.desc}</span>
+                    </div>
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-full shrink-0 ${
+                        isSelected ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-700'
+                      }`}
+                    >
+                      {isSelected ? 'Come' : 'Erased'}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 4. TELEGRAM CONNECTED HUB & STATUS INSPECTOR (USER REQUEST #2 & #4)       */}
       {/* ========================================================================= */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">

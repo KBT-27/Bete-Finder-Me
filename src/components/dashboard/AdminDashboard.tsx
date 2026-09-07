@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   ShieldCheck, 
   Crown,
@@ -59,7 +59,9 @@ import {
   Share2,
   HelpCircle,
   Send,
-  Bot
+  Bot,
+  SlidersHorizontal,
+  MessageSquare
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -71,13 +73,18 @@ import {
   updateRegisteredUserPlanTier, 
   updateAdminProfileByOwner,
   getAdminCredentials,
-  getOwnerCredentials
+  getOwnerCredentials,
+  RegisteredAccount
 } from '../../lib/passwords';
-import { PaymentRequest, Property, AdminPermissions } from '../../types';
+import { PaymentRequest, Property, AdminPermissions, MenuVisibilityConfig } from '../../types';
 import { AdminControllerTab } from './AdminControllerTab';
 import { TelegramHubTab } from './TelegramHubTab';
 import { TelegramChannelTab } from './TelegramChannelTab';
 import { TelegramBotTab } from './TelegramBotTab';
+import { OwnerFeedbackTab } from './OwnerFeedbackTab';
+import { MenuControllerModal } from './MenuControllerModal';
+import { getMenuConfig, syncMenuConfigFromServer } from '../../lib/menuConfig';
+import { getOwnerFeedbacks, syncFeedbacksFromServer } from '../../lib/feedback';
 import { getAdminControllerConfig, logAdminActivity } from '../../lib/adminController';
 import { safeFetchJson } from '../../lib/apiHelper';
 
@@ -116,6 +123,7 @@ export const AdminDashboard: React.FC = () => {
   } = useAuth();
 
   const isOwner = role === 'owner';
+  const canControlAll = isOwner || role === 'admin';
 
   // Controller config for live permissions, suspension check and owner broadcast notice
   const [controllerConfig, setControllerConfig] = useState(getAdminControllerConfig());
@@ -137,9 +145,9 @@ export const AdminDashboard: React.FC = () => {
 
   const isSecondaryAdmin = !isOwner && !isPrimaryAdmin;
 
-  // Resolve Effective Permissions Matrix based on active configuration set by Owner
+  // Resolve Effective Permissions Matrix - Admin can control all things like the owner
   const effectivePermissions = useMemo<AdminPermissions>(() => {
-    if (isOwner) {
+    if (canControlAll) {
       return {
         isSuspended: false,
         canApprovePayments: true,
@@ -192,8 +200,71 @@ export const AdminDashboard: React.FC = () => {
 
   // Navigation tab state
   const [activeAdminTab, setActiveAdminTab] = useState<
-    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'admin_controller' | 'pricing_settings' | 'security' | 'sync' | 'telegram_hub' | 'telegram_channel' | 'telegram_bot'
+    'payments' | 'properties' | 'paid_subscribers' | 'database_users' | 'admin_controller' | 'pricing_settings' | 'security' | 'sync' | 'telegram_hub' | 'telegram_channel' | 'telegram_bot' | 'feedback'
   >('payments');
+
+  // Menu visibility config & modal state (Owner select / deselect to come or erase)
+  const [menuConfig, setMenuConfig] = useState<MenuVisibilityConfig>(getMenuConfig());
+  const [isMenuControllerOpen, setIsMenuControllerOpen] = useState(false);
+
+  // Feedbacks counts for live badge
+  const [feedbacksCount, setFeedbacksCount] = useState<number>(getOwnerFeedbacks().length);
+  const [unreadFeedbacksCount, setUnreadFeedbacksCount] = useState<number>(
+    getOwnerFeedbacks().filter((f) => f.status === 'new').length
+  );
+
+  // Sync menuConfig and feedbacks with real-time events
+  useEffect(() => {
+    const handleMenuConfigChanged = (e: any) => {
+      if (e.detail) setMenuConfig(e.detail);
+      else setMenuConfig(getMenuConfig());
+    };
+    const handleFeedbacksChanged = (e: any) => {
+      const fbs = e.detail && Array.isArray(e.detail) ? e.detail : getOwnerFeedbacks();
+      setFeedbacksCount(fbs.length);
+      setUnreadFeedbacksCount(fbs.filter((f: any) => f.status === 'new').length);
+    };
+
+    window.addEventListener('bete_menu_config_changed', handleMenuConfigChanged);
+    window.addEventListener('bete_feedbacks_changed', handleFeedbacksChanged);
+
+    syncMenuConfigFromServer().then((cfg) => cfg && setMenuConfig(cfg));
+    syncFeedbacksFromServer().then((fbs) => {
+      if (fbs) {
+        setFeedbacksCount(fbs.length);
+        setUnreadFeedbacksCount(fbs.filter((f: any) => f.status === 'new').length);
+      }
+    });
+
+    return () => {
+      window.removeEventListener('bete_menu_config_changed', handleMenuConfigChanged);
+      window.removeEventListener('bete_feedbacks_changed', handleFeedbacksChanged);
+    };
+  }, []);
+
+  // If the active tab was erased by the Owner/Admin, switch to first visible tab
+  useEffect(() => {
+    if (!canControlAll) return;
+    const isCurrentTabVisible =
+      activeAdminTab === 'admin_controller' ? true :
+      activeAdminTab === 'payments' ? menuConfig.adminTabs.payments :
+      activeAdminTab === 'properties' ? menuConfig.adminTabs.properties :
+      activeAdminTab === 'paid_subscribers' ? menuConfig.adminTabs.paid_subscribers :
+      activeAdminTab === 'database_users' ? menuConfig.adminTabs.database_users :
+      activeAdminTab === 'pricing_settings' ? menuConfig.adminTabs.pricing_settings :
+      activeAdminTab === 'telegram_channel' || activeAdminTab === 'telegram_hub' ? menuConfig.adminTabs.telegram_channel :
+      activeAdminTab === 'telegram_bot' ? menuConfig.adminTabs.telegram_bot :
+      activeAdminTab === 'feedback' ? menuConfig.adminTabs.feedback :
+      activeAdminTab === 'security' ? menuConfig.adminTabs.security :
+      activeAdminTab === 'sync' ? menuConfig.adminTabs.sync : true;
+
+    if (!isCurrentTabVisible) {
+      if (menuConfig.adminTabs.payments) setActiveAdminTab('payments');
+      else if (menuConfig.adminTabs.properties) setActiveAdminTab('properties');
+      else if (menuConfig.adminTabs.feedback) setActiveAdminTab('feedback');
+      else setActiveAdminTab('admin_controller');
+    }
+  }, [menuConfig, activeAdminTab, isOwner]);
 
   // Search states for all modules
   const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
@@ -217,11 +288,31 @@ export const AdminDashboard: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Registered users state with local reload capability
-  const [usersList, setUsersList] = useState(getRegisteredUsers());
-  const reloadUsers = () => {
-    setUsersList(getRegisteredUsers());
-  };
+  // Registered users state with real database sync & reactive updates
+  const [usersList, setUsersList] = useState<RegisteredAccount[]>(getRegisteredUsers());
+  const reloadUsers = useCallback(() => {
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(data => {
+        if (data.users && Array.isArray(data.users)) {
+          setUsersList(data.users);
+          localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(data.users));
+        } else {
+          setUsersList(getRegisteredUsers());
+        }
+      })
+      .catch(() => {
+        setUsersList(getRegisteredUsers());
+      });
+  }, []);
+
+  useEffect(() => {
+    reloadUsers();
+    window.addEventListener('bete_accounts_changed', reloadUsers);
+    return () => {
+      window.removeEventListener('bete_accounts_changed', reloadUsers);
+    };
+  }, [reloadUsers]);
 
   // Reject dialog state
   const [rejectingRequestId, setRejectingRequestId] = useState<string | null>(null);
@@ -541,6 +632,15 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleExportDatabaseBackup = () => {
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
+      return;
+    }
+    if (!canControlAll && !effectivePermissions.canExportBackups) {
+      showToast('❌ Permission denied: You do not have authority to export database backups.');
+      return;
+    }
+
     const backupData = {
       application: "Bete Finder Ethiopia Real Estate",
       version: "2.5.0",
@@ -806,11 +906,11 @@ export const AdminDashboard: React.FC = () => {
   // Property Actions & Plan Tier Change Handler
   // -------------------------------------------------------------
   const handleToggleVerified = (id: string, current: boolean) => {
-    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
-      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
       return;
     }
-    if (!isOwner && !controllerConfig.adminPermissions.canVerifyProperties) {
+    if (!canControlAll && !effectivePermissions.canVerifyProperties) {
       showToast('❌ Permission denied: You do not have authority to verify listings.');
       return;
     }
@@ -826,8 +926,8 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleToggleFeatured = (id: string, current: boolean) => {
-    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
-      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
       return;
     }
     updateProperty(id, { isFeatured: !current });
@@ -839,8 +939,8 @@ export const AdminDashboard: React.FC = () => {
     newPlan: 'free' | 'basic' | 'premium' | 'vip',
     ownerEmail: string
   ) => {
-    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
-      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
       return;
     }
     const isVip = newPlan === 'vip';
@@ -884,7 +984,7 @@ export const AdminDashboard: React.FC = () => {
   // Stop/Cancel Paid User Plan Handler
   // -------------------------------------------------------------
   const handleStopUserPlan = async (userEmail: string, userName: string) => {
-    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
+    if (!isOwner && effectivePermissions.isSuspended) {
       showToast('❌ Action blocked: Administrative access is suspended by Owner.');
       return;
     }
@@ -920,6 +1020,10 @@ export const AdminDashboard: React.FC = () => {
   // Delete User Account Handler (Owner Mode)
   // -------------------------------------------------------------
   const handleConfirmDeleteUser = async () => {
+    if (!isOwner && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+      return;
+    }
     if (!userToDelete) return;
     const email = userToDelete.email;
     const name = userToDelete.name;
@@ -942,11 +1046,11 @@ export const AdminDashboard: React.FC = () => {
   // Payment Request Handlers
   // -------------------------------------------------------------
   const handleApprove = (requestId: string) => {
-    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
-      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
       return;
     }
-    if (!isOwner && !controllerConfig.adminPermissions.canApprovePayments) {
+    if (!canControlAll && !effectivePermissions.canApprovePayments) {
       showToast('❌ Permission denied: You do not have authority to approve payments.');
       return;
     }
@@ -963,8 +1067,8 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleDeletePayment = (requestId: string) => {
-    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
-      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
       return;
     }
     if (window.confirm('Are you sure you want to delete this payment record?')) {
@@ -981,11 +1085,11 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const handleOpenRejectModal = (requestId: string) => {
-    if (!isOwner && controllerConfig.adminPermissions.isSuspended) {
-      showToast('❌ Action blocked: Administrative access is suspended by Owner.');
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
       return;
     }
-    if (!isOwner && !controllerConfig.adminPermissions.canApprovePayments) {
+    if (!canControlAll && !effectivePermissions.canApprovePayments) {
       showToast('❌ Permission denied: You do not have authority to reject payments.');
       return;
     }
@@ -1104,12 +1208,12 @@ export const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl sm:text-2xl font-black">
-                  {isOwner ? 'Bete Finder Owner Command Center' : 'Bete Finder Administration'}
+                  {isOwner ? 'Bete Finder Owner Command Center' : 'Bete Finder Executive Admin Command'}
                 </h1>
                 <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
-                  isOwner ? 'bg-amber-400 text-slate-950 font-black' : 'bg-purple-500 text-white'
+                  isOwner ? 'bg-amber-400 text-slate-950 font-black' : 'bg-emerald-400 text-slate-950 font-black'
                 }`}>
-                  {isOwner ? '👑 Owner Mode' : 'Admin'}
+                  {isOwner ? '👑 Owner Mode' : '🛡️ Full Admin Controller'}
                 </span>
               </div>
               <p className="text-xs text-slate-300 mt-1">
@@ -1119,6 +1223,17 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+            {canControlAll && (
+              <button
+                onClick={() => setIsMenuControllerOpen(true)}
+                id="admin-menu-controller-btn"
+                className="px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-black text-xs rounded-xl shadow-md shadow-indigo-600/30 flex items-center gap-2 cursor-pointer transition-all active:scale-98 border border-indigo-400/30"
+                title="Select or deselect menus to come or erase them from navigation"
+              >
+                <SlidersHorizontal className="w-4 h-4 text-indigo-200" />
+                <span>Menu Controller (Erase / Come)</span>
+              </button>
+            )}
             <button
               onClick={() => setActiveAdminTab('security')}
               id="admin-edit-profile-btn"
@@ -1180,7 +1295,7 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* Secondary Admin Suspension Emergency Alert (Visible to Admin when suspended by Owner) */}
-        {!isOwner && controllerConfig.adminPermissions.isSuspended && (
+        {!isOwner && effectivePermissions.isSuspended && (
           <div className="mb-8 p-5 bg-rose-500 text-white rounded-3xl shadow-xl flex items-start gap-4 animate-in slide-in-from-top-4 border-2 border-rose-600">
             <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
               <ShieldAlert className="w-6 h-6 text-white" />
@@ -1188,7 +1303,7 @@ export const AdminDashboard: React.FC = () => {
             <div className="space-y-1">
               <h3 className="font-black text-sm sm:text-base">Administrative Access Temporarily Suspended by Owner</h3>
               <p className="text-xs text-rose-100 leading-relaxed">
-                Owner Kaleb Bereket has engaged the emergency administrative lock. Operational privileges (Approvals, Property Deletion, Verification modifications) are suspended until re-authorized.
+                Owner Kaleb Bereket has engaged the administrative lock. Operational privileges (Approvals, Property Deletion, Verification modifications) are suspended until re-authorized.
               </p>
             </div>
           </div>
@@ -1262,59 +1377,65 @@ export const AdminDashboard: React.FC = () => {
         {/* Professional Executive Tab Navigation Menu */}
         <div className="bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/90 shadow-2xs mb-8 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
           {/* Tab 1: Payments */}
-          <button
-            id="admin-tab-payments"
-            onClick={() => setActiveAdminTab('payments')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'payments'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-            }`}
-          >
-            <Smartphone className="w-4 h-4 text-emerald-400" />
-            <span>Payments</span>
-            {pendingPayments.length > 0 && (
-              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
-                {pendingPayments.length}
-              </span>
-            )}
-          </button>
+          {menuConfig.adminTabs.payments && (
+            <button
+              id="admin-tab-payments"
+              onClick={() => setActiveAdminTab('payments')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'payments'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Smartphone className="w-4 h-4 text-emerald-400" />
+              <span>Payments</span>
+              {pendingPayments.length > 0 && (
+                <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
+                  {pendingPayments.length}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Tab 2: Property Verification & Management */}
-          <button
-            id="admin-tab-properties"
-            onClick={() => setActiveAdminTab('properties')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'properties'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-            }`}
-          >
-            <Building2 className="w-4 h-4 text-amber-400" />
-            <span>Properties</span>
-            {unverifiedProperties.length > 0 && (
-              <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
-                {unverifiedProperties.length}
-              </span>
-            )}
-          </button>
+          {menuConfig.adminTabs.properties && (
+            <button
+              id="admin-tab-properties"
+              onClick={() => setActiveAdminTab('properties')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'properties'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Building2 className="w-4 h-4 text-amber-400" />
+              <span>Properties</span>
+              {unverifiedProperties.length > 0 && (
+                <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full">
+                  {unverifiedProperties.length}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Tab 3: Paid Subscribers */}
-          <button
-            id="admin-tab-subscribers"
-            onClick={() => setActiveAdminTab('paid_subscribers')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'paid_subscribers'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-            }`}
-          >
-            <Crown className="w-4 h-4 text-amber-400" />
-            <span>Subscribers ({allPaidSubscribers.length})</span>
-          </button>
+          {menuConfig.adminTabs.paid_subscribers && (
+            <button
+              id="admin-tab-subscribers"
+              onClick={() => setActiveAdminTab('paid_subscribers')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'paid_subscribers'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Crown className="w-4 h-4 text-amber-400" />
+              <span>Subscribers ({allPaidSubscribers.length})</span>
+            </button>
+          )}
 
-          {/* Tab 4: Database Users (Owner only) */}
-          {isOwner && (
+          {/* Tab 4: Database Users (Owner or Admin) */}
+          {menuConfig.adminTabs.database_users && (canControlAll || effectivePermissions.canViewUserDatabase) && (
             <button
               id="admin-tab-database-users"
               onClick={() => setActiveAdminTab('database_users')}
@@ -1329,8 +1450,8 @@ export const AdminDashboard: React.FC = () => {
             </button>
           )}
 
-          {/* Tab 5: Admin Controller Suite (Owner only) */}
-          {isOwner && (
+          {/* Tab 5: Admin Controller Suite (Owner & Admin) */}
+          {menuConfig.adminTabs.admin_controller && canControlAll && (
             <button
               id="admin-tab-controller"
               onClick={() => setActiveAdminTab('admin_controller')}
@@ -1345,8 +1466,8 @@ export const AdminDashboard: React.FC = () => {
             </button>
           )}
 
-          {/* Tab 6: Pricing & Telebirr Settings (Owner only) */}
-          {isOwner && (
+          {/* Tab 6: Pricing & Telebirr Settings (Owner & Admin) */}
+          {menuConfig.adminTabs.pricing_settings && canControlAll && (
             <button
               id="admin-tab-pricing"
               onClick={() => setActiveAdminTab('pricing_settings')}
@@ -1361,8 +1482,8 @@ export const AdminDashboard: React.FC = () => {
             </button>
           )}
 
-          {/* SEPARATED TAB 7: Telegram Channel (Owner only) */}
-          {isOwner && (
+          {/* Tab 7: Telegram Channel (Owner & Admin) */}
+          {menuConfig.adminTabs.telegram_channel && canControlAll && (
             <button
               id="admin-tab-telegram-channel"
               onClick={() => setActiveAdminTab('telegram_channel')}
@@ -1378,8 +1499,8 @@ export const AdminDashboard: React.FC = () => {
             </button>
           )}
 
-          {/* SEPARATED TAB 8: Telegram Bot (Owner only) */}
-          {isOwner && (
+          {/* Tab 8: Telegram Bot (Owner & Admin) */}
+          {menuConfig.adminTabs.telegram_bot && canControlAll && (
             <button
               id="admin-tab-telegram-bot"
               onClick={() => setActiveAdminTab('telegram_bot')}
@@ -1395,33 +1516,71 @@ export const AdminDashboard: React.FC = () => {
             </button>
           )}
 
-          {/* Tab 9: Security & Profile Settings */}
-          <button
-            id="admin-tab-security"
-            onClick={() => setActiveAdminTab('security')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'security'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-            }`}
-          >
-            <Lock className="w-4 h-4 text-amber-500" />
-            <span>Security & Profile</span>
-          </button>
+          {/* Tab 9: Direct Feedbacks Inbox (Owner & Admin) */}
+          {menuConfig.adminTabs.feedback && (canControlAll || effectivePermissions.canViewUserDatabase) && (
+            <button
+              id="admin-tab-feedback"
+              onClick={() => setActiveAdminTab('feedback')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'feedback'
+                  ? 'bg-slate-900 text-white shadow-xs ring-1 ring-indigo-500/50'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4 text-indigo-400" />
+              <span>Feedbacks ({feedbacksCount})</span>
+              {unreadFeedbacksCount > 0 && (
+                <span className="bg-amber-500 text-slate-950 font-black text-[10px] px-1.5 py-0.2 rounded-full animate-pulse">
+                  {unreadFeedbacksCount}
+                </span>
+              )}
+            </button>
+          )}
 
-          {/* Tab 10: Cross-Device Database Sync */}
-          <button
-            id="admin-tab-sync"
-            onClick={() => setActiveAdminTab('sync')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-              activeAdminTab === 'sync'
-                ? 'bg-slate-900 text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
-            }`}
-          >
-            <RefreshCw className="w-4 h-4 text-blue-400" />
-            <span>Database Sync</span>
-          </button>
+          {/* Tab 10: Security & Profile Settings */}
+          {menuConfig.adminTabs.security && (
+            <button
+              id="admin-tab-security"
+              onClick={() => setActiveAdminTab('security')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'security'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <Lock className="w-4 h-4 text-amber-500" />
+              <span>Security & Profile</span>
+            </button>
+          )}
+
+          {/* Tab 11: Cross-Device Database Sync */}
+          {menuConfig.adminTabs.sync && (
+            <button
+              id="admin-tab-sync"
+              onClick={() => setActiveAdminTab('sync')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                activeAdminTab === 'sync'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70'
+              }`}
+            >
+              <RefreshCw className="w-4 h-4 text-blue-400" />
+              <span>Database Sync</span>
+            </button>
+          )}
+
+          {/* Menu Erase / Come Quick Controller Action (Owner & Admin) */}
+          {canControlAll && (
+            <button
+              type="button"
+              onClick={() => setIsMenuControllerOpen(true)}
+              className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors whitespace-nowrap cursor-pointer shrink-0"
+              title="Select or deselect menus to come or erase them from navigation"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-600" />
+              <span>Erase / Come Menus</span>
+            </button>
+          )}
         </div>
 
         {/* ============================================================== */}
@@ -1889,6 +2048,14 @@ export const AdminDashboard: React.FC = () => {
                             </button>
                             <button
                               onClick={() => {
+                                if (!canControlAll && effectivePermissions.isSuspended) {
+                                  showToast('❌ Action blocked: Administrative access is suspended.');
+                                  return;
+                                }
+                                if (!canControlAll && !effectivePermissions.canDeleteProperties) {
+                                  showToast('❌ Permission denied: You do not have authority to delete properties.');
+                                  return;
+                                }
                                 if (window.confirm(`Delete listing "${prop.title}" permanently?`)) {
                                   deleteProperty(prop.id);
                                   showToast('Listing removed.');
@@ -2078,16 +2245,16 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 4: Database Registered Users (Owner Mode Only with Delete & Search) */}
+        {/* TAB 4: Database Registered Users (Owner & Authorized Admin with canViewUserDatabase) */}
         {/* ============================================================== */}
-        {activeAdminTab === 'database_users' && isOwner && (
+        {activeAdminTab === 'database_users' && (isOwner || (!effectivePermissions.isSuspended && effectivePermissions.canViewUserDatabase)) && (
           <div className="space-y-6 animate-in fade-in">
             <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h3 className="font-black text-base text-slate-900 flex items-center gap-2">
                     <Database className="w-5 h-5 text-amber-600" />
-                    <span>Database Registered Users Management (Owner Access Only)</span>
+                    <span>Database Registered Users Management {isOwner ? '(Owner Access)' : '(Authorized Admin Access)'}</span>
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
                     View all registered user identities, search database records, manage plans, and delete user accounts.
@@ -2376,9 +2543,9 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ============================================================== */}
-        {/* TAB 5: Owner Pricing & Telebirr Plans Settings */}
+        {/* TAB 5: Pricing & Telebirr Plans Settings */}
         {/* ============================================================== */}
-        {activeAdminTab === 'pricing_settings' && isOwner && (
+        {activeAdminTab === 'pricing_settings' && canControlAll && (
           <div className="max-w-3xl mx-auto bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs animate-in fade-in">
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/20 text-amber-600 flex items-center justify-center">
@@ -2905,9 +3072,9 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ============================================================== */}
-        {/* TAB: Owner Admin Controller Suite (Sub-Admins, Authorities, Audits) */}
+        {/* TAB: Admin Controller Suite (Sub-Admins, Authorities, Audits) */}
         {/* ============================================================== */}
-        {activeAdminTab === 'admin_controller' && isOwner && (
+        {activeAdminTab === 'admin_controller' && canControlAll && (
           <AdminControllerTab
             onShowToast={showToast}
             adminCredentials={adminCredentials}
@@ -2924,6 +3091,7 @@ export const AdminDashboard: React.FC = () => {
               setShowEraseAllModal(true);
               setEraseConfirmText('');
             }}
+            onOpenMenuControllerModal={() => setIsMenuControllerOpen(true)}
             totalPropertiesCount={properties.length}
           />
         )}
@@ -3732,9 +3900,9 @@ export const AdminDashboard: React.FC = () => {
         })()}
 
         {/* ============================================================== */}
-        {/* TAB: Telegram Channel Broadcaster (Owner only) */}
+        {/* TAB: Telegram Channel Broadcaster */}
         {/* ============================================================== */}
-        {isOwner && (activeAdminTab === 'telegram_channel' || activeAdminTab === 'telegram_hub') && (
+        {canControlAll && (activeAdminTab === 'telegram_channel' || activeAdminTab === 'telegram_hub') && (
           <TelegramChannelTab
             properties={properties}
             showToast={showToast}
@@ -3743,14 +3911,21 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ============================================================== */}
-        {/* TAB: Telegram Bot Management Console (Owner only) */}
+        {/* TAB: Telegram Bot Management Console */}
         {/* ============================================================== */}
-        {isOwner && activeAdminTab === 'telegram_bot' && (
+        {canControlAll && activeAdminTab === 'telegram_bot' && (
           <TelegramBotTab
             properties={properties}
             showToast={showToast}
             onSwitchToChannel={() => setActiveAdminTab('telegram_channel')}
           />
+        )}
+
+        {/* ============================================================== */}
+        {/* TAB: Owner Direct Feedbacks Inbox */}
+        {/* ============================================================== */}
+        {activeAdminTab === 'feedback' && (
+          <OwnerFeedbackTab onShowToast={showToast} />
         )}
 
       </div>
@@ -3957,6 +4132,13 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Menu Controller Modal (Select / Deselect to Come or Erase Menus) */}
+      <MenuControllerModal
+        isOpen={isMenuControllerOpen}
+        onClose={() => setIsMenuControllerOpen(false)}
+        onShowToast={showToast}
+      />
 
     </div>
   );

@@ -4,10 +4,14 @@ import {
   User, 
   X, 
   RefreshCw, 
-  HelpCircle
+  HelpCircle,
+  ThumbsUp,
+  ThumbsDown,
+  CheckCircle2
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
+import { useAuth } from '../../context/AuthContext';
 import { BeteAIMessage, BeteAISearchContext } from '../../types';
 import { safeFetchJson } from '../../lib/apiHelper';
 import { GeminiIcon } from '../common/GeminiIcon';
@@ -24,7 +28,8 @@ export const BeteAIAssistantModal: React.FC<BeteAIAssistantModalProps> = ({
   initialPrompt = ''
 }) => {
   const { isAmharic } = useLanguage();
-  const { updateFilter, setCurrentView } = useProperties();
+  const { user } = useAuth();
+  const { selectedProperty, updateFilter, setCurrentView } = useProperties();
 
   const [inputMessage, setInputMessage] = useState(initialPrompt);
   const [isLoading, setIsLoading] = useState(false);
@@ -70,6 +75,67 @@ I can answer any questions about the Bete Finder platform, Ethiopian real estate
     isAmharic ? 'የኢትዮጵያ ንግድ ባንክ እና አዋሽ የቤት መግዣ ብድር እንዴት ይሰራል?' : 'How do CBE / Awash Bank mortgage loans work in Ethiopia?'
   ];
 
+  const [feedbackToast, setFeedbackToast] = useState<string | null>(null);
+
+  // Restore saved feedback ratings from local storage
+  useEffect(() => {
+    try {
+      const savedRatings = JSON.parse(localStorage.getItem('bete_ai_feedback_ratings') || '{}');
+      if (savedRatings && Object.keys(savedRatings).length > 0) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            savedRatings[m.id] ? { ...m, feedback: savedRatings[m.id] } : m
+          )
+        );
+      }
+    } catch {}
+  }, [isOpen]);
+
+  const handleFeedback = async (messageId: string, type: 'up' | 'down', messageText: string) => {
+    // Update local state immediately
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === messageId
+          ? { ...m, feedback: type, feedbackTimestamp: Date.now() }
+          : m
+      )
+    );
+
+    // Persist in localStorage
+    try {
+      const saved = JSON.parse(localStorage.getItem('bete_ai_feedback_ratings') || '{}');
+      saved[messageId] = type;
+      localStorage.setItem('bete_ai_feedback_ratings', JSON.stringify(saved));
+    } catch {}
+
+    const isRentalOrSale = /rent|ኪራይ|sale|ሽያጭ|መግዛት|buy|ቤት|landlord|አከራይ|tenant/i.test(messageText);
+    const queryType = isRentalOrSale ? 'rental' : 'general';
+
+    // Show friendly acknowledgement toast
+    const msg = type === 'up'
+      ? (isAmharic 
+          ? '👍 እናመሰግናለን! አስተያየትዎ የኪራይና ሽያጭ መረጃ ትክክለኛነትን ለማሻሻል ይረዳል' 
+          : '👍 Thank you! Your feedback helps Bete AI improve rental & sales accuracy.')
+      : (isAmharic 
+          ? '👎 አስተያየትዎ ተመዝግቧል፤ የኪራይና ሽያጭ መረጃዎችን ለማሻሻል እንሰራለን' 
+          : '👎 Feedback noted. We will use this to improve rental & sales accuracy.');
+    
+    setFeedbackToast(msg);
+    setTimeout(() => setFeedbackToast(null), 3500);
+
+    // Send to server feedback endpoint
+    safeFetchJson('/api/ai/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messageId,
+        feedback: type,
+        responseSnippet: messageText.slice(0, 250),
+        queryType
+      })
+    }).catch(() => {});
+  };
+
   const handleSendMessage = async (textToSend?: string) => {
     const query = (textToSend || inputMessage).trim();
     if (!query || isLoading) return;
@@ -92,7 +158,22 @@ I can answer any questions about the Bete Finder platform, Ethiopian real estate
         body: JSON.stringify({
           message: query,
           history: messages.slice(-5),
-          language: isAmharic ? 'am' : 'en'
+          language: isAmharic ? 'am' : 'en',
+          user: user ? {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            phone: user.phone,
+            role: user.role
+          } : null,
+          activeProperty: selectedProperty ? {
+            id: selectedProperty.id,
+            title: selectedProperty.title,
+            status: selectedProperty.status,
+            ownerEmail: selectedProperty.owner?.email,
+            ownerPhone: selectedProperty.owner?.phone,
+            ownerName: selectedProperty.owner?.name
+          } : null
         })
       });
 
@@ -177,6 +258,23 @@ I can answer any questions about the Bete Finder platform, Ethiopian real estate
           </button>
         </div>
 
+        {/* Feedback Confirmation Toast */}
+        {feedbackToast && (
+          <div className="px-4 py-2 bg-emerald-50 border-b border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center justify-between gap-2 shrink-0 animate-in fade-in">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{feedbackToast}</span>
+            </div>
+            <button 
+              type="button" 
+              onClick={() => setFeedbackToast(null)}
+              className="text-emerald-700 hover:text-emerald-900 cursor-pointer text-xs"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Chat Messages Body */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 bg-slate-50/70">
           {messages.map((msg) => {
@@ -196,13 +294,55 @@ I can answer any questions about the Bete Finder platform, Ethiopian real estate
                   {isBot ? <GeminiIcon size={18} /> : <User className="w-4 h-4" />}
                 </div>
 
-                {/* Message Content Bubble */}
-                <div className={`max-w-[85%] rounded-2xl p-4 text-sm shadow-xs leading-relaxed ${
-                  isBot 
-                    ? 'bg-white text-slate-800 border border-slate-200/90 whitespace-pre-wrap font-medium' 
-                    : 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white whitespace-pre-wrap'
-                }`}>
-                  {msg.text}
+                {/* Message Bubble + Feedback Controls */}
+                <div className="max-w-[85%] space-y-1">
+                  <div className={`rounded-2xl p-4 text-sm shadow-xs leading-relaxed ${
+                    isBot 
+                      ? 'bg-white text-slate-800 border border-slate-200/90 whitespace-pre-wrap font-medium' 
+                      : 'bg-gradient-to-r from-indigo-600 to-indigo-700 text-white whitespace-pre-wrap'
+                  }`}>
+                    {msg.text}
+                  </div>
+
+                  {/* Feedback Mechanism for AI Assistant Responses (Rental & Sales Accuracy) */}
+                  {isBot && (
+                    <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 select-none">
+                      <span className="text-[10px] text-slate-400">
+                        {isAmharic ? 'መልሱ ረድቶዎታል?' : 'Accurate response?'}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          id={`ai-feedback-up-${msg.id}`}
+                          onClick={() => handleFeedback(msg.id, 'up', msg.text)}
+                          className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 text-[11px] font-medium cursor-pointer ${
+                            msg.feedback === 'up'
+                              ? 'bg-emerald-100 text-emerald-700 border border-emerald-300 font-bold shadow-xs'
+                              : 'hover:bg-slate-200/60 text-slate-500 hover:text-emerald-700'
+                          }`}
+                          title={isAmharic ? 'ትክክለኛ እና ጠቃሚ መልስ (Thumbs Up)' : 'Helpful & accurate for rental/sales (Thumbs Up)'}
+                        >
+                          <ThumbsUp className={`w-3.5 h-3.5 ${msg.feedback === 'up' ? 'fill-emerald-600' : ''}`} />
+                          <span>{msg.feedback === 'up' ? (isAmharic ? 'ጠቃሚ' : 'Accurate') : ''}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          id={`ai-feedback-down-${msg.id}`}
+                          onClick={() => handleFeedback(msg.id, 'down', msg.text)}
+                          className={`px-2 py-1 rounded-lg transition-all flex items-center gap-1 text-[11px] font-medium cursor-pointer ${
+                            msg.feedback === 'down'
+                              ? 'bg-rose-100 text-rose-700 border border-rose-300 font-bold shadow-xs'
+                              : 'hover:bg-slate-200/60 text-slate-500 hover:text-rose-700'
+                          }`}
+                          title={isAmharic ? 'ትክክለኛ አይደለም / ማሻሻል ይፈልጋል (Thumbs Down)' : 'Needs improvement for rental/sales (Thumbs Down)'}
+                        >
+                          <ThumbsDown className={`w-3.5 h-3.5 ${msg.feedback === 'down' ? 'fill-rose-600' : ''}`} />
+                          <span>{msg.feedback === 'down' ? (isAmharic ? 'ማሻሻል' : 'Needs work') : ''}</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

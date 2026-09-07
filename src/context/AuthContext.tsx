@@ -20,7 +20,9 @@ import {
   normalizePhoneNumber,
   isSlashAllowedForPassword,
   isRevokedAdminEmail,
-  isRevokedAdminPassword
+  isRevokedAdminPassword,
+  isRevokedOwnerEmail,
+  isRevokedOwnerPassword
 } from '../lib/passwords';
 import { authenticateWithGoogle } from '../lib/googleAuth';
 import { safeFetchJson } from '../lib/apiHelper';
@@ -245,19 +247,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // 1. Owner Login Check
+    // 1. Owner Login Check with Invalidation Enforced
+    if (isRevokedOwnerEmail(cleanEmail)) {
+      return { 
+        success: false, 
+        message: 'This previous Owner email address was changed and can no longer access the system. Access with the old email is permanently invalidated. Please sign in using the updated Owner email address.' 
+      };
+    }
+
     const currentOwner = getOwnerCredentials();
     const cleanOwnerEmail = (currentOwner.email || '').split('/')[0].toLowerCase();
-    if (
+    const isOwnerEmailMatch =
       cleanEmail === currentOwner.email.toLowerCase() ||
       cleanEmail === cleanOwnerEmail ||
-      cleanEmail === `${cleanOwnerEmail}/owner` ||
-      cleanEmail === 'kalebbereket49@gmail.com/owner' ||
-      cleanEmail === 'kalebbereker49@gmail.com/owner' ||
-      cleanEmail === 'kalebbereker49@gmail.com' ||
-      cleanEmail === 'kalebbereket49@gmail.com'
-    ) {
+      cleanEmail === `${cleanOwnerEmail}/owner`;
+
+    if (isOwnerEmailMatch) {
       if (password && cleanPass !== currentOwner.password) {
+        if (isRevokedOwnerPassword(cleanPass)) {
+          return {
+            success: false,
+            message: 'Incorrect password. Your Owner password was changed and the previous password can no longer access this account. Please use your new Owner password.'
+          };
+        }
         return { success: false, message: 'Invalid password for Owner account.' };
       }
       const ownerUser: UserProfile = {

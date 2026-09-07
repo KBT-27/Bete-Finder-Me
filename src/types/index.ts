@@ -103,6 +103,8 @@ export interface BeteAIMessage {
   mapContextPart?: string;
   searchContext?: BeteAISearchContext;
   timestamp: number;
+  feedback?: 'up' | 'down';
+  feedbackTimestamp?: number;
 }
 
 export interface TelebirrSettings {
@@ -259,4 +261,51 @@ export interface AdminControllerConfig {
   adminBroadcastNotice: string;
   subAdmins: SubAdmin[];
   auditLogs: AdminAuditLog[];
+}
+
+export interface OwnerFeedback {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  category: 'rental' | 'sale' | 'general' | 'platform' | 'bug' | 'support' | 'other';
+  rating?: number; // 1-5
+  message: string;
+  propertyId?: string;
+  propertyTitle?: string;
+  status: 'new' | 'read' | 'replied' | 'archived';
+  replyNotes?: string;
+  createdAt: string;
+  userAgent?: string;
+}
+
+export interface AdminTabVisibility {
+  payments: boolean;
+  properties: boolean;
+  paid_subscribers: boolean;
+  database_users: boolean;
+  admin_controller: boolean;
+  pricing_settings: boolean;
+  telegram_channel: boolean;
+  telegram_bot: boolean;
+  feedback: boolean;
+  security: boolean;
+  sync: boolean;
+}
+
+export interface PublicMenuVisibility {
+  home: boolean;
+  rent: boolean;
+  sale: boolean;
+  pricing: boolean;
+  post: boolean;
+  ai_assistant: boolean;
+  feedback_button: boolean;
+  favorites: boolean;
+}
+
+export interface MenuVisibilityConfig {
+  adminTabs: AdminTabVisibility;
+  publicMenus: PublicMenuVisibility;
+  lastUpdated?: string;
 }

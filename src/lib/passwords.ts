@@ -220,13 +220,54 @@ export const getRevokedAdminPasswords = (): string[] => {
 export const isRevokedAdminEmail = (email: string): boolean => {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();
+  const base = normalized.split('/')[0];
   const revoked = getRevokedAdminEmails();
-  return revoked.some(rev => rev.toLowerCase() === normalized);
+  return revoked.some(rev => {
+    const revNorm = rev.trim().toLowerCase();
+    const revBase = revNorm.split('/')[0];
+    return revNorm === normalized || revBase === base || `${revBase}/admin` === normalized;
+  });
 };
 
 export const isRevokedAdminPassword = (password: string): boolean => {
   if (!password) return false;
   const revoked = getRevokedAdminPasswords();
+  return revoked.includes(password.trim());
+};
+
+export const getRevokedOwnerEmails = (): string[] => {
+  try {
+    const raw = localStorage.getItem('bete_finder_revoked_owner_emails');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const getRevokedOwnerPasswords = (): string[] => {
+  try {
+    const raw = localStorage.getItem('bete_finder_revoked_owner_passwords');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const isRevokedOwnerEmail = (email: string): boolean => {
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  const base = normalized.split('/')[0];
+  const revoked = getRevokedOwnerEmails();
+  return revoked.some(rev => {
+    const revNorm = rev.trim().toLowerCase();
+    const revBase = revNorm.split('/')[0];
+    return revNorm === normalized || revBase === base || `${revBase}/owner` === normalized;
+  });
+};
+
+export const isRevokedOwnerPassword = (password: string): boolean => {
+  if (!password) return false;
+  const revoked = getRevokedOwnerPasswords();
   return revoked.includes(password.trim());
 };
 
@@ -278,6 +319,27 @@ export const getOwnerCredentials = (): StoredCredentials => {
 
 export const saveOwnerCredentials = (creds: Partial<StoredCredentials>) => {
   const current = getOwnerCredentials();
+
+  // If email is changing, record previous email as revoked so old credentials cannot access
+  if (creds.email && creds.email.trim().toLowerCase() !== current.email.trim().toLowerCase()) {
+    const revokedEmails = getRevokedOwnerEmails();
+    const oldEmail = current.email.trim().toLowerCase();
+    if (!revokedEmails.includes(oldEmail)) {
+      revokedEmails.push(oldEmail);
+      localStorage.setItem('bete_finder_revoked_owner_emails', JSON.stringify(revokedEmails));
+    }
+  }
+
+  // If password is changing, record previous password as revoked
+  if (creds.password && creds.password.trim() !== current.password.trim()) {
+    const revokedPasswords = getRevokedOwnerPasswords();
+    const oldPass = current.password.trim();
+    if (!revokedPasswords.includes(oldPass)) {
+      revokedPasswords.push(oldPass);
+      localStorage.setItem('bete_finder_revoked_owner_passwords', JSON.stringify(revokedPasswords));
+    }
+  }
+
   const updated = { ...current, ...creds };
   localStorage.setItem('bete_finder_owner_creds', JSON.stringify(updated));
   return updated;
@@ -305,6 +367,17 @@ export const saveRegisteredUser = (account: RegisteredAccount) => {
     updated = [account, ...accounts];
   }
   localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
+  
+  // Real database sync & reactive notifications
+  fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(account)
+  }).catch(() => {});
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('bete_accounts_changed'));
+  }
   return updated;
 };
 
@@ -313,8 +386,13 @@ export const deleteRegisteredAccount = (emailOrId: string): RegisteredAccount[] 
   const target = (emailOrId || '').trim().toLowerCase();
   const updated = accounts.filter(a => a.id !== emailOrId && (a.email || '').trim().toLowerCase() !== target);
   localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(updated));
+  
   // Call server deletion
   fetch(`/api/users/${encodeURIComponent(emailOrId)}`, { method: 'DELETE' }).catch(() => {});
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('bete_accounts_changed'));
+  }
   return updated;
 };
 

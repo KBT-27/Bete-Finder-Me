@@ -1,6 +1,40 @@
 {
   "users": [
     {
+      "id": "google-1788769848160",
+      "name": "Leul Lula",
+      "role": "tenant",
+      "email": "leullula2425@gmail.com",
+      "phone": "0942352381",
+      "avatar": "https://lh3.googleusercontent.com/a/ACg8ocJc2zdP7kDoUboyzp3BZxwlwd-sx_7UJv4DT7AHyw_7lHvlcA=s96-c",
+      "password": "google-oauth-auth",
+      "provider": "google",
+      "lastLogin": "2026-09-07T08:30:48.160Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-07T08:30:40.789Z",
+      "registeredAt": "2026-09-07T08:30:48.160Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
+      "id": "user-1788723766395",
+      "name": "Kaleb",
+      "role": "landlord",
+      "email": "kalebbereket894@gmail.com",
+      "phone": "0995406697",
+      "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+      "password": "Kaleb5873",
+      "provider": "local",
+      "lastLogin": "2026-09-06T19:42:46.395Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-06T19:43:34.018Z",
+      "registeredAt": "2026-09-06T19:42:46.395Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
       "id": "user-1788523512807",
       "name": "Darartu Tadesse",
       "role": "tenant",
@@ -31,12 +65,28 @@
     }
   ],
   "properties": [],
-  "lastUpdated": 1788525240240,
+  "lastUpdated": 1788814708883,
+  "ownerFeedbacks": [
+    {
+      "id": "fb-1788814705082-cfjkm",
+      "name": "Abebe Tadesse",
+      "email": "abebe@gmail.com",
+      "phone": "+251911234567",
+      "rating": 5,
+      "status": "new",
+      "message": "Looking for 2-bedroom rental in Bole Atlas. Great platform!",
+      "category": "rental",
+      "createdAt": "2026-09-07T20:58:25.082Z",
+      "userAgent": "curl/7.88.1"
+    }
+  ],
   "paymentRequests": [],
   "adminCredentials": {
-    "name": "Admin (Kaleb Bereket)",
-    "email": "kalebbereket49@gmail.com/admin",
-    "phone": "+251995406697",
+    "bio": "All System Admin",
+    "name": "Bereket Tadesse",
+    "email": "lekeneke@gmail.com/admin",
+    "phone": "+251911749109",
+    "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
     "password": "Kaleb5873"
   },
   "ownerCredentials": {
@@ -52,67 +102,85 @@
   "adminControllerConfig": {
     "auditLogs": [
       {
-        "id": "log-1788273027491-k2vc",
+        "id": "log-1788813888694-g51j",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified Admin Authority Matrix",
-        "details": "Updated permissions: canExportBackups",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T14:30:27.491Z"
+        "timestamp": "2026-09-07T20:44:48.694Z"
       },
       {
-        "id": "log-1788273026542-2nca",
+        "id": "log-1788813886757-ka3w",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified Admin Authority Matrix",
-        "details": "Updated permissions: canExportBackups",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T14:30:26.542Z"
+        "timestamp": "2026-09-07T20:44:46.757Z"
       },
       {
-        "id": "log-1788273023524-fpld",
+        "id": "log-1788813886038-i6nn",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified Admin Authority Matrix",
-        "details": "Updated permissions: canViewUserDatabase",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T14:30:23.524Z"
+        "timestamp": "2026-09-07T20:44:46.038Z"
       },
       {
-        "id": "log-1788273022258-gyns",
+        "id": "log-1788813883740-5481",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified Admin Authority Matrix",
-        "details": "Updated permissions: canBroadcastNotices",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: canApprovePayments",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T14:30:22.258Z"
+        "timestamp": "2026-09-07T20:44:43.740Z"
       },
       {
-        "id": "log-1788273021646-405q",
+        "id": "log-1788813882652-zz1q",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified Admin Authority Matrix",
-        "details": "Updated permissions: canVerifyProperties",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T14:30:21.646Z"
+        "timestamp": "2026-09-07T20:44:42.652Z"
       },
       {
-        "id": "log-1788273019240-d0bt",
+        "id": "log-1788813881348-zel7",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified Admin Authority Matrix",
-        "details": "Updated permissions: canExportBackups",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: canApprovePayments",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T14:30:19.240Z"
+        "timestamp": "2026-09-07T20:44:41.348Z"
       },
       {
-        "id": "log-1788273018374-m1o4",
+        "id": "log-1788813879268-cjqx",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified Admin Authority Matrix",
-        "details": "Updated permissions: canDeleteProperties",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: canApprovePayments",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T14:30:18.374Z"
+        "timestamp": "2026-09-07T20:44:39.268Z"
+      },
+      {
+        "id": "log-1788813878356-7wsc",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-07T20:44:38.356Z"
+      },
+      {
+        "id": "log-1788813877681-xaj9",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified First Admin Authority Matrix",
+        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-09-07T20:44:37.681Z"
       },
       {
         "id": "log-1",
@@ -121,7 +189,7 @@
         "details": "Full cross-device sync completed across 6 PostgreSQL entities.",
         "category": "system",
         "severity": "info",
-        "timestamp": "2026-09-01T14:13:51.944Z"
+        "timestamp": "2026-09-07T20:28:59.245Z"
       },
       {
         "id": "log-2",
@@ -130,7 +198,7 @@
         "details": "Approved luxury 3-bedroom apartment in Bole Olympia for public display.",
         "category": "property",
         "severity": "success",
-        "timestamp": "2026-09-01T13:43:51.944Z"
+        "timestamp": "2026-09-07T19:58:59.245Z"
       },
       {
         "id": "log-3",
@@ -139,7 +207,7 @@
         "details": "Approved 2,499 ETB VIP Spotlight package for Landlord account.",
         "category": "payment",
         "severity": "success",
-        "timestamp": "2026-09-01T12:28:51.944Z"
+        "timestamp": "2026-09-07T18:43:59.245Z"
       },
       {
         "id": "log-4",
@@ -148,7 +216,7 @@
         "details": "Permissions matrix saved and broadcasted to edge cache.",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-01T08:28:51.944Z"
+        "timestamp": "2026-09-07T14:43:59.245Z"
       }
     ],
     "subAdmins": [
@@ -160,8 +228,8 @@
         "phone": "+251911223344",
         "status": "active",
         "password": "InspectorBole2025",
-        "createdAt": "2026-08-27T14:28:51.944Z",
-        "lastLogin": "2026-09-01T10:28:51.944Z",
+        "createdAt": "2026-09-02T20:43:59.243Z",
+        "lastLogin": "2026-09-07T16:43:59.245Z",
         "permissions": {
           "isSuspended": false,
           "canExportBackups": false,
@@ -181,8 +249,8 @@
         "phone": "+251922334455",
         "status": "active",
         "password": "TelebirrOfficer2025",
-        "createdAt": "2026-08-20T14:28:51.944Z",
-        "lastLogin": "2026-09-01T12:28:51.944Z",
+        "createdAt": "2026-08-26T20:43:59.245Z",
+        "lastLogin": "2026-09-07T18:43:59.245Z",
         "permissions": {
           "isSuspended": false,
           "canExportBackups": false,
@@ -196,14 +264,52 @@
       }
     ],
     "adminPermissions": {
-      "isSuspended": false,
-      "canExportBackups": false,
+      "isSuspended": true,
+      "canExportBackups": true,
       "canApprovePayments": true,
-      "canBroadcastNotices": false,
-      "canDeleteProperties": false,
-      "canVerifyProperties": false,
-      "canViewUserDatabase": false
+      "canBroadcastNotices": true,
+      "canDeleteProperties": true,
+      "canVerifyProperties": true,
+      "canViewUserDatabase": true
     },
-    "adminBroadcastNotice": "System Notice: Please prioritize verifying VIP listing requests submitted within 24 hours."
+    "adminBroadcastNotice": "System Notice: Please prioritize verifying VIP listing requests submitted within 24 hours.",
+    "firstAdminPermissions": {
+      "isSuspended": false,
+      "canExportBackups": true,
+      "canApprovePayments": true,
+      "canBroadcastNotices": true,
+      "canDeleteProperties": true,
+      "canVerifyProperties": true,
+      "canViewUserDatabase": true
+    }
+  },
+  "menuConfig": {
+    "adminTabs": {
+      "payments": true,
+      "properties": true,
+      "paid_subscribers": true,
+      "database_users": true,
+      "admin_controller": true,
+      "pricing_settings": true,
+      "telegram_channel": true,
+      "telegram_bot": true,
+      "feedback": true,
+      "security": true,
+      "sync": true
+    },
+    "publicMenus": {
+      "home": true,
+      "rent": true,
+      "sale": true,
+      "pricing": true,
+      "post": true,
+      "ai_assistant": true,
+      "feedback_button": true,
+      "favorites": true,
+      "dashboard": true,
+      "post_property": true,
+      "feedback": true
+    },
+    "lastUpdated": "2026-09-07T20:58:28.883Z"
   }
 }

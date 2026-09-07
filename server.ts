@@ -185,7 +185,34 @@ function getCleanInitialState() {
       channelUsername: 'Bete_Finder',
       autoPublishProperties: true
     },
-    paymentRequests: []
+    paymentRequests: [],
+    ownerFeedbacks: [],
+    menuConfig: {
+      adminTabs: {
+        payments: true,
+        properties: true,
+        paid_subscribers: true,
+        database_users: true,
+        admin_controller: true,
+        pricing_settings: true,
+        telegram_channel: true,
+        telegram_bot: true,
+        feedback: true,
+        security: true,
+        sync: true
+      },
+      publicMenus: {
+        home: true,
+        rent: true,
+        sale: true,
+        pricing: true,
+        post: true,
+        ai_assistant: true,
+        feedback_button: true,
+        favorites: true
+      },
+      lastUpdated: new Date().toISOString()
+    }
   };
 }
 
@@ -876,6 +903,23 @@ app.post('/api/admin/update-profile', async (req, res) => {
     }
 
     const currentData = await fetchMasterData();
+    const oldEmail = (currentData.adminCredentials?.email || '').trim().toLowerCase();
+    const oldPass = (currentData.adminCredentials?.password || '').trim();
+
+    if (oldEmail && oldEmail !== cleanEmail) {
+      currentData.revokedAdminEmails = currentData.revokedAdminEmails || [];
+      if (!currentData.revokedAdminEmails.includes(oldEmail)) {
+        currentData.revokedAdminEmails.push(oldEmail);
+      }
+    }
+
+    if (oldPass && oldPass !== String(password).trim()) {
+      currentData.revokedAdminPasswords = currentData.revokedAdminPasswords || [];
+      if (!currentData.revokedAdminPasswords.includes(oldPass)) {
+        currentData.revokedAdminPasswords.push(oldPass);
+      }
+    }
+
     const updatedAdminCreds = {
       email: cleanEmail,
       password: String(password).trim(),
@@ -937,7 +981,7 @@ const BETE_ASSISTANCE_SYSTEM_INSTRUCTION = `
 You are Bete Assistance, a versatile, highly capable AI assistant powered by Google Gemini.
 
 Key Directives:
-1. Universal Capabilities ("Can Answer Anything"):
+1. Universal Capabilities ("Can Answer All Questions"):
 - You have comprehensive universal knowledge and can answer ANY question on ANY subject:
   * General knowledge, world and Ethiopian history, geography, cultures, traditions, and literature.
   * Science, physics, chemistry, biology, astronomy, medicine, and health.
@@ -952,7 +996,15 @@ Key Directives:
   * Provide realistic Ethiopian market insights for Addis Ababa (Bole, CMC, Kazanchis, Sarbet, Summit, Bisrate Gabriel, Old Airport), Hawassa, Bahir Dar, and Bishoftu.
   * Detail tenancy legalities, written contract requirements at woredas, standard advance rent expectations (3 to 6 months), broker fees, and bank mortgage procedures (CBE, Awash Bank, Nib Bank).
 
-3. Language & Tone:
+3. Property Status Declaration Authority ("Can Say Buyed Or Rented Only The Poster Person"):
+- STRICT PLATFORM RULE: ONLY the original poster person (the verified owner, host, or landlord who published the listing) has the legitimate authority to declare, state, or change the status of a property to "Bought / Sold" (የተሸጠ) or "Rented" (የተከራየ).
+- If any user (who is NOT the verified poster person) asks if a property is bought or rented, or requests to declare/mark it as bought or rented, or claims it is bought or rented:
+  * You MUST explicitly clarify that in Bete Finder, only the original poster person who posted the listing can confirm or declare a property as "Bought (Sold)" or "Rented".
+  * Prospective tenants, buyers, or other users cannot make this declaration, and the listing remains active until the poster person updates it.
+- If the requester IS the verified poster person:
+  * Acknowledge that as the verified poster person, they have the exclusive right to mark their property as "Rented" or "Sold (Bought)" using their property management controls.
+
+4. Language & Tone:
 - Respond fluently in the language the user addresses you in: Amharic (አማርኛ) or English.
 - Be articulate, welcoming, thorough, and helpful.
 - Provide direct answers without any internal labels or prefixes.
@@ -961,15 +1013,65 @@ Key Directives:
 // 1. Bete Assistance Interactive Chat (Powered by Gemini)
 app.post('/api/ai/chat', async (req, res) => {
   try {
-    const { message, history = [], language = 'auto' } = req.body;
+    const { message, history = [], language = 'auto', user, activeProperty } = req.body;
     if (!message || typeof message !== 'string') {
       return res.status(400).json({ success: false, message: 'Message is required.' });
     }
 
-    const ai = getGeminiClient();
+    const isAmh = /[\u1200-\u137F]/.test(message);
+    const lower = message.toLowerCase().trim();
+
+    // Check if the user is the verified poster person of the active property
+    const isPosterPerson = Boolean(
+      activeProperty && user && (
+        (user.id && activeProperty.ownerId && user.id === activeProperty.ownerId) ||
+        (user.email && activeProperty.ownerEmail && user.email.toLowerCase() === activeProperty.ownerEmail.toLowerCase()) ||
+        (user.phone && activeProperty.ownerPhone && user.phone.replace(/[^0-9]/g, '') === activeProperty.ownerPhone.replace(/[^0-9]/g, ''))
+      )
+    );
+
+    // Rule check: "say buyed or rented only the poster person"
+    const isStatusQuery = (
+      lower.includes('say buyed') ||
+      lower.includes('say rented') ||
+      lower.includes('buyed or rented') ||
+      lower.includes('bought or rented') ||
+      lower.includes('say it is rented') ||
+      lower.includes('say it is bought') ||
+      lower.includes('say it is sold') ||
+      lower.includes('is it rented') ||
+      lower.includes('is it bought') ||
+      lower.includes('is it sold') ||
+      lower.includes('mark as rented') ||
+      lower.includes('mark as bought') ||
+      lower.includes('mark as sold') ||
+      lower.includes('who can say rented') ||
+      lower.includes('who can say bought') ||
+      message.includes('ተከራይቷል') ||
+      message.includes('ተሽጧል') ||
+      message.includes('ተገዝቷል') ||
+      message.includes('ተከራይቷል በል') ||
+      message.includes('ተሽጧል በል')
+    );
+
     let replyText = '';
 
-    if (ai) {
+    // Direct enforcement for property status rule: Only the poster person can say buyed or rented
+    if (isStatusQuery) {
+      if (!isPosterPerson) {
+        replyText = isAmh
+          ? `በቤቴ ፈላጊ (Bete Finder) ህግና አሰራር መሰረት፣ ማንኛውንም ቤት **"ተከራይቷል (Rented)"** ወይም **"ተገዝቷል/ተሽጧል (Buyed/Sold)"** ብሎ መናገር፣ ማረጋገጥ ወይም ሁኔታውን መቀየር የሚችለው **ቤቱን የለጠፈው ዋና ባለቤት (The Poster Person)** ብቻ ነው። \n\nሌሎች ተጠቃሚዎች፣ ደንበኞች ወይም ተመልካቾች ይህንን ሁኔታ መወሰን ወይም መቀየር አይችሉም። ቤቱ በዋናው ለጣፊ ባለቤት እስካልተቀየረ ድረስ በድረ-ገፁ ላይ ንቁ (Active) ሆኖ ይቆያል።`
+          : `According to Bete Finder platform rules, **ONLY the original poster person (the landlord/owner who published the listing)** has the exclusive authority to say, confirm, or declare a property as **"Bought / Sold"** or **"Rented"**.\n\nProspective buyers, tenants, or general visitors cannot state or change this status. The listing remains active on the marketplace until the authentic poster person modifies its status in their property management dashboard.`;
+      } else {
+        replyText = isAmh
+          ? `እርስዎ የዚህ ቤት ትክክለኛ ለጣፊ (The Poster Person) በመሆንዎ፣ ቤቱን **"ተከራይቷል (Rented)"** ወይም **"ተሽጧል/ተገዝቷል (Sold/Bought)"** ብለው የማስታወቅ እና ሁኔታውን የመቀየር ሙሉ ስልጣን አለዎት። በንብረትዎ ዝርዝር ገጽ ወይም በዳሽቦርድዎ ውስጥ ባለው የሁኔታ መቆጣጠሪያ (Status Control) አማካኝነት በቀላሉ ማስተካከል ይችላሉ።`
+          : `As the verified **Poster Person** of this listing, you have full and exclusive authority to say or declare that this property is **"Rented"** or **"Bought / Sold"**. You can update this status directly at any time from your Property Details view or User Dashboard status controls.`;
+      }
+    }
+
+    const ai = getGeminiClient();
+
+    if (!replyText && ai) {
       // Build conversation context
       const formattedContents: any[] = [];
       
@@ -983,10 +1085,14 @@ app.post('/api/ai/chat', async (req, res) => {
         }
       }
 
-      // Add current user message
+      // Add current user message with context hints
+      const contextualUserText = activeProperty 
+        ? `[Context: Active Property "${activeProperty.title}", User is Poster Person: ${isPosterPerson ? 'YES' : 'NO'}]\n${message}`
+        : message;
+
       formattedContents.push({
         role: 'user',
-        parts: [{ text: message }]
+        parts: [{ text: contextualUserText }]
       });
 
       try {
@@ -1260,7 +1366,6 @@ Feel free to ask follow-up questions or explore any subject—from software engi
 
     // Extract structured search parameters for frontend map/filter actions
     const searchContext: any = {};
-    const lower = message.toLowerCase();
     const replyLower = cleanAnswer.toLowerCase();
 
     // Detect target location
@@ -1333,6 +1438,243 @@ Feel free to ask follow-up questions or explore any subject—from software engi
       success: false, 
       message: error?.message || 'Error processing AI assistant request.' 
     });
+  }
+});
+
+// ==========================================
+// AI ASSISTANT FEEDBACK ENDPOINT (THUMBS UP / DOWN)
+// ==========================================
+interface AIFeedbackRecord {
+  id: string;
+  messageId: string;
+  feedback: 'up' | 'down';
+  query?: string;
+  responseSnippet?: string;
+  queryType?: 'rental' | 'sales' | 'general';
+  timestamp: string;
+}
+
+const aiFeedbackLogs: AIFeedbackRecord[] = [];
+
+app.post('/api/ai/feedback', (req, res) => {
+  try {
+    const { messageId, feedback, query, responseSnippet, queryType } = req.body || {};
+    if (!messageId || (feedback !== 'up' && feedback !== 'down')) {
+      return res.status(400).json({ success: false, message: 'Invalid feedback parameters' });
+    }
+
+    const record: AIFeedbackRecord = {
+      id: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      messageId: String(messageId),
+      feedback,
+      query: query ? String(query).slice(0, 300) : undefined,
+      responseSnippet: responseSnippet ? String(responseSnippet).slice(0, 300) : undefined,
+      queryType: queryType || 'rental',
+      timestamp: new Date().toISOString()
+    };
+
+    aiFeedbackLogs.push(record);
+    if (aiFeedbackLogs.length > 500) aiFeedbackLogs.shift();
+
+    console.log(`[Bete AI Feedback]: ${feedback.toUpperCase()} received for ${record.queryType} query (ID: ${messageId})`);
+
+    res.json({
+      success: true,
+      message: 'Feedback recorded successfully to optimize rental and sales response accuracy.'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Error recording feedback' });
+  }
+});
+
+// ==========================================
+// OWNER FEEDBACK INBOX & SUBMISSION
+// ==========================================
+app.get('/api/feedback', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    res.json({
+      success: true,
+      feedbacks: currentData.ownerFeedbacks || [],
+      totalFeedbacks: (currentData.ownerFeedbacks || []).length
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Failed to fetch feedbacks' });
+  }
+});
+
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const { name, email, phone, category, rating, message, propertyId, propertyTitle } = req.body || {};
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, message: 'Message text is required.' });
+    }
+
+    const currentData = await fetchMasterData();
+    if (!currentData.ownerFeedbacks) {
+      currentData.ownerFeedbacks = [];
+    }
+
+    const newFeedback = {
+      id: req.body?.id || `fb-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      name: (name || 'Anonymous User').trim(),
+      email: (email || 'user@example.com').trim(),
+      phone: (phone || '').trim(),
+      category: category || 'general',
+      rating: Number(rating) || 5,
+      message: message.trim(),
+      propertyId: propertyId || undefined,
+      propertyTitle: propertyTitle || undefined,
+      status: 'new',
+      createdAt: new Date().toISOString(),
+      userAgent: req.headers['user-agent']
+    };
+
+    currentData.ownerFeedbacks = [newFeedback, ...currentData.ownerFeedbacks];
+    await persistMasterData(currentData);
+
+    console.log(`[Owner Feedback]: New feedback received from ${newFeedback.name} (${newFeedback.category})`);
+
+    res.json({
+      success: true,
+      feedback: newFeedback,
+      totalFeedbacks: currentData.ownerFeedbacks.length,
+      message: 'Feedback submitted directly to Owner successfully!'
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message || 'Failed to save feedback' });
+  }
+});
+
+app.patch('/api/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status, replyNotes } = req.body || {};
+    const currentData = await fetchMasterData();
+    if (!currentData.ownerFeedbacks) currentData.ownerFeedbacks = [];
+
+    const index = currentData.ownerFeedbacks.findIndex((f: any) => f.id === id);
+    if (index === -1) {
+      return res.status(404).json({ success: false, message: 'Feedback not found' });
+    }
+
+    if (status) currentData.ownerFeedbacks[index].status = status;
+    if (replyNotes !== undefined) currentData.ownerFeedbacks[index].replyNotes = replyNotes;
+
+    await persistMasterData(currentData);
+    res.json({ success: true, feedback: currentData.ownerFeedbacks[index] });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message });
+  }
+});
+
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentData = await fetchMasterData();
+    if (!currentData.ownerFeedbacks) currentData.ownerFeedbacks = [];
+
+    currentData.ownerFeedbacks = currentData.ownerFeedbacks.filter((f: any) => f.id !== id);
+    await persistMasterData(currentData);
+    res.json({ success: true, message: 'Feedback removed', totalFeedbacks: currentData.ownerFeedbacks.length });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message });
+  }
+});
+
+app.post('/api/feedback/clear', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    currentData.ownerFeedbacks = [];
+    await persistMasterData(currentData);
+    res.json({ success: true, message: 'All feedbacks cleared' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message });
+  }
+});
+
+// ==========================================
+// MENU VISIBILITY CONTROLLER API (SELECT / DESELECT MENUS)
+// ==========================================
+app.get('/api/menu-config', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    res.json({
+      success: true,
+      menuConfig: currentData.menuConfig || {
+        adminTabs: {
+          payments: true,
+          properties: true,
+          paid_subscribers: true,
+          database_users: true,
+          admin_controller: true,
+          pricing_settings: true,
+          telegram_channel: true,
+          telegram_bot: true,
+          feedback: true,
+          security: true,
+          sync: true
+        },
+        publicMenus: {
+          home: true,
+          rent: true,
+          sale: true,
+          pricing: true,
+          post: true,
+          ai_assistant: true,
+          feedback_button: true,
+          favorites: true
+        },
+        lastUpdated: new Date().toISOString()
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message });
+  }
+});
+
+app.post('/api/menu-config', async (req, res) => {
+  try {
+    const newConfig = req.body;
+    if (!newConfig || typeof newConfig !== 'object') {
+      return res.status(400).json({ success: false, message: 'Invalid menu configuration' });
+    }
+
+    const currentData = await fetchMasterData();
+    currentData.menuConfig = {
+      adminTabs: {
+        payments: true,
+        properties: true,
+        paid_subscribers: true,
+        database_users: true,
+        admin_controller: true,
+        pricing_settings: true,
+        telegram_channel: true,
+        telegram_bot: true,
+        feedback: true,
+        security: true,
+        sync: true,
+        ...(newConfig.adminTabs || {})
+      },
+      publicMenus: {
+        home: true,
+        rent: true,
+        sale: true,
+        pricing: true,
+        post: true,
+        ai_assistant: true,
+        feedback_button: true,
+        favorites: true,
+        ...(newConfig.publicMenus || {})
+      },
+      lastUpdated: new Date().toISOString()
+    };
+
+    await persistMasterData(currentData);
+    console.log('[Menu Config]: Owner updated menu visibility preferences');
+    res.json({ success: true, menuConfig: currentData.menuConfig });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err?.message });
   }
 });
 
@@ -2146,6 +2488,23 @@ app.post('/api/admin/update-profile', async (req, res) => {
     }
 
     const currentData = await fetchMasterData();
+    const oldEmail = (currentData.adminCredentials?.email || '').trim().toLowerCase();
+    const oldPass = (currentData.adminCredentials?.password || '').trim();
+
+    if (oldEmail && oldEmail !== cleanEmail) {
+      currentData.revokedAdminEmails = currentData.revokedAdminEmails || [];
+      if (!currentData.revokedAdminEmails.includes(oldEmail)) {
+        currentData.revokedAdminEmails.push(oldEmail);
+      }
+    }
+
+    if (oldPass && oldPass !== cleanPass) {
+      currentData.revokedAdminPasswords = currentData.revokedAdminPasswords || [];
+      if (!currentData.revokedAdminPasswords.includes(oldPass)) {
+        currentData.revokedAdminPasswords.push(oldPass);
+      }
+    }
+
     currentData.adminCredentials = {
       email: cleanEmail,
       password: cleanPass,
@@ -2402,11 +2761,28 @@ app.post('/api/auth/change-password', async (req, res) => {
 
     const currentData = await fetchMasterData();
 
+    // Check revoked emails
+    const revokedAdminEmails: string[] = currentData.revokedAdminEmails || [];
+    const revokedOwnerEmails: string[] = currentData.revokedOwnerEmails || [];
+    if (revokedAdminEmails.includes(inputEmail) || revokedOwnerEmails.includes(inputEmail)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'This email address was previously changed and can no longer access or modify the system.' 
+      });
+    }
+
     // 1. Check Owner account
     const ownerCreds = currentData.ownerCredentials || { email: 'kalebbereket49@gmail.com/owner', password: 'Kaleb5873' };
-    if (inputEmail === ownerCreds.email.toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/owner') {
+    const cleanOwnerEmail = (ownerCreds.email || '').trim().toLowerCase();
+    const isOwnerMatch = inputEmail === cleanOwnerEmail || inputEmail === cleanOwnerEmail.split('/')[0];
+    if (isOwnerMatch) {
       if (inputCurrent !== ownerCreds.password) {
         return res.status(400).json({ success: false, message: 'Current password is incorrect for Owner account.' });
+      }
+      // Invalidate old password permanently
+      currentData.revokedOwnerPasswords = currentData.revokedOwnerPasswords || [];
+      if (!currentData.revokedOwnerPasswords.includes(ownerCreds.password)) {
+        currentData.revokedOwnerPasswords.push(ownerCreds.password);
       }
       currentData.ownerCredentials = {
         ...ownerCreds,
@@ -2414,14 +2790,21 @@ app.post('/api/auth/change-password', async (req, res) => {
         phone: inputPhone || ownerCreds.phone
       };
       await persistMasterData(currentData);
-      return res.json({ success: true, message: 'Owner password changed successfully!' });
+      return res.json({ success: true, message: 'Owner password changed successfully! Old password is now invalidated.' });
     }
 
     // 2. Check Admin account
     const adminCreds = currentData.adminCredentials || { email: 'kalebbereket49@gmail.com/admin', password: 'Kaleb5873' };
-    if (inputEmail === adminCreds.email.toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/admin') {
+    const cleanAdminEmail = (adminCreds.email || '').trim().toLowerCase();
+    const isAdminMatch = inputEmail === cleanAdminEmail || inputEmail === cleanAdminEmail.split('/')[0];
+    if (isAdminMatch) {
       if (inputCurrent !== adminCreds.password) {
         return res.status(400).json({ success: false, message: 'Current password is incorrect for Admin account.' });
+      }
+      // Invalidate old password permanently
+      currentData.revokedAdminPasswords = currentData.revokedAdminPasswords || [];
+      if (!currentData.revokedAdminPasswords.includes(adminCreds.password)) {
+        currentData.revokedAdminPasswords.push(adminCreds.password);
       }
       currentData.adminCredentials = {
         ...adminCreds,
@@ -2429,7 +2812,7 @@ app.post('/api/auth/change-password', async (req, res) => {
         phone: inputPhone || adminCreds.phone
       };
       await persistMasterData(currentData);
-      return res.json({ success: true, message: 'Admin password changed successfully!' });
+      return res.json({ success: true, message: 'Admin password changed successfully! Old password is now invalidated.' });
     }
 
     // 3. Check registered users

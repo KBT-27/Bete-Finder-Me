@@ -69,6 +69,15 @@ export const PropertyDetailsView: React.FC = () => {
 
   const isFav = isFavorite(selectedProperty.id);
 
+  // Strictly enforce that only the original poster person who listed this property can set availability status to Rented or Sold
+  const isPosterPerson = Boolean(
+    user && (
+      (selectedProperty.owner?.id && user.id === selectedProperty.owner.id) ||
+      (selectedProperty.owner?.email && user.email && user.email.trim().toLowerCase() === selectedProperty.owner.email.trim().toLowerCase()) ||
+      (selectedProperty.owner?.phone && user.phone && user.phone.replace(/\D/g, '') === selectedProperty.owner.phone.replace(/\D/g, ''))
+    )
+  );
+
   const formattedPrice = new Intl.NumberFormat('en-ET', {
     maximumFractionDigits: 0
   }).format(selectedProperty.price);
@@ -226,14 +235,36 @@ export const PropertyDetailsView: React.FC = () => {
             </div>
           </div>
 
-          {/* If landlord or admin: allow quick status change */}
-          {user && (user.id === selectedProperty.owner?.id || user.email === selectedProperty.owner?.email || user.role === 'owner' || user.role === 'admin' || user.role === 'landlord') && (
-            <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+          {/* Availability Status: Strictly restricted so only the original poster person who posted this listing can say Rented or Sold */}
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                 <KeyRound className="w-3.5 h-3.5 text-emerald-600" />
-                <span>{isAmharic ? 'የንብረት ሁኔታ ለውጥ (Status Control):' : 'Update Property Availability Status:'}</span>
+                <span>{isAmharic ? 'የንብረት ሁኔታ (Availability):' : 'Property Availability:'}</span>
               </span>
-              <div className="flex items-center gap-1.5">
+
+              {/* Status Badge */}
+              {selectedProperty.availabilityStatus === 'rented' ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-rose-100 text-rose-700 border border-rose-200 flex items-center gap-1">
+                  🔑 {isAmharic ? 'ተከራይቷል (Rented)' : 'Rented'}
+                </span>
+              ) : selectedProperty.availabilityStatus === 'sold' ? (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-1">
+                  🏷️ {isAmharic ? 'ተሸጧል / ተገዝቷል (Sold / Bought)' : 'Bought / Sold'}
+                </span>
+              ) : (
+                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                  🟢 {isAmharic ? 'ክፍት ነው (Available)' : 'Available'}
+                </span>
+              )}
+            </div>
+
+            {/* If the current user is the poster person: allow changing status */}
+            {isPosterPerson ? (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 mr-1">
+                  {isAmharic ? 'የለጠፈው ባለቤት ብቻ:' : 'Poster Only:'}
+                </span>
                 <button
                   type="button"
                   id="status-btn-available"
@@ -246,6 +277,7 @@ export const PropertyDetailsView: React.FC = () => {
                       ? 'bg-emerald-600 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
+                  title={isAmharic ? 'ይህን ቤት ክፍት ነው ብለው ያመልክቱ' : 'Mark as Available'}
                 >
                   🟢 {isAmharic ? 'ክፍት ነው' : 'Available'}
                 </button>
@@ -261,6 +293,7 @@ export const PropertyDetailsView: React.FC = () => {
                       ? 'bg-rose-600 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
+                  title={isAmharic ? 'ይህን ቤት ተከራይቷል ብለው ያመልክቱ (የለጠፈው ሰው ብቻ)' : 'Mark as Rented (Poster only)'}
                 >
                   🔑 {isAmharic ? 'ተከራይቷል' : 'Mark as Rented'}
                 </button>
@@ -276,12 +309,19 @@ export const PropertyDetailsView: React.FC = () => {
                       ? 'bg-purple-700 text-white shadow-xs'
                       : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
+                  title={isAmharic ? 'ይህን ቤት ተሸጧል / ተገዝቷል ብለው ያመልክቱ (የለጠፈው ሰው ብቻ)' : 'Mark as Bought/Sold (Poster only)'}
                 >
                   🏷️ {isAmharic ? 'ተሸጧል' : 'Mark as Sold'}
                 </button>
               </div>
-            </div>
-          )}
+            ) : (
+              <span className="text-[11px] text-slate-400 italic">
+                {isAmharic 
+                  ? 'ተከራይቷል ወይም ተሸጧል ብሎ ሁኔታውን መቀየር የሚችለው ይህን ቤት የለጠፈው ባለቤት ብቻ ነው።' 
+                  : 'Only the poster person who listed this property can say Rented or Bought/Sold.'}
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Photo Gallery Grid */}

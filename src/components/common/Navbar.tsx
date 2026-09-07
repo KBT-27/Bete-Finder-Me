@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Building2, 
   Home, 
@@ -16,13 +16,16 @@ import {
   Crown,
   ShieldCheck,
   Sparkles,
-  Bot
+  Bot,
+  MessageSquare
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProperties } from '../../context/PropertyContext';
-import { UserRole } from '../../types';
+import { UserRole, MenuVisibilityConfig } from '../../types';
 import { GeminiIcon } from './GeminiIcon';
+import { getMenuConfig, syncMenuConfigFromServer } from '../../lib/menuConfig';
+import { OwnerFeedbackModal } from '../feedback/OwnerFeedbackModal';
 
 export const Navbar: React.FC = () => {
   const { t, language, toggleLanguage, isAmharic } = useLanguage();
@@ -30,6 +33,22 @@ export const Navbar: React.FC = () => {
   const { currentView, setCurrentView, setActiveListingType, savedProperties, updateFilter, resetFilters, openAIChatWithPrompt } = useProperties();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  
+  // Dynamic menu visibility controlled by the Owner
+  const [menuConfig, setMenuConfig] = useState<MenuVisibilityConfig>(getMenuConfig());
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+
+  useEffect(() => {
+    const handleMenuConfigChanged = (e: any) => {
+      if (e.detail) setMenuConfig(e.detail);
+      else setMenuConfig(getMenuConfig());
+    };
+    window.addEventListener('bete_menu_config_changed', handleMenuConfigChanged);
+    syncMenuConfigFromServer().then((cfg) => cfg && setMenuConfig(cfg));
+    return () => {
+      window.removeEventListener('bete_menu_config_changed', handleMenuConfigChanged);
+    };
+  }, []);
 
   const handleNavClick = (view: 'home' | 'properties' | 'post' | 'pricing' | 'dashboard', listingType?: 'all' | 'rent' | 'sale') => {
     if (listingType) {
@@ -95,51 +114,59 @@ export const Navbar: React.FC = () => {
 
           {/* Desktop Navigation Links */}
           <nav className="hidden md:flex items-center gap-1 lg:gap-2">
-            <button
-              id="nav-home-btn"
-              onClick={() => handleNavClick('home')}
-              className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
-                currentView === 'home'
-                  ? 'text-emerald-700 bg-emerald-50'
-                  : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              {t('navHome')}
-            </button>
+            {menuConfig.publicMenus.home && (
+              <button
+                id="nav-home-btn"
+                onClick={() => handleNavClick('home')}
+                className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+                  currentView === 'home'
+                    ? 'text-emerald-700 bg-emerald-50'
+                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
+                }`}
+              >
+                {t('navHome')}
+              </button>
+            )}
 
-            <button
-              id="nav-rent-btn"
-              onClick={() => handleNavClick('properties', 'rent')}
-              className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
-                currentView === 'properties'
-                  ? 'text-emerald-700 bg-emerald-50'
-                  : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              {t('navRent')}
-            </button>
+            {menuConfig.publicMenus.rent && (
+              <button
+                id="nav-rent-btn"
+                onClick={() => handleNavClick('properties', 'rent')}
+                className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+                  currentView === 'properties'
+                    ? 'text-emerald-700 bg-emerald-50'
+                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
+                }`}
+              >
+                {t('navRent')}
+              </button>
+            )}
 
-            <button
-              id="nav-sale-btn"
-              onClick={() => handleNavClick('properties', 'sale')}
-              className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-650 hover:text-slate-900 hover:bg-slate-100/70 transition-colors cursor-pointer"
-            >
-              {t('navSale')}
-            </button>
+            {menuConfig.publicMenus.sale && (
+              <button
+                id="nav-sale-btn"
+                onClick={() => handleNavClick('properties', 'sale')}
+                className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-650 hover:text-slate-900 hover:bg-slate-100/70 transition-colors cursor-pointer"
+              >
+                {t('navSale')}
+              </button>
+            )}
 
-            <button
-              id="nav-pricing-btn"
-              onClick={() => handleNavClick('pricing')}
-              className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
-                currentView === 'pricing'
-                  ? 'text-emerald-700 bg-emerald-50'
-                  : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
-              }`}
-            >
-              {t('navPricing')}
-            </button>
+            {menuConfig.publicMenus.pricing && (
+              <button
+                id="nav-pricing-btn"
+                onClick={() => handleNavClick('pricing')}
+                className={`px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer ${
+                  currentView === 'pricing'
+                    ? 'text-emerald-700 bg-emerald-50'
+                    : 'text-slate-650 hover:text-slate-900 hover:bg-slate-100/70'
+                }`}
+              >
+                {t('navPricing')}
+              </button>
+            )}
 
-            {user && (
+            {user && menuConfig.publicMenus.dashboard && (
               <button
                 id="nav-dashboard-btn"
                 onClick={() => handleNavClick('dashboard')}
@@ -154,24 +181,39 @@ export const Navbar: React.FC = () => {
             )}
           </nav>
 
-          {/* Right Action Tools: Language, Post Property, User Profile */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Right Action Tools: Language, Feedback, Post Property, User Profile */}
+          <div className="hidden md:flex items-center gap-2.5">
             
             {/* Bete Assistance (Gemini) Launcher Button */}
-            <button
-              id="header-gemini-ai-btn"
-              onClick={() => openAIChatWithPrompt()}
-              className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-xl shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer ring-1 ring-slate-700/60 hover:ring-indigo-400 group"
-              title={isAmharic ? 'Bete Assistance (በ Google Gemini የተደገፈ)' : 'Bete Assistance (Powered by Google Gemini)'}
-            >
-              <GeminiIcon size={18} className="transition-transform group-hover:scale-115 group-hover:rotate-6 shrink-0" />
-              <span className="tracking-tight bg-gradient-to-r from-white via-indigo-100 to-indigo-200 bg-clip-text text-transparent font-bold">
-                {isAmharic ? 'ቤቴ ረዳት' : 'Bete Assistance'}
-              </span>
-              <span className="hidden xl:inline text-[9px] font-bold text-indigo-300 px-1 py-0.2 bg-indigo-500/20 rounded">
-                Gemini
-              </span>
-            </button>
+            {menuConfig.publicMenus.ai_assistant && (
+              <button
+                id="header-gemini-ai-btn"
+                onClick={() => openAIChatWithPrompt()}
+                className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 text-white text-xs font-black rounded-xl shadow-xs hover:shadow-md transition-all active:scale-98 cursor-pointer ring-1 ring-slate-700/60 hover:ring-indigo-400 group"
+                title={isAmharic ? 'Bete Assistance (በ Google Gemini የተደገፈ)' : 'Bete Assistance (Powered by Google Gemini)'}
+              >
+                <GeminiIcon size={18} className="transition-transform group-hover:scale-115 group-hover:rotate-6 shrink-0" />
+                <span className="tracking-tight bg-gradient-to-r from-white via-indigo-100 to-indigo-200 bg-clip-text text-transparent font-bold">
+                  {isAmharic ? 'ቤቴ ረዳት' : 'Bete Assistance'}
+                </span>
+                <span className="hidden xl:inline text-[9px] font-bold text-indigo-300 px-1 py-0.2 bg-indigo-500/20 rounded">
+                  Gemini
+                </span>
+              </button>
+            )}
+
+            {/* Direct Feedback to Owner Button */}
+            {menuConfig.publicMenus.feedback && (
+              <button
+                id="header-feedback-btn"
+                onClick={() => setIsFeedbackModalOpen(true)}
+                title={isAmharic ? 'ለባለቤቱ አስተያየት ወይም ጥቆማ ይላኩ' : 'Send feedback or suggestions directly to the Owner'}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-800 hover:text-indigo-950 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200/90 cursor-pointer shadow-2xs"
+              >
+                <MessageSquare className="w-3.5 h-3.5 text-indigo-600" />
+                <span>{isAmharic ? 'አስተያየት' : 'Feedback'}</span>
+              </button>
+            )}
 
             {/* Language Switcher */}
             <button
@@ -204,14 +246,16 @@ export const Navbar: React.FC = () => {
             )}
 
             {/* Post Property Button */}
-            <button
-              id="header-post-property-btn"
-              onClick={() => handleNavClick('post')}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md transition-all active:scale-98 cursor-pointer"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>{t('navPostProperty')}</span>
-            </button>
+            {menuConfig.publicMenus.post_property && (
+              <button
+                id="header-post-property-btn"
+                onClick={() => handleNavClick('post')}
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-sm hover:shadow-md transition-all active:scale-98 cursor-pointer"
+              >
+                <PlusCircle className="w-4 h-4" />
+                <span>{t('navPostProperty')}</span>
+              </button>
+            )}
 
             {/* User Dropdown */}
             <div className="relative">
@@ -351,62 +395,72 @@ export const Navbar: React.FC = () => {
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-slate-200 px-4 pt-3 pb-6 space-y-3 animate-in slide-in-from-top-3 duration-200">
           <div className="space-y-1">
-            <button
-              id="mobile-nav-home-btn"
-              onClick={() => handleNavClick('home')}
-              className={`w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold flex items-center gap-3 ${
-                currentView === 'home' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-800 hover:bg-slate-100'
-              }`}
-            >
-              <Home className="w-5 h-5" />
-              <span>{t('navHome')}</span>
-            </button>
+            {menuConfig.publicMenus.home && (
+              <button
+                id="mobile-nav-home-btn"
+                onClick={() => handleNavClick('home')}
+                className={`w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold flex items-center gap-3 ${
+                  currentView === 'home' ? 'bg-emerald-50 text-emerald-700' : 'text-slate-800 hover:bg-slate-100'
+                }`}
+              >
+                <Home className="w-5 h-5" />
+                <span>{t('navHome')}</span>
+              </button>
+            )}
 
-            <button
-              id="mobile-nav-rent-btn"
-              onClick={() => handleNavClick('properties', 'rent')}
-              className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3"
-            >
-              <Search className="w-5 h-5 text-emerald-600" />
-              <span>{t('navRent')}</span>
-            </button>
+            {menuConfig.publicMenus.rent && (
+              <button
+                id="mobile-nav-rent-btn"
+                onClick={() => handleNavClick('properties', 'rent')}
+                className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3"
+              >
+                <Search className="w-5 h-5 text-emerald-600" />
+                <span>{t('navRent')}</span>
+              </button>
+            )}
 
-            <button
-              id="mobile-nav-sale-btn"
-              onClick={() => handleNavClick('properties', 'sale')}
-              className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3"
-            >
-              <Building2 className="w-5 h-5 text-amber-600" />
-              <span>{t('navSale')}</span>
-            </button>
+            {menuConfig.publicMenus.sale && (
+              <button
+                id="mobile-nav-sale-btn"
+                onClick={() => handleNavClick('properties', 'sale')}
+                className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3"
+              >
+                <Building2 className="w-5 h-5 text-amber-600" />
+                <span>{t('navSale')}</span>
+              </button>
+            )}
 
-            <button
-              id="mobile-nav-gemini-ai-btn"
-              onClick={() => {
-                setIsMobileMenuOpen(false);
-                openAIChatWithPrompt();
-              }}
-              className="w-full text-left px-3 py-2.5 rounded-xl text-base font-bold text-white bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-700/60 flex items-center justify-between shadow-xs"
-            >
-              <div className="flex items-center gap-3">
-                <GeminiIcon size={22} className="shrink-0" />
-                <span>{isAmharic ? 'ቤቴ ረዳት (Bete Assistance)' : 'Bete Assistance'}</span>
-              </div>
-              <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/30">
-                Gemini
-              </span>
-            </button>
+            {menuConfig.publicMenus.ai_assistant && (
+              <button
+                id="mobile-nav-gemini-ai-btn"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  openAIChatWithPrompt();
+                }}
+                className="w-full text-left px-3 py-2.5 rounded-xl text-base font-bold text-white bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-slate-700/60 flex items-center justify-between shadow-xs"
+              >
+                <div className="flex items-center gap-3">
+                  <GeminiIcon size={22} className="shrink-0" />
+                  <span>{isAmharic ? 'ቤቴ ረዳት (Bete Assistance)' : 'Bete Assistance'}</span>
+                </div>
+                <span className="text-[10px] font-bold text-indigo-300 bg-indigo-500/20 px-2 py-0.5 rounded-full border border-indigo-400/30">
+                  Gemini
+                </span>
+              </button>
+            )}
 
-            <button
-              id="mobile-nav-pricing-btn"
-              onClick={() => handleNavClick('pricing')}
-              className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3"
-            >
-              <CreditCard className="w-5 h-5 text-blue-600" />
-              <span>{t('navPricing')}</span>
-            </button>
+            {menuConfig.publicMenus.pricing && (
+              <button
+                id="mobile-nav-pricing-btn"
+                onClick={() => handleNavClick('pricing')}
+                className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3"
+              >
+                <CreditCard className="w-5 h-5 text-blue-600" />
+                <span>{t('navPricing')}</span>
+              </button>
+            )}
 
-            {user && (
+            {user && menuConfig.publicMenus.dashboard && (
               <button
                 id="mobile-nav-dashboard-btn"
                 onClick={() => handleNavClick('dashboard')}
@@ -416,17 +470,33 @@ export const Navbar: React.FC = () => {
                 <span>{t('navDashboard')}</span>
               </button>
             )}
+
+            {menuConfig.publicMenus.feedback && (
+              <button
+                id="mobile-nav-feedback-btn"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setIsFeedbackModalOpen(true);
+                }}
+                className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-indigo-950 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 flex items-center gap-3 transition-colors"
+              >
+                <MessageSquare className="w-5 h-5 text-indigo-600" />
+                <span>{isAmharic ? 'ለባለቤቱ አስተያየት ላክ' : 'Send Feedback to Owner'}</span>
+              </button>
+            )}
           </div>
 
           <div className="pt-3 border-t border-slate-200 space-y-2">
-            <button
-              id="mobile-post-property-btn"
-              onClick={() => handleNavClick('post')}
-              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm"
-            >
-              <PlusCircle className="w-5 h-5" />
-              <span>{t('navPostProperty')}</span>
-            </button>
+            {menuConfig.publicMenus.post_property && (
+              <button
+                id="mobile-post-property-btn"
+                onClick={() => handleNavClick('post')}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm"
+              >
+                <PlusCircle className="w-5 h-5" />
+                <span>{t('navPostProperty')}</span>
+              </button>
+            )}
 
             {user ? (
               <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2">
@@ -483,6 +553,12 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Owner Feedback Modal */}
+      <OwnerFeedbackModal
+        isOpen={isFeedbackModalOpen}
+        onClose={() => setIsFeedbackModalOpen(false)}
+      />
     </header>
   );
 };
