@@ -19,7 +19,8 @@ import {
   Building2,
   Crown,
   Sparkles,
-  Inbox
+  Inbox,
+  MapPin
 } from 'lucide-react';
 import { OwnerFeedback } from '../../types';
 import { 
@@ -137,9 +138,10 @@ export const OwnerFeedbackTab: React.FC<OwnerFeedbackTabProps> = ({ onShowToast 
         const inName = (fb.name || '').toLowerCase().includes(q);
         const inEmail = (fb.email || '').toLowerCase().includes(q);
         const inPhone = (fb.phone || '').toLowerCase().includes(q);
+        const inLoc = (fb.location || '').toLowerCase().includes(q);
         const inMsg = (fb.message || '').toLowerCase().includes(q);
         const inProp = (fb.propertyTitle || '').toLowerCase().includes(q);
-        return inName || inEmail || inPhone || inMsg || inProp;
+        return inName || inEmail || inPhone || inLoc || inMsg || inProp;
       }
       return true;
     });
@@ -420,6 +422,13 @@ export const OwnerFeedbackTab: React.FC<OwnerFeedbackTabProps> = ({ onShowToast 
                             <Phone className="w-3.5 h-3.5 text-slate-400" />
                             <span>{fb.phone}</span>
                           </a>
+                        )}
+
+                        {fb.location && (
+                          <span className="flex items-center gap-1 text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-200">
+                            <MapPin className="w-3 h-3 text-rose-500" />
+                            <span>{fb.location}</span>
+                          </span>
                         )}
 
                         <span className="flex items-center gap-1 text-[11px] text-slate-400">

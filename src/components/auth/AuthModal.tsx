@@ -272,14 +272,10 @@ export const AuthModal: React.FC = () => {
         const trimmedEmail = email.trim().toLowerCase();
         const trimmedPhone = phone.trim();
 
-        if (!trimmedEmail) {
-          setErrorMessage(language === 'am' ? 'እባክዎ የተመዘገበውን Gmail / ኢሜይል ያስገቡ።' : 'Please enter your registered Gmail / Email address.');
-          setIsLoading(false);
-          return;
-        }
-
-        if (!trimmedPhone) {
-          setErrorMessage(language === 'am' ? 'እባክዎ የተመዘገበውን ስልክ ቁጥር ያስገቡ።' : 'Please enter your registered Phone Number.');
+        if (!trimmedEmail || !trimmedEmail.includes('@')) {
+          setErrorMessage(language === 'am' 
+            ? 'ባለ 6 አሃዝ የማረጋገጫ ኮድ ለመቀበል እባክዎ ትክክለኛ የጂሜይል አድራሻዎን ያስገቡ።' 
+            : 'Enter your Gmail address to receive an automatic 6-digit verification code in your Primary Inbox Access.');
           setIsLoading(false);
           return;
         }
@@ -295,16 +291,16 @@ export const AuthModal: React.FC = () => {
           }
         }
 
-        const res = await requestPasswordReset(trimmedEmail, trimmedPhone);
+        const res = await requestPasswordReset(trimmedEmail, trimmedPhone || undefined);
         if (res.success) {
           setIsDeliveredViaSmtp(Boolean(res.delivered));
           setSuccessMessage(res.message || (language === 'am'
             ? 'ባለ 6 አሃዝ የማረጋገጫ ቁጥር ወደ Gmail Primary Inbox ተልኳል!'
-            : 'A 6-digit verification code has been dispatched to your Gmail Primary Inbox.'));
+            : 'An automatic 6-digit verification code has been dispatched to your Gmail Primary Inbox Access.'));
         } else {
           setErrorMessage(res.message || (language === 'am'
-            ? 'የገቡት Gmail እና ስልክ ቁጥር በመረጃ ቋቱ ከተመዘገበ መለያ ጋር አይዛመድም።'
-            : 'The entered Gmail and Phone Number do not match any registered account in the database.'));
+            ? 'ይቅርታ፣ ኮዱን መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ።'
+            : 'Unable to send verification code. Please check your Gmail address and try again.'));
         }
       } else if (mode === 'change') {
         // Change Password Handler: Asks for Gmail, Phone, Current Password, New Password
@@ -386,8 +382,8 @@ export const AuthModal: React.FC = () => {
           {(mode === 'forgot' || mode === 'change' || mode === 'reset') && (
             <p className="text-xs text-slate-500 mt-1">
               {mode === 'forgot' && (language === 'am' 
-                ? 'የ Gmail አድራሻዎን ያስገቡ፤ ባለ 6 አሃዝ የማረጋገጫ ቁጥር ወዲያውኑ ይላክልዎታል'
-                : 'Enter your Gmail address to receive an automatic 6-digit verification code in your Primary Inbox')}
+                ? 'ባለ 6 አሃዝ የማረጋገጫ ኮድ በቀጥታ በዋናው የጂሜይል ሳጥንዎ (Primary Inbox Access) ለመቀበል የጂሜይል አድራሻዎን ያስገቡ'
+                : 'Enter your Gmail address to receive an automatic 6-digit verification code in your Primary Inbox Access')}
               {mode === 'change' && (language === 'am'
                 ? 'የ Gmail አድራሻዎን፣ ስልክ ቁጥርዎን፣ የአሁኑን እና አዲሱን የይለፍ ቃል ያስገቡ'
                 : 'Enter your Gmail, phone number, current password, and new password')}
@@ -744,7 +740,7 @@ export const AuthModal: React.FC = () => {
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   {mode === 'forgot' ? (
-                    language === 'am' ? '1. የተመዘገበ Gmail / ኢሜይል *' : '1. Registered Gmail / Email *'
+                    language === 'am' ? 'የጂሜይል አድራሻ (Gmail Address) *' : 'Gmail Address (for 6-Digit Code) *'
                   ) : mode === 'change' ? (
                     language === 'am' ? '1. የተመዘገበ Gmail / ኢሜይል *' : '1. Registered Gmail / Email *'
                   ) : (
@@ -761,10 +757,16 @@ export const AuthModal: React.FC = () => {
                     id="auth-email-input"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="name@gmail.com"
+                    placeholder="Enter your Gmail address (e.g. name@gmail.com)"
                     className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                   />
                 </div>
+                {mode === 'forgot' && (
+                  <p className="mt-1 text-[10px] text-emerald-700 font-semibold flex items-center gap-1">
+                    <span>⚡</span>
+                    <span>{language === 'am' ? 'ባለ 6 አሃዝ የማረጋገጫ ኮድ በቀጥታ በዋናው የጂሜይል ሳጥንዎ (Primary Inbox) ይደርስዎታል' : 'An automatic 6-digit verification code will be sent to your Primary Inbox.'}</span>
+                  </p>
+                )}
               </div>
 
               {/* Phone Number for Sign Up, Forgot Password, and Change Password */}
@@ -772,7 +774,7 @@ export const AuthModal: React.FC = () => {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     {mode === 'forgot' ? (
-                      language === 'am' ? '2. የተመዘገበ ስልክ ቁጥር *' : '2. Registered Phone Number *'
+                      language === 'am' ? 'ስልክ ቁጥር (አማራጭ)' : 'Phone Number (Optional)'
                     ) : mode === 'change' ? (
                       language === 'am' ? '2. የተመዘገበ ስልክ ቁጥር *' : '2. Registered Phone Number *'
                     ) : (
@@ -783,7 +785,7 @@ export const AuthModal: React.FC = () => {
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="tel"
-                      required={mode === 'change' || mode === 'forgot'}
+                      required={mode === 'change'}
                       id="auth-phone-input"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}

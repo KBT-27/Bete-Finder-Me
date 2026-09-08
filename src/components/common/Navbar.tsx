@@ -25,18 +25,16 @@ import { useProperties } from '../../context/PropertyContext';
 import { UserRole, MenuVisibilityConfig } from '../../types';
 import { GeminiIcon } from './GeminiIcon';
 import { getMenuConfig, syncMenuConfigFromServer } from '../../lib/menuConfig';
-import { OwnerFeedbackModal } from '../feedback/OwnerFeedbackModal';
 
 export const Navbar: React.FC = () => {
   const { t, language, toggleLanguage, isAmharic } = useLanguage();
   const { user, role, logout, setIsAuthModalOpen, setAuthModalInitialMode } = useAuth();
-  const { currentView, setCurrentView, setActiveListingType, savedProperties, updateFilter, resetFilters, openAIChatWithPrompt } = useProperties();
+  const { currentView, setCurrentView, setActiveListingType, savedProperties, updateFilter, resetFilters, openAIChatWithPrompt, openFeedbackModal } = useProperties();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   
   // Dynamic menu visibility controlled by the Owner
   const [menuConfig, setMenuConfig] = useState<MenuVisibilityConfig>(getMenuConfig());
-  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
 
   useEffect(() => {
     const handleMenuConfigChanged = (e: any) => {
@@ -206,7 +204,7 @@ export const Navbar: React.FC = () => {
             {menuConfig.publicMenus.feedback && (
               <button
                 id="header-feedback-btn"
-                onClick={() => setIsFeedbackModalOpen(true)}
+                onClick={() => openFeedbackModal()}
                 title={isAmharic ? 'ለባለቤቱ አስተያየት ወይም ጥቆማ ይላኩ' : 'Send feedback or suggestions directly to the Owner'}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-800 hover:text-indigo-950 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors border border-indigo-200/90 cursor-pointer shadow-2xs"
               >
@@ -476,7 +474,7 @@ export const Navbar: React.FC = () => {
                 id="mobile-nav-feedback-btn"
                 onClick={() => {
                   setIsMobileMenuOpen(false);
-                  setIsFeedbackModalOpen(true);
+                  openFeedbackModal();
                 }}
                 className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-indigo-950 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/80 flex items-center gap-3 transition-colors"
               >
@@ -553,12 +551,6 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       )}
-
-      {/* Owner Feedback Modal */}
-      <OwnerFeedbackModal
-        isOpen={isFeedbackModalOpen}
-        onClose={() => setIsFeedbackModalOpen(false)}
-      />
     </header>
   );
 };

@@ -36,9 +36,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password?: string) => { success: boolean; message?: string };
   signup: (data: { name: string; email: string; phone: string; password: string; role?: UserRole }) => { success: boolean; message?: string };
-  loginWithGoogle: (role?: UserRole, customProfile?: { name?: string; email?: string; avatar?: string }) => Promise<{ success: boolean; message?: string }>;
+  loginWithGoogle: (role?: UserRole, customProfile?: { name?: string; email?: string; avatar?: string; phone?: string }) => Promise<{ success: boolean; message?: string }>;
   isEmailRegistered: (email: string) => boolean;
-  requestPasswordReset: (email: string, phone: string) => Promise<{ success: boolean; message: string; resetToken?: string; resetCode?: string; resetUrl?: string; delivered?: boolean }>;
+  requestPasswordReset: (email: string, phone?: string) => Promise<{ success: boolean; message: string; resetToken?: string; resetCode?: string; resetUrl?: string; delivered?: boolean }>;
   verifyResetToken: (token: string) => { valid: boolean; email?: string; error?: string };
   resetPasswordWithToken: (token: string, newPassword: string) => Promise<{ success: boolean; message: string }>;
   changePassword: (data: { email: string; phone: string; currentPassword: string; newPassword: string }) => Promise<{ success: boolean; message: string }>;
@@ -599,7 +599,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Request Password Reset with Email AND Phone number verification
   const requestPasswordReset = async (
     email: string,
-    phone: string
+    phone?: string
   ): Promise<{
     success: boolean;
     message: string;
@@ -609,14 +609,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     delivered?: boolean;
   }> => {
     if (!email || !email.includes('@')) {
-      return { success: false, message: 'Please enter a valid registered Gmail / Email address.' };
-    }
-    if (!phone || !phone.trim()) {
-      return { success: false, message: 'Please enter your registered phone number.' };
+      return { success: false, message: 'Please enter a valid Gmail / Email address.' };
     }
 
     const inputEmail = email.trim().toLowerCase();
-    const inputPhone = phone.trim();
+    const inputPhone = (phone || '').trim();
 
     // Check slash symbol constraint
     if (inputEmail.includes('/')) {
@@ -629,12 +626,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    // Client-side verification against registered accounts & phone numbers
+    // Client-side verification against registered accounts & phone numbers (phone optional)
     const localVerification = verifyRegisteredAccountAndPhone(inputEmail, inputPhone);
     if (!localVerification.matched) {
       return {
         success: false,
-        message: localVerification.error || 'The entered Gmail and Phone Number do not match any registered account in the database.'
+        message: localVerification.error || 'The entered Gmail address could not be verified in the database.'
       };
     }
 

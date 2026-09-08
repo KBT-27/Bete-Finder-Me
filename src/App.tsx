@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { PropertyProvider, useProperties } from './context/PropertyContext';
@@ -22,25 +22,56 @@ import { ResetPasswordView } from './components/auth/ResetPasswordView';
 import { PaymentModal } from './components/payment/PaymentModal';
 import { FloatingBeteAIButton } from './components/ai/FloatingBeteAIButton';
 import { BeteAIAssistantModal } from './components/ai/BeteAIAssistantModal';
+import { OwnerFeedbackModal } from './components/feedback/OwnerFeedbackModal';
 
 // Google AdSense Banner Component
 const AdSenseBanner: React.FC = () => {
+  const adRef = useRef<HTMLModElement | null>(null);
+  const isPushedRef = useRef(false);
+
   useEffect(() => {
+    // Avoid double-pushing if already initiated for this instance
+    if (isPushedRef.current) return;
+
+    const el = adRef.current;
+    if (!el) return;
+
+    // Check if element has already been processed by AdSense
+    if (el.getAttribute('data-adsbygoogle-status') === 'done' || el.children.length > 0) {
+      return;
+    }
+
+    // Ensure there is at least one unfilled ins.adsbygoogle in the DOM before pushing
+    const pendingIns = document.querySelectorAll('ins.adsbygoogle:not([data-adsbygoogle-status])');
+    if (pendingIns.length === 0) {
+      return;
+    }
+
     try {
-      ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
-    } catch (e) {
-      console.error("AdSense error:", e);
+      isPushedRef.current = true;
+      if (typeof window !== 'undefined') {
+        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      }
+    } catch (e: any) {
+      // Gracefully catch and ignore benign AdSense SPA duplicate push warnings
+      const msg = e?.message || String(e);
+      if (!msg.includes('already have ads in them')) {
+        console.warn('AdSense notice:', msg);
+      }
     }
   }, []);
 
   return (
     <div className="my-6 w-full overflow-hidden flex justify-center px-4">
-      <ins className="adsbygoogle"
-           style={{ display: 'block', width: '100%', maxWidth: '728px' }}
-           data-ad-client="ca-pub-7267372597438656"
-           data-ad-slot="5231098149"
-           data-ad-format="auto"
-           data-full-width-responsive="true"></ins>
+      <ins
+        ref={adRef}
+        className="adsbygoogle"
+        style={{ display: 'block', width: '100%', maxWidth: '728px' }}
+        data-ad-client="ca-pub-7267372597438656"
+        data-ad-slot="5231098149"
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      />
     </div>
   );
 };
@@ -93,7 +124,15 @@ const MainContent: React.FC = () => {
 };
 
 const AppShell: React.FC = () => {
-  const { isAIChatOpen, setIsAIChatOpen, aiInitialPrompt, openAIChatWithPrompt } = useProperties();
+  const { 
+    isAIChatOpen, 
+    setIsAIChatOpen, 
+    aiInitialPrompt, 
+    openAIChatWithPrompt,
+    isFeedbackOpen,
+    setIsFeedbackOpen,
+    openFeedbackModal
+  } = useProperties();
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 font-sans text-slate-900 selection:bg-amber-500 selection:text-white">
@@ -101,14 +140,23 @@ const AppShell: React.FC = () => {
       <Navbar />
       <MainContent />
 
-      {/* Global Bete AI Floating Action Button */}
-      <FloatingBeteAIButton onClick={() => openAIChatWithPrompt()} />
+      {/* Global Bete AI Floating Action Button with Touch Feedback */}
+      <FloatingBeteAIButton 
+        onClick={() => openAIChatWithPrompt()} 
+        onOpenFeedback={() => openFeedbackModal()}
+      />
 
       {/* Global Bete AI Assistant Modal */}
       <BeteAIAssistantModal 
         isOpen={isAIChatOpen} 
         onClose={() => setIsAIChatOpen(false)} 
         initialPrompt={aiInitialPrompt} 
+      />
+
+      {/* Global Owner Direct Feedback Modal - pops up in the very front */}
+      <OwnerFeedbackModal
+        isOpen={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
       />
 
       {/* Global Overlays & Modals */}

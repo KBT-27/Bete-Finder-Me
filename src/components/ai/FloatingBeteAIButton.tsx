@@ -1,14 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeftRight } from 'lucide-react';
+import { ArrowLeftRight, MessageSquare } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
+import { useProperties } from '../../context/PropertyContext';
 import { GeminiIcon } from '../common/GeminiIcon';
 
 interface FloatingGeminiButtonProps {
   onClick: () => void;
+  onOpenFeedback?: () => void;
 }
 
-export const FloatingGeminiButton: React.FC<FloatingGeminiButtonProps> = ({ onClick }) => {
+export const FloatingGeminiButton: React.FC<FloatingGeminiButtonProps> = ({ 
+  onClick, 
+  onOpenFeedback 
+}) => {
   const { isAmharic } = useLanguage();
+  const { openFeedbackModal } = useProperties();
   const [position, setPosition] = useState<'right' | 'left'>('right');
 
   useEffect(() => {
@@ -33,9 +39,19 @@ export const FloatingGeminiButton: React.FC<FloatingGeminiButtonProps> = ({ onCl
     }
   };
 
+  const handleFeedbackClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onOpenFeedback) {
+      onOpenFeedback();
+    } else {
+      openFeedbackModal();
+    }
+  };
+
   return (
     <div 
-      className={`fixed bottom-6 ${position === 'right' ? 'right-6' : 'left-6'} z-40 flex items-center ${position === 'right' ? 'flex-row-reverse' : 'flex-row'} gap-2 transition-all duration-300`}
+      id="floating-actions-dock"
+      className={`fixed bottom-6 ${position === 'right' ? 'right-6' : 'left-6'} z-40 flex items-center ${position === 'right' ? 'flex-row-reverse' : 'flex-row'} gap-2.5 transition-all duration-300`}
     >
       {/* Circle Bete Assistance (Gemini) Button */}
       <button
@@ -64,12 +80,36 @@ export const FloatingGeminiButton: React.FC<FloatingGeminiButtonProps> = ({ onCl
         </span>
       </button>
 
-      {/* Dock Position Switcher (Move Left/Right) */}
+      {/* Floating Touch Feedback Button (Styled like the AI Assistance) */}
+      <button
+        id="floating-touch-feedback-btn"
+        onClick={handleFeedbackClick}
+        aria-label="Send Direct Feedback"
+        title={isAmharic ? 'ለባለቤቱ አስተያየት / ጥቆማ ይላኩ (Direct Feedback)' : 'Touch to send Direct Feedback or Inquiries'}
+        className="group relative w-12 h-12 rounded-full bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 text-white shadow-xl shadow-indigo-950/60 border border-indigo-500/40 flex items-center justify-center hover:scale-108 active:scale-95 transition-all duration-300 cursor-pointer overflow-visible ring-2 ring-indigo-500/30 hover:ring-indigo-400"
+      >
+        {/* Subtle indigo-teal aura glow */}
+        <span className="absolute -inset-1 rounded-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 opacity-50 blur-sm group-hover:opacity-85 transition-all pointer-events-none" />
+
+        <div className="relative w-full h-full rounded-full bg-slate-950 flex items-center justify-center overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-tr from-indigo-900/40 via-purple-900/30 to-teal-900/20 pointer-events-none" />
+          <MessageSquare className="w-5 h-5 text-indigo-200 group-hover:text-white group-hover:scale-110 transition-all relative z-10 drop-shadow-sm" />
+        </div>
+
+        {/* Floating badge label on hover */}
+        <span className="absolute -top-7 whitespace-nowrap px-2 py-0.5 rounded-md bg-slate-900/90 text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none border border-indigo-400/30 shadow-md">
+          {isAmharic ? 'አስተያየት' : 'Feedback'}
+        </span>
+      </button>
+
+      {/* Dock Location Switcher (Switch Dock Location Left/Right) */}
       <button
         id="gemini-switch-side-btn"
         onClick={toggleSide}
-        title={position === 'right' ? (isAmharic ? 'ወደ ግራ አዙር' : 'Move circle to Left') : (isAmharic ? 'ወደ ቀኝ አዙር' : 'Move circle to Right')}
-        className="w-7 h-7 rounded-full bg-white/90 hover:bg-white text-slate-700 shadow-md border border-slate-200 flex items-center justify-center transition-transform hover:scale-110 active:scale-90 cursor-pointer opacity-70 hover:opacity-100"
+        title={position === 'right' 
+          ? (isAmharic ? 'አካባቢን ቀይር (ወደ ግራ)' : 'Switch Dock Location (Move to Left)') 
+          : (isAmharic ? 'አካባቢን ቀይር (ወደ ቀኝ)' : 'Switch Dock Location (Move to Right)')}
+        className="w-7 h-7 rounded-full bg-white/90 hover:bg-white text-slate-700 shadow-md border border-slate-200 flex items-center justify-center transition-transform hover:scale-110 active:scale-90 cursor-pointer opacity-75 hover:opacity-100"
       >
         <ArrowLeftRight className="w-3.5 h-3.5" />
       </button>

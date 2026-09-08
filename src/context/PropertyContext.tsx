@@ -85,6 +85,11 @@ interface PropertyContextType {
   aiInitialPrompt: string;
   setAiInitialPrompt: (prompt: string) => void;
   openAIChatWithPrompt: (prompt?: string) => void;
+  isFeedbackOpen: boolean;
+  setIsFeedbackOpen: (open: boolean) => void;
+  feedbackInitialLocation: string;
+  setFeedbackInitialLocation: (loc: string) => void;
+  openFeedbackModal: (initialLocation?: string) => void;
 }
 
 const PropertyContext = createContext<PropertyContextType | undefined>(undefined);
@@ -169,12 +174,23 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [lastDbSyncTimestamp, setLastDbSyncTimestamp] = useState(Date.now());
   const [isAIChatOpen, setIsAIChatOpen] = useState(false);
   const [aiInitialPrompt, setAiInitialPrompt] = useState('');
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [feedbackInitialLocation, setFeedbackInitialLocation] = useState('');
 
   const openAIChatWithPrompt = useCallback((prompt?: string) => {
     if (prompt) {
       setAiInitialPrompt(prompt);
     }
     setIsAIChatOpen(true);
+  }, []);
+
+  const openFeedbackModal = useCallback((initialLocation?: string) => {
+    if (initialLocation) {
+      setFeedbackInitialLocation(initialLocation);
+    } else {
+      setFeedbackInitialLocation('');
+    }
+    setIsFeedbackOpen(true);
   }, []);
 
   const [syncIntervalSeconds, setSyncIntervalSecondsState] = useState<number>(() => {
@@ -764,7 +780,12 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setIsAIChatOpen,
         aiInitialPrompt,
         setAiInitialPrompt,
-        openAIChatWithPrompt
+        openAIChatWithPrompt,
+        isFeedbackOpen,
+        setIsFeedbackOpen,
+        feedbackInitialLocation,
+        setFeedbackInitialLocation,
+        openFeedbackModal
       }}
     >
       {children}

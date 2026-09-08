@@ -57,11 +57,11 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
       setMessage('');
       setRating(0);
       setHoverRating(null);
-      setCategory('');
+      setCategory(initialCategory || '');
       setIsSubmitted(false);
       setErrorMsg(null);
     }
-  }, [isOpen]);
+  }, [isOpen, initialCategory]);
 
   const handleResetAllQuestions = () => {
     setName('');
@@ -151,7 +151,7 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
   return (
     <div 
       id="owner-feedback-modal-overlay"
-      className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
+      className="fixed inset-0 z-[999999] flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

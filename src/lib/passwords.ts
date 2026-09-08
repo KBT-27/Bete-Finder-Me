@@ -78,10 +78,10 @@ export const normalizePhoneNumber = (phone: string): string => {
   return digitsOnly;
 };
 
-// Verify that the requested Gmail and Phone Number are both registered and belong to the same account
+// Verify that the requested Gmail and optional Phone Number are verified to receive verification code
 export const verifyRegisteredAccountAndPhone = (
   email: string,
-  phone: string
+  phone?: string
 ): { 
   matched: boolean; 
   accountType?: 'owner' | 'admin' | 'user'; 
@@ -90,13 +90,10 @@ export const verifyRegisteredAccountAndPhone = (
   error?: string 
 } => {
   const normEmail = (email || '').trim().toLowerCase();
-  const normPhone = normalizePhoneNumber(phone);
+  const normPhone = phone ? normalizePhoneNumber(phone) : '';
 
-  if (!normEmail) {
-    return { matched: false, error: 'Registered Gmail / Email is required.' };
-  }
-  if (!normPhone) {
-    return { matched: false, error: 'Registered Phone Number is required.' };
+  if (!normEmail || !normEmail.includes('@')) {
+    return { matched: false, error: 'A valid registered Gmail / Email is required.' };
   }
 
   // 1. Check Owner Account
@@ -113,11 +110,11 @@ export const verifyRegisteredAccountAndPhone = (
     normEmail === 'kalebbereker49@gmail.com'
   ) {
     const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '0995406697');
-    if (ownerPhoneNorm === normPhone) {
+    if (!normPhone || ownerPhoneNorm === normPhone) {
       return { 
         matched: true, 
         accountType: 'owner', 
-        accountName: owner.name, 
+        accountName: owner.name || 'Kaleb Bereket (Owner)', 
         registeredPhone: owner.phone 
       };
     } else {
@@ -139,11 +136,11 @@ export const verifyRegisteredAccountAndPhone = (
     normEmail === 'kalebbereket49@gmail.com/admin'
   ) {
     const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
-    if (adminPhoneNorm === normPhone) {
+    if (!normPhone || adminPhoneNorm === normPhone) {
       return { 
         matched: true, 
         accountType: 'admin', 
-        accountName: admin.name, 
+        accountName: admin.name || 'Administrator', 
         registeredPhone: admin.phone 
       };
     } else {
@@ -160,7 +157,7 @@ export const verifyRegisteredAccountAndPhone = (
 
   if (foundUser) {
     const userPhoneNorm = normalizePhoneNumber(foundUser.phone || '');
-    if (userPhoneNorm && userPhoneNorm === normPhone) {
+    if (!normPhone || (userPhoneNorm && userPhoneNorm === normPhone)) {
       return { 
         matched: true, 
         accountType: 'user', 
@@ -175,9 +172,12 @@ export const verifyRegisteredAccountAndPhone = (
     }
   }
 
+  // Support any Gmail address requesting an automatic verification code to primary inbox
   return { 
-    matched: false, 
-    error: 'No registered account found with this Gmail / Email address. You must have a registered account in Bete Finder.' 
+    matched: true, 
+    accountType: 'user',
+    accountName: normEmail.split('@')[0],
+    registeredPhone: ''
   };
 };
 

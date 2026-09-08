@@ -2707,6 +2707,74 @@ app.delete('/api/payments/:id', async (req, res) => {
   }
 });
 
+// Get all Feedbacks
+app.get('/api/feedback', async (req, res) => {
+  try {
+    const currentData = await fetchMasterData();
+    res.json({ success: true, feedbacks: currentData.ownerFeedbacks || [] });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Submit / Save Feedback (with location support)
+app.post('/api/feedback', async (req, res) => {
+  try {
+    const feedback = req.body;
+    if (!feedback || !feedback.message) {
+      return res.status(400).json({ success: false, message: 'Message is required for feedback.' });
+    }
+
+    const currentData = await fetchMasterData();
+    currentData.ownerFeedbacks = [
+      feedback,
+      ...(currentData.ownerFeedbacks || []).filter((f: any) => f.id !== feedback.id)
+    ];
+    await persistMasterData(currentData);
+
+    res.json({ success: true, feedback, message: 'Feedback stored successfully in Master Database.' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Delete Feedback (Owner or Admin)
+app.delete('/api/feedback/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentData = await fetchMasterData();
+    currentData.ownerFeedbacks = (currentData.ownerFeedbacks || []).filter((f: any) => f.id !== id);
+    await persistMasterData(currentData);
+    res.json({ success: true, message: `Feedback ${id} deleted successfully.` });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Reply / Status update on Feedback (Owner or Admin)
+app.post('/api/feedback/:id/reply', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { replyNotes, status } = req.body;
+    const currentData = await fetchMasterData();
+    currentData.ownerFeedbacks = (currentData.ownerFeedbacks || []).map((f: any) => {
+      if (f.id === id) {
+        return {
+          ...f,
+          replyNotes: replyNotes || f.replyNotes,
+          status: status || 'replied',
+          repliedAt: new Date().toISOString()
+        };
+      }
+      return f;
+    });
+    await persistMasterData(currentData);
+    res.json({ success: true, message: 'Feedback updated.' });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
 // Change Password Endpoint (Requires: Gmail, Phone, Current Password, New Password)
 app.post('/api/auth/change-password', async (req, res) => {
   try {
@@ -2876,19 +2944,12 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       return res.status(400).json({ 
         success: false, 
-        message: 'A valid registered Gmail / Email address is required.' 
-      });
-    }
-
-    if (!phone || typeof phone !== 'string' || !phone.trim()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Registered Phone Number is required to request a password reset.'
+        message: 'A valid Gmail address is required to receive the 6-digit verification code.' 
       });
     }
 
     const inputEmail = email.trim().toLowerCase();
-    const inputPhone = phone.trim();
+    const inputPhone = phone ? phone.toString().trim() : '';
     const inputPhoneNorm = normalizePhone(inputPhone);
 
     // Check slash symbol constraint: allowed ONLY for Admin and Owner accounts
@@ -2908,62 +2969,45 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     const adminCreds = currentData.adminCredentials || { email: 'kalebbereket49@gmail.com/admin', phone: '+251995406697' };
     const users = currentData.users || [];
 
-    let isMatched = false;
     let matchedAccountName = 'User';
 
     // 1. Owner Check
     if (inputEmail === (ownerCreds.email || '').toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/owner' || inputEmail === 'kalebbereket49@gmail.com') {
       const ownerPhoneNorm = normalizePhone(ownerCreds.phone || '+251995406697');
-      if (ownerPhoneNorm === inputPhoneNorm) {
-        isMatched = true;
-        matchedAccountName = ownerCreds.name || 'Owner';
-      } else {
+      if (inputPhoneNorm && ownerPhoneNorm && ownerPhoneNorm !== inputPhoneNorm) {
         return res.status(400).json({
           success: false,
           message: 'The provided Phone Number does not match the registered Owner account phone number.'
         });
       }
+      matchedAccountName = ownerCreds.name || 'Kaleb Bereket (Owner)';
     }
     // 2. Admin Check
     else if (inputEmail === (adminCreds.email || '').toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/admin') {
       const adminPhoneNorm = normalizePhone(adminCreds.phone || '+251995406697');
-      if (adminPhoneNorm === inputPhoneNorm) {
-        isMatched = true;
-        matchedAccountName = adminCreds.name || 'Admin';
-      } else {
+      if (inputPhoneNorm && adminPhoneNorm && adminPhoneNorm !== inputPhoneNorm) {
         return res.status(400).json({
           success: false,
           message: 'The provided Phone Number does not match the registered Admin account phone number.'
         });
       }
+      matchedAccountName = adminCreds.name || 'Administrator';
     }
     // 3. Registered Users Check
     else {
       const foundUser = users.find((u: any) => (u.email || '').toLowerCase() === inputEmail);
-      if (!foundUser) {
-        return res.status(400).json({
-          success: false,
-          message: 'No registered account found with this Gmail / Email in the Bete Finder database. Both Email and Phone must be registered.'
-        });
-      }
-
-      const userPhoneNorm = normalizePhone(foundUser.phone || '');
-      if (userPhoneNorm && userPhoneNorm === inputPhoneNorm) {
-        isMatched = true;
+      if (foundUser) {
+        const userPhoneNorm = normalizePhone(foundUser.phone || '');
+        if (inputPhoneNorm && userPhoneNorm && userPhoneNorm !== inputPhoneNorm) {
+          return res.status(400).json({
+            success: false,
+            message: `The provided Phone Number does not match the registered phone number on file for ${inputEmail}.`
+          });
+        }
         matchedAccountName = foundUser.name || 'User';
       } else {
-        return res.status(400).json({
-          success: false,
-          message: `The provided Phone Number does not match the registered phone number on file for ${inputEmail}.`
-        });
+        matchedAccountName = inputEmail.split('@')[0];
       }
-    }
-
-    if (!isMatched) {
-      return res.status(400).json({
-        success: false,
-        message: 'The entered Gmail and Phone Number could not be verified in the database.'
-      });
     }
 
     // Extract destination Gmail address

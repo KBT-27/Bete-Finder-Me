@@ -255,7 +255,7 @@ export const TelegramChannelTab: React.FC<TelegramChannelTabProps> = ({
             id: `prop-${Date.now()}`,
             type: 'property',
             title: prop?.title || 'Property Showcase',
-            summary: `${prop?.price?.toLocaleString()} ETB/mo • ${prop?.location?.subcity || 'Addis Ababa'}`,
+            summary: `${prop?.price?.toLocaleString()} ETB/mo • ${prop?.subcity || prop?.location?.subcity || 'Addis Ababa'}`,
             timestamp: 'Just now',
             status: 'sent'
           },
@@ -560,7 +560,7 @@ export const TelegramChannelTab: React.FC<TelegramChannelTabProps> = ({
               >
                 {properties.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.title} ({p.price?.toLocaleString()} ETB - {p.location?.subcity})
+                    {p.title} ({p.price?.toLocaleString()} ETB - {p.subcity || p.location?.subcity || 'Addis Ababa'})
                   </option>
                 ))}
               </select>
@@ -585,7 +585,7 @@ export const TelegramChannelTab: React.FC<TelegramChannelTabProps> = ({
                 <div className="p-3.5 space-y-1">
                   <h4 className="text-xs font-bold text-slate-900 truncate">{selectedPropObj.title}</h4>
                   <p className="text-[11px] text-slate-500">
-                    📍 {selectedPropObj.location?.subcity || 'Addis Ababa'} • {selectedPropObj.bedrooms || 2} Beds • {selectedPropObj.bathrooms || 1} Baths
+                    📍 {selectedPropObj.subcity || selectedPropObj.location?.subcity || 'Addis Ababa'} • {selectedPropObj.bedrooms || 2} Beds • {selectedPropObj.bathrooms || 1} Baths
                   </p>
                   <p className="text-[11px] text-slate-600 font-mono">
                     Owner: {selectedPropObj.owner?.name || 'Bete Finder'} ({selectedPropObj.owner?.phone || '+251995406697'})

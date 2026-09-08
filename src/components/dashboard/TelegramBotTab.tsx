@@ -445,7 +445,7 @@ export const TelegramBotTab: React.FC<TelegramBotTabProps> = ({
               >
                 {properties.map(p => (
                   <option key={p.id} value={p.id}>
-                    {p.title} ({p.price?.toLocaleString()} ETB - {p.location?.subcity})
+                    {p.title} ({p.price?.toLocaleString()} ETB - {p.subcity || p.location?.subcity || 'Addis Ababa'})
                   </option>
                 ))}
               </select>

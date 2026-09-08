@@ -76,6 +76,16 @@ export interface Property {
     lat: number;
     lng: number;
   };
+  status?: string;
+  tier?: string;
+  type?: string;
+  location?: {
+    city?: string;
+    subcity?: string;
+    neighborhood?: string;
+    address?: string;
+    coordinates?: { lat: number; lng: number };
+  };
 }
 
 export interface BeteAISearchContext {
@@ -270,6 +280,7 @@ export interface OwnerFeedback {
   phone?: string;
   category: 'rental' | 'sale' | 'general' | 'platform' | 'bug' | 'support' | 'other';
   rating?: number; // 1-5
+  location?: string;
   message: string;
   propertyId?: string;
   propertyTitle?: string;
@@ -302,6 +313,9 @@ export interface PublicMenuVisibility {
   ai_assistant: boolean;
   feedback_button: boolean;
   favorites: boolean;
+  dashboard?: boolean;
+  feedback?: boolean;
+  post_property?: boolean;
 }
 
 export interface MenuVisibilityConfig {

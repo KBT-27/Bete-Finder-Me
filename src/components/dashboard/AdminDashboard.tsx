@@ -687,7 +687,7 @@ export const AdminDashboard: React.FC = () => {
       `Sync Status: Active & Operational`,
       `Last Sync Time: ${new Date(lastDbSyncTimestamp).toLocaleTimeString()}`,
       `Total Properties: ${properties.length} (${properties.filter(p => p.isVerified).length} Verified, ${properties.filter(p => !p.isVerified).length} Pending)`,
-      `VIP/Premium Properties: ${properties.filter(p => p.tier === 'vip' || p.tier === 'premium').length}`,
+      `VIP/Premium Properties: ${properties.filter(p => p.payPlan === 'vip' || p.payPlan === 'premium' || (p as any).tier === 'vip' || (p as any).tier === 'premium').length}`,
       `Total Registered Users: ${usersList.length} (${usersList.filter(u => u.role === 'landlord').length} Landlords, ${usersList.filter(u => u.role === 'tenant').length} Tenants, ${usersList.filter(u => u.role === 'admin' || u.role === 'owner').length} Admins)`,
       `Total Payment Requests: ${paymentRequests.length} (${paymentRequests.filter(r => r.status === 'approved').length} Approved, ${paymentRequests.filter(r => r.status === 'pending').length} Pending)`,
       `Total Approved Revenue: ${paymentRequests.filter(r => r.status === 'approved').reduce((acc, r) => acc + (r.totalAmount || 0), 0).toLocaleString()} ETB`,
@@ -3104,9 +3104,9 @@ export const AdminDashboard: React.FC = () => {
           const totalProperties = properties.length;
           const verifiedProps = properties.filter(p => p.isVerified).length;
           const pendingProps = properties.filter(p => !p.isVerified).length;
-          const vipProps = properties.filter(p => p.payPlan === 'vip' || p.tier === 'vip').length;
-          const premiumProps = properties.filter(p => p.payPlan === 'premium' || p.tier === 'premium').length;
-          const basicProps = properties.filter(p => p.payPlan === 'basic' || p.tier === 'basic').length;
+          const vipProps = properties.filter(p => p.payPlan === 'vip' || (p as any).tier === 'vip').length;
+          const premiumProps = properties.filter(p => p.payPlan === 'premium' || (p as any).tier === 'premium').length;
+          const basicProps = properties.filter(p => p.payPlan === 'basic' || (p as any).tier === 'basic').length;
           const freeProps = totalProperties - (vipProps + premiumProps + basicProps);
 
           const rentProps = properties.filter(p => p.listingType === 'rent');
@@ -3119,11 +3119,11 @@ export const AdminDashboard: React.FC = () => {
             : 0;
           const totalDbAssetValue = properties.reduce((sum, p) => sum + (p.price || 0), 0);
 
-          const houseCount = properties.filter(p => p.propertyType === 'house' || p.type === 'house').length;
-          const aptCount = properties.filter(p => p.propertyType === 'apartment' || p.type === 'apartment').length;
-          const commCount = properties.filter(p => p.propertyType === 'commercial' || p.type === 'commercial').length;
-          const landCount = properties.filter(p => p.propertyType === 'land' || p.type === 'land').length;
-          const guestCount = properties.filter(p => p.propertyType === 'guesthouse' || p.type === 'guesthouse').length;
+          const houseCount = properties.filter(p => String(p.propertyType).toLowerCase().includes('house') || String(p.propertyType).toLowerCase().includes('villa')).length;
+          const aptCount = properties.filter(p => String(p.propertyType).toLowerCase().includes('apartment') || String(p.propertyType).toLowerCase().includes('condo')).length;
+          const commCount = properties.filter(p => String(p.propertyType).toLowerCase().includes('commercial')).length;
+          const landCount = properties.filter(p => String(p.propertyType).toLowerCase().includes('land')).length;
+          const guestCount = properties.filter(p => String(p.propertyType).toLowerCase().includes('guest')).length;
 
           // User demographics
           const totalUsers = usersList.length;
@@ -3152,7 +3152,7 @@ export const AdminDashboard: React.FC = () => {
           // Subcity aggregation
           const subcityMap: Record<string, number> = {};
           properties.forEach(p => {
-            const sc = p.neighborhood || p.location?.subcity || 'Bole';
+            const sc = p.neighborhood || p.subcity || (p as any).location?.subcity || 'Bole';
             subcityMap[sc] = (subcityMap[sc] || 0) + 1;
           });
           const topSubcities = Object.entries(subcityMap)
