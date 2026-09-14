@@ -13,12 +13,21 @@ import {
   User, 
   Phone,
   Clock,
-  ArrowRight
+  ArrowRight,
+  Zap,
+  Link as LinkIcon,
+  ExternalLink,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
+  UserX, 
+  Building2, 
+  PlusCircle
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
 import { useAuth } from '../../context/AuthContext';
-import { UserX, Building2, PlusCircle } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const PaymentModal: React.FC = () => {
   const { t, isAmharic } = useLanguage();
@@ -28,6 +37,7 @@ export const PaymentModal: React.FC = () => {
     selectedPlan, 
     pendingPaymentPurpose,
     submitPaymentRequest,
+    verifyPaymentWithLinksEt,
     setCurrentView,
     telebirrSettings,
     userPostedProperties
@@ -37,10 +47,22 @@ export const PaymentModal: React.FC = () => {
   const isTenant = user?.role === 'tenant';
   const hasPostedProperties = userPostedProperties.length > 0;
 
+  // Verification mode: 'links_et' (instant automated) vs 'manual' (traditional review)
+  const [verificationMode, setVerificationMode] = useState<'links_et' | 'manual'>('links_et');
+
   const [selectedNetwork, setSelectedNetwork] = useState('Telebirr');
   const [durationMonths, setDurationMonths] = useState<number>(1);
   const [payerName, setPayerName] = useState(user?.name || telebirrSettings.accountName);
   const [payerPhone, setPayerPhone] = useState(user?.phone || telebirrSettings.accountNumber);
+  
+  // links.et specific state
+  const [receiptInput, setReceiptInput] = useState('');
+  const [isVerifyingLinksEt, setIsVerifyingLinksEt] = useState(false);
+  const [linksEtReceipt, setLinksEtReceipt] = useState<any | null>(null);
+  const [verificationError, setVerificationError] = useState<string | null>(null);
+  const [isInstantVerified, setIsInstantVerified] = useState(false);
+
+  // Manual review state
   const [transactionRef, setTransactionRef] = useState('');
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null);
   const [screenshotFileName, setScreenshotFileName] = useState('');
@@ -61,6 +83,7 @@ export const PaymentModal: React.FC = () => {
   const handleCopyNumber = () => {
     navigator.clipboard?.writeText(telebirrSettings.accountNumber);
     setCopiedNumber(true);
+    toast.success(isAmharic ? 'የስልክ ቁጥር ተገልብጧል' : 'Phone number copied to clipboard');
     setTimeout(() => setCopiedNumber(false), 2000);
   };
 
@@ -73,6 +96,90 @@ export const PaymentModal: React.FC = () => {
         setScreenshotPreview(reader.result as string);
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // Instant Verification using links.et API
+  const handleVerifyWithLinksEt = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const inputVal = receiptInput.trim();
+    if (!inputVal && !screenshotPreview) {
+      toast.error(isAmharic 
+        ? 'እባክዎ የክፍያ ማረጋገጫ ሊንክ ወይም የትራንዛክሽን ቁጥር ያስገቡ' 
+        : 'Please enter a receipt URL or transaction reference number');
+      return;
+    }
+
+    setIsVerifyingLinksEt(true);
+    setVerificationError(null);
+
+    try {
+      const isUrl = inputVal.startsWith('http://') || inputVal.startsWith('https://');
+
+      // If user provided a screenshot without text, we can try image OCR endpoint
+      if (!inputVal && screenshotPreview) {
+        const ocrRes = await fetch('/api/links-et/verify-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            imageBase64: screenshotPreview,
+            userEmail: user?.email,
+            userName: payerName.trim() || user?.name,
+            userPhone: payerPhone.trim() || user?.phone,
+            planId: selectedPlan?.id || 'premium',
+            planName: planTitle,
+            durationMonths,
+            totalAmount,
+            autoActivate: true
+          })
+        });
+        const ocrData = await ocrRes.json();
+        if (ocrData.success && ocrData.verified) {
+          setLinksEtReceipt(ocrData.receipt);
+          setIsInstantVerified(true);
+          toast.success(isAmharic 
+            ? 'ክፍያዎ በ links.et ተረጋግጧል! ፓኬጅዎ ወዲያውኑ ተከፍቷል!' 
+            : 'Payment verified by links.et! Plan activated instantly!'
+          );
+          return;
+        } else {
+          setVerificationError(ocrData.message || (isAmharic ? 'የስክሪንሾት ክፍያ በ links.et አልተረጋገጠም። እባክዎ የትራንዛክሽን ቁጥሩን ጽፈው ይሞክሩ።' : 'Screenshot could not be verified by links.et. Please enter the transaction reference text.'));
+          return;
+        }
+      }
+
+      // Standard links.et verification via URL or Reference
+      const res = await verifyPaymentWithLinksEt({
+        url: isUrl ? inputVal : undefined,
+        reference: !isUrl ? inputVal : undefined,
+        userName: payerName.trim() || user?.name,
+        userPhone: payerPhone.trim() || user?.phone,
+        plan: selectedPlan,
+        durationMonths,
+        totalAmount,
+        autoActivate: true
+      });
+
+      if (res.success && res.verified) {
+        setLinksEtReceipt(res.receipt);
+        setIsInstantVerified(true);
+        toast.success(isAmharic 
+          ? `ክፍያዎ በ links.et ተረጋግጧል! ${planTitle} ወዲያውኑ ተከፍቷል!` 
+          : `Payment verified by links.et! ${planTitle} activated instantly!`
+        );
+      } else {
+        const errMsg = res.message || (isAmharic 
+          ? 'ክፍያው በ links.et ሊረጋገጥ አልቻለም። እባክዎ ትክክለኛውን ቁጥር ያስገቡ ወይም በማኑዋል ይላኩ።' 
+          : 'Receipt could not be verified by links.et. Please ensure the reference number or receipt URL is correct.');
+        setVerificationError(errMsg);
+        toast.error(errMsg);
+      }
+    } catch (err: any) {
+      const msg = err.message || 'Error communicating with links.et service';
+      setVerificationError(msg);
+      toast.error(msg);
+    } finally {
+      setIsVerifyingLinksEt(false);
     }
   };
 
@@ -103,14 +210,18 @@ export const PaymentModal: React.FC = () => {
 
       setIsProcessing(false);
       setIsSuccess(true);
+      toast.success(isAmharic ? 'የክፍያ ማረጋገጫ ጥያቄዎ ለባለቤቱ ተልኳል!' : 'Payment sent to owner for verification!');
     }, 1200);
   };
 
   const handleDone = () => {
     setIsSuccess(false);
+    setIsInstantVerified(false);
     setIsPaymentModalOpen(false);
     setTransactionRef('');
+    setReceiptInput('');
     setScreenshotPreview(null);
+    setLinksEtReceipt(null);
     setCurrentView('dashboard');
   };
 
@@ -126,7 +237,65 @@ export const PaymentModal: React.FC = () => {
           <X className="w-5 h-5" />
         </button>
 
-        {isSuccess ? (
+        {isInstantVerified ? (
+          <div className="text-center py-6 space-y-4 animate-in fade-in">
+            <div className="w-16 h-16 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/30">
+              <Zap className="w-9 h-9" />
+            </div>
+
+            <div className="space-y-1">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black mb-1">
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                <span>links.et Automated Gateway Verified</span>
+              </div>
+              <h3 className="text-2xl font-black text-slate-900">
+                Plan Activated Instantly!
+              </h3>
+              <p className="text-xs text-slate-500 font-medium">
+                ክፍያዎ በ links.et በኩል ወዲያውኑ ተረጋግጦ ፓኬጅዎ ተከፍቷል!
+              </p>
+            </div>
+
+            <div className="bg-emerald-50 text-emerald-950 p-5 rounded-2xl border border-emerald-200 text-xs text-left space-y-3 shadow-xs">
+              <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2.5">
+                <span className="font-bold text-emerald-900">Active Package:</span>
+                <span className="font-black text-emerald-950 text-sm">{planTitle}</span>
+              </div>
+              <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2.5">
+                <span className="text-emerald-800 font-medium">Validity Period:</span>
+                <span className="font-bold text-emerald-950">{durationMonths} Month{durationMonths > 1 ? 's' : ''} (30 Days/mo)</span>
+              </div>
+              {linksEtReceipt?.receiptNo && (
+                <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2.5">
+                  <span className="text-emerald-800 font-medium">Receipt No / Ref:</span>
+                  <span className="font-mono font-bold text-emerald-950">{linksEtReceipt.receiptNo}</span>
+                </div>
+              )}
+              {linksEtReceipt?.payerName && (
+                <div className="flex items-center justify-between border-b border-emerald-200/80 pb-2.5">
+                  <span className="text-emerald-800 font-medium">Verified Payer:</span>
+                  <span className="font-bold text-emerald-950">{linksEtReceipt.payerName}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <span className="text-emerald-800 font-medium">Amount Verified:</span>
+                <span className="font-black text-emerald-900 text-sm">{(linksEtReceipt?.amount || totalAmount).toLocaleString()} ETB</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 leading-relaxed">
+              Your listings are now marked with <strong className="text-slate-900">Featured & Verified Badges</strong> and have top priority ranking in search results.
+            </p>
+
+            <button
+              onClick={handleDone}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
+            >
+              <span>Go to Dashboard & Manage Listings</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        ) : isSuccess ? (
           <div className="text-center py-6 space-y-4 animate-in fade-in">
             <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
               <CheckCircle2 className="w-10 h-10" />
@@ -284,12 +453,42 @@ export const PaymentModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Official Telebirr Recipient Account Info Box */}
+            {/* Mode Switcher Tabs */}
+            <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-100 rounded-2xl mb-5 border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setVerificationMode('links_et')}
+                className={`py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  verificationMode === 'links_et'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>⚡ Instant links.et</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setVerificationMode('manual')}
+                className={`py-2.5 px-3 rounded-xl text-xs font-black flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  verificationMode === 'manual'
+                    ? 'bg-white text-slate-900 shadow-xs border border-slate-200/80'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span>Manual Review</span>
+              </button>
+            </div>
+
+            {/* Official Recipient Account Info Box */}
             <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-4 mb-5 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs text-emerald-950 font-bold">Select your network*:</span>
-                <span className="text-xs font-black text-emerald-800 bg-white px-2.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs">
-                  Telebirr
+                <span className="text-xs text-emerald-950 font-bold">Official Network / Gateway:</span>
+                <span className="text-xs font-black text-emerald-800 bg-white px-2.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs flex items-center gap-1">
+                  <Zap className="w-3 h-3 text-emerald-600" />
+                  <span>Telebirr & CBE via links.et</span>
                 </span>
               </div>
 
@@ -301,7 +500,7 @@ export const PaymentModal: React.FC = () => {
               </div>
 
               <div className="flex items-center justify-between">
-                <span className="text-xs text-emerald-950 font-bold">Your phone number* / Send to:</span>
+                <span className="text-xs text-emerald-950 font-bold">Send to (Telebirr / Mobile):</span>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-black text-emerald-700 bg-white px-2.5 py-0.5 rounded-md border border-emerald-300 font-mono shadow-2xs">
                     {telebirrSettings.accountNumber}
@@ -318,141 +517,251 @@ export const PaymentModal: React.FC = () => {
               </div>
             </div>
 
-            {/* User Form for Payment Verification */}
-            <form onSubmit={handleCompletePayment} className="space-y-3.5">
-              
-              {/* Network selection (locked to Telebirr as requested) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Select your network*
-                </label>
-                <div className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
-                  <Smartphone className="w-4 h-4 text-emerald-600" />
-                  <span>Telebirr</span>
-                  <span className="ml-auto text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold">Active</span>
+            {verificationMode === 'links_et' ? (
+              /* Automated Verification with links.et */
+              <form onSubmit={handleVerifyWithLinksEt} className="space-y-4">
+                <div className="p-3.5 bg-emerald-50/60 rounded-2xl border border-emerald-200 text-xs text-emerald-950 space-y-1.5">
+                  <div className="flex items-center gap-2 font-black text-emerald-900">
+                    <Zap className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>Instant Automated Verification</span>
+                  </div>
+                  <p className="text-[11px] text-emerald-800 leading-relaxed">
+                    Pay <strong className="text-emerald-950 font-bold">{totalAmount.toLocaleString()} ETB</strong> via Telebirr or any bank app. Then paste the <strong>Receipt Link</strong> or <strong>Transaction ID</strong> below. links.et connects to the official provider and verifies your payment in seconds.
+                  </p>
                 </div>
-              </div>
 
-              {/* Payer Name */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Name of the Payer (Telebirr Account Holder)*
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                {/* Receipt Link or Transaction Reference */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Receipt Link or Transaction Reference ID*
+                  </label>
+                  <div className="relative">
+                    <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={receiptInput}
+                      onChange={(e) => setReceiptInput(e.target.value)}
+                      placeholder="e.g. https://transactioninfo.ethiotelecom.et/receipt/... or DE73NC383J"
+                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Supports Telebirr receipt links, CBE Birr references, and 17+ Ethiopian bank codes.
+                  </p>
+                </div>
+
+                {/* Optional Screenshot for AI OCR */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>Payment Screenshot (Optional / OCR)</span>
+                    <span className="text-[10px] text-emerald-600 font-bold">Auto-scanned</span>
+                  </label>
+                  <label className={`border-2 rounded-xl p-2.5 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${
+                    screenshotPreview 
+                      ? 'border-emerald-400 bg-emerald-50/50' 
+                      : 'border-dashed border-slate-300 hover:border-emerald-500 bg-slate-50/50'
+                  }`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    {screenshotPreview ? (
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={screenshotPreview}
+                          alt="Screenshot"
+                          className="w-10 h-10 object-cover rounded-lg border border-emerald-300 shadow-xs"
+                        />
+                        <div className="text-left">
+                          <p className="text-xs font-bold text-emerald-800 truncate max-w-xs">{screenshotFileName || 'Screenshot attached'}</p>
+                          <p className="text-[10px] text-emerald-600 font-semibold">Attached • Click to change</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <Upload className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="text-[11px] font-medium">Attach receipt screenshot for links.et visual verification</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+
+                {/* Error Banner */}
+                {verificationError && (
+                  <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 text-xs text-rose-800 animate-in fade-in">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">Verification Notice</p>
+                      <p className="text-[11px] mt-0.5">{verificationError}</p>
+                      <button
+                        type="button"
+                        onClick={() => setVerificationMode('manual')}
+                        className="mt-1.5 text-[11px] font-bold text-rose-900 underline hover:text-rose-950 block cursor-pointer"
+                      >
+                        Switch to Manual Review instead →
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Verify Button */}
+                <button
+                  type="submit"
+                  disabled={isVerifyingLinksEt || (!receiptInput.trim() && !screenshotPreview)}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-600/25 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isVerifyingLinksEt ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Verifying with links.et Ethiopian Gateway...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="w-4 h-4" />
+                      <span>⚡ Verify & Activate Instantly ({totalAmount.toLocaleString()} ETB)</span>
+                    </>
+                  )}
+                </button>
+              </form>
+            ) : (
+              /* User Form for Manual Payment Verification */
+              <form onSubmit={handleCompletePayment} className="space-y-3.5">
+                
+                {/* Network selection */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Select your network*
+                  </label>
+                  <div className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800">
+                    <Smartphone className="w-4 h-4 text-emerald-600" />
+                    <span>Telebirr</span>
+                    <span className="ml-auto text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-md font-bold">Active</span>
+                  </div>
+                </div>
+
+                {/* Payer Name */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Name of the Payer (Telebirr Account Holder)*
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      required
+                      value={payerName}
+                      onChange={(e) => setPayerName(e.target.value)}
+                      placeholder="e.g. Desalegn Guta / Abebe Kebede"
+                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Payer Telebirr Account Number */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Your phone number* / Telebirr Account
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="tel"
+                      required
+                      value={payerPhone}
+                      onChange={(e) => setPayerPhone(e.target.value)}
+                      placeholder="0912345678"
+                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Transaction Ref */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Telebirr Transaction / Reference ID*
+                  </label>
                   <input
                     type="text"
                     required
-                    value={payerName}
-                    onChange={(e) => setPayerName(e.target.value)}
-                    placeholder="e.g. Desalegn Guta / Abebe Kebede"
-                    className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
+                    value={transactionRef}
+                    onChange={(e) => setTransactionRef(e.target.value)}
+                    placeholder="e.g. TB982348912 or 7GH98124"
+                    className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                   />
                 </div>
-              </div>
 
-              {/* Payer Telebirr Account Number */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Your phone number* / Telebirr Account
-                </label>
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input
-                    type="tel"
-                    required
-                    value={payerPhone}
-                    onChange={(e) => setPayerPhone(e.target.value)}
-                    placeholder="0912345678"
-                    className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              {/* Transaction Ref */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Telebirr Transaction / Reference ID*
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={transactionRef}
-                  onChange={(e) => setTransactionRef(e.target.value)}
-                  placeholder="e.g. TB982348912 or 7GH98124"
-                  className="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-bold focus:ring-2 focus:ring-emerald-500 focus:bg-white"
-                />
-              </div>
-
-              {/* Screenshot of Payment (Mandatory) */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                  <span className="flex items-center gap-1.5">
-                    <span>Payment Screenshot / Receipt</span>
-                    <span className="text-[10px] font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200">
-                      Mandatory *
+                {/* Screenshot of Payment (Mandatory) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <span>Payment Screenshot / Receipt</span>
+                      <span className="text-[10px] font-black text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200">
+                        Mandatory *
+                      </span>
                     </span>
-                  </span>
-                  <span className="text-[11px] text-slate-500 font-semibold">Screenshot Proof</span>
-                </label>
-                
-                <label className={`border-2 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${
-                  screenshotPreview 
-                    ? 'border-emerald-400 bg-emerald-50/50' 
-                    : 'border-dashed border-rose-300 hover:border-emerald-500 bg-rose-50/30 hover:bg-emerald-50/40'
-                }`}>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  {screenshotPreview ? (
-                    <div className="flex items-center gap-3">
-                      <img
-                        src={screenshotPreview}
-                        alt="Screenshot"
-                        className="w-12 h-12 object-cover rounded-lg border border-emerald-300 shadow-xs"
-                      />
-                      <div className="text-left">
-                        <p className="text-xs font-bold text-emerald-800 truncate max-w-xs">{screenshotFileName || 'Screenshot attached'}</p>
-                        <p className="text-[10px] text-emerald-600 font-semibold">Attached • Click to change file</p>
+                    <span className="text-[11px] text-slate-500 font-semibold">Screenshot Proof</span>
+                  </label>
+                  
+                  <label className={`border-2 rounded-xl p-3 flex flex-col items-center justify-center text-center cursor-pointer transition-colors ${
+                    screenshotPreview 
+                      ? 'border-emerald-400 bg-emerald-50/50' 
+                      : 'border-dashed border-rose-300 hover:border-emerald-500 bg-rose-50/30 hover:bg-emerald-50/40'
+                  }`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    {screenshotPreview ? (
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={screenshotPreview}
+                          alt="Screenshot"
+                          className="w-12 h-12 object-cover rounded-lg border border-emerald-300 shadow-xs"
+                        />
+                        <div className="text-left">
+                          <p className="text-xs font-bold text-emerald-800 truncate max-w-xs">{screenshotFileName || 'Screenshot attached'}</p>
+                          <p className="text-[10px] text-emerald-600 font-semibold">Attached • Click to change file</p>
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-rose-700">
+                        <Upload className="w-4 h-4 text-rose-600" />
+                        <span className="text-xs font-bold">Attach screenshot of Telebirr payment (Mandatory *)</span>
+                      </div>
+                    )}
+                  </label>
+                </div>
+
+                {/* Notification Note Box */}
+                <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-start gap-2 text-[11px] text-amber-900 leading-relaxed">
+                  <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    The owner will verify your Telebirr SIM PIN payment and your package will be automatically activated.
+                  </span>
+                </div>
+
+                {/* Complete Payment Button */}
+                <button
+                  type="submit"
+                  disabled={isProcessing || !transactionRef.trim() || !payerPhone.trim() || !payerName.trim() || !screenshotPreview}
+                  className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-emerald-600/25 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isProcessing ? (
+                    <span>Sending to Owner for Verification...</span>
                   ) : (
-                    <div className="flex items-center gap-2 text-rose-700">
-                      <Upload className="w-4 h-4 text-rose-600" />
-                      <span className="text-xs font-bold">Attach screenshot of Telebirr payment (Mandatory *)</span>
-                    </div>
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Submit for Manual Review ({totalAmount.toLocaleString()} ETB)</span>
+                    </>
                   )}
-                </label>
-              </div>
+                </button>
 
-              {/* Notification Note Box */}
-              <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-start gap-2 text-[11px] text-amber-900 leading-relaxed">
-                <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <span>
-                  You should receive a notification about this request when the person write his pin in his Telebirr sim automatically get the package when confirmed.
-                </span>
-              </div>
-
-              {/* Complete Payment Button */}
-              <button
-                type="submit"
-                disabled={isProcessing || !transactionRef.trim() || !payerPhone.trim() || !payerName.trim() || !screenshotPreview}
-                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-emerald-600/25 transition-all active:scale-98 cursor-pointer flex items-center justify-center gap-2"
-              >
-                {isProcessing ? (
-                  <span>Sending to Owner for Verification...</span>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Complete the payment ({totalAmount.toLocaleString()} ETB)</span>
-                  </>
-                )}
-              </button>
-
-            </form>
+              </form>
+            )}
 
           </div>
         )}

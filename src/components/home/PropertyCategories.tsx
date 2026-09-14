@@ -75,7 +75,7 @@ export const PropertyCategories: React.FC = () => {
   };
 
   return (
-    <section className="py-12 lg:py-16 bg-white border-b border-slate-200/70">
+    <section id="property-categories" className="py-12 lg:py-16 bg-white border-b border-slate-200/70 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}

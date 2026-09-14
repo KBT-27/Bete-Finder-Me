@@ -23,6 +23,7 @@ import { PaymentModal } from './components/payment/PaymentModal';
 import { FloatingBeteAIButton } from './components/ai/FloatingBeteAIButton';
 import { BeteAIAssistantModal } from './components/ai/BeteAIAssistantModal';
 import { OwnerFeedbackModal } from './components/feedback/OwnerFeedbackModal';
+import { Toaster } from 'sonner';
 
 // Google AdSense Banner Component
 const AdSenseBanner: React.FC = () => {
@@ -30,35 +31,40 @@ const AdSenseBanner: React.FC = () => {
   const isPushedRef = useRef(false);
 
   useEffect(() => {
-    // Avoid double-pushing if already initiated for this instance
     if (isPushedRef.current) return;
 
-    const el = adRef.current;
-    if (!el) return;
+    const timer = setTimeout(() => {
+      const el = adRef.current;
+      if (!el || !document.body.contains(el)) return;
 
-    // Check if element has already been processed by AdSense
-    if (el.getAttribute('data-adsbygoogle-status') === 'done' || el.children.length > 0) {
-      return;
-    }
-
-    // Ensure there is at least one unfilled ins.adsbygoogle in the DOM before pushing
-    const pendingIns = document.querySelectorAll('ins.adsbygoogle:not([data-adsbygoogle-status])');
-    if (pendingIns.length === 0) {
-      return;
-    }
-
-    try {
-      isPushedRef.current = true;
-      if (typeof window !== 'undefined') {
-        ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+      // Check if element has already been processed by AdSense
+      if (
+        el.getAttribute('data-adsbygoogle-status') === 'done' ||
+        el.getAttribute('data-ad-status') ||
+        el.children.length > 0
+      ) {
+        return;
       }
-    } catch (e: any) {
-      // Gracefully catch and ignore benign AdSense SPA duplicate push warnings
-      const msg = e?.message || String(e);
-      if (!msg.includes('already have ads in them')) {
-        console.warn('AdSense notice:', msg);
+
+      // Ensure there is at least one unfilled ins.adsbygoogle in the DOM before pushing
+      const pendingIns = document.querySelectorAll(
+        'ins.adsbygoogle:not([data-adsbygoogle-status]):not([data-ad-status])'
+      );
+      if (pendingIns.length === 0) {
+        return;
       }
-    }
+
+      try {
+        isPushedRef.current = true;
+        if (typeof window !== 'undefined') {
+          ((window as any).adsbygoogle = (window as any).adsbygoogle || []).push({});
+        }
+      } catch {
+        // Silently ignore benign AdSense duplicate push or quota errors
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -162,6 +168,7 @@ const AppShell: React.FC = () => {
       {/* Global Overlays & Modals */}
       <AuthModal />
       <PaymentModal />
+      <Toaster position="top-right" richColors closeButton />
     </div>
   );
 };

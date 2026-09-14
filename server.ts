@@ -51,6 +51,7 @@ let inMemoryDbCache: any = null;
 interface ServerResetRequest {
   id: string;
   email: string;
+  phone?: string;
   code: string;
   token: string;
   createdAt: number;
@@ -2707,6 +2708,289 @@ app.delete('/api/payments/:id', async (req, res) => {
   }
 });
 
+// ==========================================================
+// links.et Official Integration for Pricing & Plans
+// API: vk_live_Odg6id0F1fFg3TWuWZj_yGIxa5lWmnIt
+// ==========================================================
+const LINKS_ET_API_KEY = process.env.LINKS_ET_API_KEY || 'vk_live_Odg6id0F1fFg3TWuWZj_yGIxa5lWmnIt';
+const LINKS_ET_BASE_URL = 'https://links.et/api';
+
+// Check links.et connection status
+app.get('/api/links-et/status', async (req, res) => {
+  try {
+    const isConfigured = Boolean(LINKS_ET_API_KEY);
+    const keyPrefix = isConfigured ? LINKS_ET_API_KEY.slice(0, 14) : '';
+    res.json({
+      success: true,
+      connected: isConfigured,
+      provider: 'links.et (Ethiopian Payment & Receipt Verifier)',
+      keyPrefix,
+      supportedProviders: [
+        'telebirr', 'cbe', 'cbe-birr', 'boa', 'zemen', 'awash', 
+        'dashen', 'mpesa', 'coopay', 'kaafi', 'amhara', 'abay', 
+        'berhan', 'oromia', 'ahadu', 'siinqee', 'zamzam'
+      ]
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Verify Receipt URL or Reference using links.et API
+app.post('/api/links-et/verify', async (req, res) => {
+  try {
+    const { 
+      url, 
+      reference, 
+      userEmail, 
+      userName, 
+      userPhone, 
+      planId, 
+      planName, 
+      durationMonths = 1, 
+      totalAmount,
+      autoActivate = false 
+    } = req.body;
+
+    if (!url && !reference) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Either a receipt URL or transaction reference number is required.' 
+      });
+    }
+
+    const payload: any = {};
+    if (url) {
+      payload.url = url.trim();
+    } else if (reference) {
+      payload.reference = reference.trim();
+    }
+
+    // Call official links.et API
+    const response = await fetch(`${LINKS_ET_BASE_URL}/verify`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': LINKS_ET_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data: any = await response.json();
+
+    if (!response.ok || !data.ok) {
+      return res.status(200).json({
+        success: false,
+        verified: false,
+        message: data.error || 'Transaction could not be verified by links.et. Please ensure the reference or receipt URL is correct.',
+        raw: data
+      });
+    }
+
+    // Extraction & Normalization
+    const receipt = data.receipt || {};
+    const normalized = {
+      providerKey: data.providerKey || (receipt.source ? receipt.source.split('-')[0] : 'telebirr'),
+      resolvedUrl: data.resolvedUrl,
+      source: receipt.source,
+      payerName: receipt.payerName || receipt.customerName || receipt.senderName || userName || 'Customer',
+      receiptNo: receipt.receiptNo || receipt.reference || receipt.transactionId || reference || 'VERIFIED',
+      totalPaidAmount: receipt.totalPaidAmount || receipt.settledAmount || receipt.totalAmount || receipt.transferredAmount || receipt.amount || totalAmount,
+      paymentDate: receipt.paymentDate || receipt.date || receipt.transactionTime || new Date().toISOString(),
+      transactionStatus: receipt.transactionStatus || receipt.upstreamStatus || 'Completed',
+      verifiedAt: data.fetchedAt || new Date().toISOString()
+    };
+
+    // If autoActivate is requested (e.g. user paid for a plan and wants immediate activation)
+    if (autoActivate && userEmail && planId) {
+      const currentData = await fetchMasterData();
+      const durationDays = Number(durationMonths) * 30;
+      const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+      const resolvedPlan = planId === 'boost' ? 'premium' : planId;
+      const targetEmail = userEmail.trim().toLowerCase();
+
+      // Record payment request as pre-approved via links.et
+      const paymentRecord = {
+        id: `links-et-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        userName: normalized.payerName || userName || 'Customer',
+        userPhone: userPhone || '',
+        transactionRef: normalized.receiptNo,
+        amount: totalAmount || (planId === 'vip' ? 999 : planId === 'premium' ? 599 : 299),
+        totalAmount: totalAmount || (planId === 'vip' ? 999 : planId === 'premium' ? 599 : 299),
+        planId: resolvedPlan,
+        planTitle: planName || (resolvedPlan === 'vip' ? 'VIP TOP+' : resolvedPlan === 'premium' ? 'Premium' : 'Basic'),
+        durationMonths: Number(durationMonths),
+        status: 'approved',
+        linksEtVerified: true,
+        linksEtData: normalized,
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: 'links.et Automated Verifier',
+        expiresAt,
+        createdAt: new Date().toISOString()
+      };
+
+      currentData.paymentRequests = [paymentRecord, ...(currentData.paymentRequests || []).filter((p: any) => p.transactionRef !== normalized.receiptNo)];
+
+      // Activate user plan
+      currentData.users = (currentData.users || []).map((u: any) => {
+        if (u.email && u.email.toLowerCase() === targetEmail) {
+          return {
+            ...u,
+            role: u.role === 'tenant' ? 'landlord' : u.role,
+            activePlan: resolvedPlan,
+            planExpiresAt: expiresAt,
+            planStartedAt: new Date().toISOString()
+          };
+        }
+        return u;
+      });
+
+      // Update properties owned by this user
+      const isVip = resolvedPlan === 'vip';
+      const isPremium = resolvedPlan === 'premium';
+      currentData.properties = (currentData.properties || []).map((p: any) => {
+        if (p.owner && p.owner.email && p.owner.email.toLowerCase() === targetEmail) {
+          return {
+            ...p,
+            isVerified: true,
+            isFeatured: isVip || isPremium,
+            payPlan: resolvedPlan,
+            payPlanName: planName || (isVip ? 'VIP TOP+ Package' : isPremium ? 'Premium Package' : 'Basic Package')
+          };
+        }
+        return p;
+      });
+
+      await persistMasterData(currentData);
+    }
+
+    return res.json({
+      success: true,
+      verified: true,
+      message: `Transaction verified successfully via links.et (${normalized.providerKey.toUpperCase()})!`,
+      receipt: normalized,
+      raw: data
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message || 'Server error verifying with links.et' });
+  }
+});
+
+// Verify Receipt Screenshot via links.et AI OCR
+app.post('/api/links-et/verify-image', async (req, res) => {
+  try {
+    const { 
+      imageBase64, 
+      userEmail, 
+      userName, 
+      userPhone, 
+      planId, 
+      planName, 
+      durationMonths = 1, 
+      totalAmount,
+      autoActivate = false 
+    } = req.body;
+
+    if (!imageBase64) {
+      return res.status(400).json({ success: false, message: 'Image base64 is required.' });
+    }
+
+    // Clean base64 data URL prefix if present
+    const cleanBase64 = imageBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+
+    const response = await fetch(`${LINKS_ET_BASE_URL}/verify-image`, {
+      method: 'POST',
+      headers: {
+        'x-api-key': LINKS_ET_API_KEY,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ imageBase64: cleanBase64 })
+    });
+
+    const data: any = await response.json();
+
+    if (!response.ok || !data.ok) {
+      return res.status(200).json({
+        success: false,
+        verified: false,
+        message: data.error?.message || data.error || 'Could not verify image receipt with links.et.',
+        raw: data
+      });
+    }
+
+    const upstream = data.upstream;
+    const detected = data.detected;
+    const isUpstreamVerified = upstream?.attempted && upstream?.result?.ok;
+
+    const receipt = isUpstreamVerified ? upstream.result.receipt : null;
+    const normalized = {
+      providerKey: detected?.provider || 'telebirr',
+      reference: detected?.reference,
+      confidence: detected?.confidence,
+      isUpstreamVerified: Boolean(isUpstreamVerified),
+      payerName: receipt?.payerName || receipt?.customerName || userName || 'Customer',
+      receiptNo: receipt?.receiptNo || detected?.reference || 'VERIFIED',
+      totalPaidAmount: receipt?.totalPaidAmount || receipt?.settledAmount || totalAmount,
+      paymentDate: receipt?.paymentDate || data.fetchedAt || new Date().toISOString(),
+      transactionStatus: receipt?.transactionStatus || 'Completed'
+    };
+
+    if (autoActivate && isUpstreamVerified && userEmail && planId) {
+      const currentData = await fetchMasterData();
+      const durationDays = Number(durationMonths) * 30;
+      const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+      const resolvedPlan = planId === 'boost' ? 'premium' : planId;
+      const targetEmail = userEmail.trim().toLowerCase();
+
+      const paymentRecord = {
+        id: `links-et-ocr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        userName: normalized.payerName || userName || 'Customer',
+        userPhone: userPhone || '',
+        transactionRef: normalized.receiptNo,
+        amount: totalAmount || (planId === 'vip' ? 999 : planId === 'premium' ? 599 : 299),
+        totalAmount: totalAmount || (planId === 'vip' ? 999 : planId === 'premium' ? 599 : 299),
+        planId: resolvedPlan,
+        planTitle: planName || (resolvedPlan === 'vip' ? 'VIP TOP+' : resolvedPlan === 'premium' ? 'Premium' : 'Basic'),
+        durationMonths: Number(durationMonths),
+        status: 'approved',
+        linksEtVerified: true,
+        linksEtData: normalized,
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: 'links.et Image Verifier',
+        expiresAt,
+        createdAt: new Date().toISOString()
+      };
+
+      currentData.paymentRequests = [paymentRecord, ...(currentData.paymentRequests || []).filter((p: any) => p.transactionRef !== normalized.receiptNo)];
+
+      // Update user plan
+      currentData.users = (currentData.users || []).map((u: any) => {
+        if (u.email && u.email.toLowerCase() === targetEmail) {
+          return {
+            ...u,
+            role: u.role === 'tenant' ? 'landlord' : u.role,
+            activePlan: resolvedPlan,
+            planExpiresAt: expiresAt,
+            planStartedAt: new Date().toISOString()
+          };
+        }
+        return u;
+      });
+
+      await persistMasterData(currentData);
+    }
+
+    return res.json({
+      success: true,
+      verified: Boolean(isUpstreamVerified || (detected?.confidence > 0.8 && detected?.reference)),
+      receipt: normalized,
+      raw: data
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message || 'Server error verifying image with links.et' });
+  }
+});
+
 // Get all Feedbacks
 app.get('/api/feedback', async (req, res) => {
   try {
@@ -2952,6 +3236,13 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     const inputPhone = phone ? phone.toString().trim() : '';
     const inputPhoneNorm = normalizePhone(inputPhone);
 
+    if (!inputPhone || !inputPhoneNorm) {
+      return res.status(400).json({
+        success: false,
+        message: 'Registered Phone Number is mandatory (ግዴታ ነው). Please enter your registered phone number.'
+      });
+    }
+
     // Check slash symbol constraint: allowed ONLY for Admin and Owner accounts
     if (inputEmail.includes('/')) {
       const isAllowedRole = inputEmail.endsWith('/admin') || inputEmail.endsWith('/owner');
@@ -2974,7 +3265,7 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     // 1. Owner Check
     if (inputEmail === (ownerCreds.email || '').toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/owner' || inputEmail === 'kalebbereket49@gmail.com') {
       const ownerPhoneNorm = normalizePhone(ownerCreds.phone || '+251995406697');
-      if (inputPhoneNorm && ownerPhoneNorm && ownerPhoneNorm !== inputPhoneNorm) {
+      if (ownerPhoneNorm !== inputPhoneNorm) {
         return res.status(400).json({
           success: false,
           message: 'The provided Phone Number does not match the registered Owner account phone number.'
@@ -2985,7 +3276,7 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     // 2. Admin Check
     else if (inputEmail === (adminCreds.email || '').toLowerCase() || inputEmail === 'kalebbereket49@gmail.com/admin') {
       const adminPhoneNorm = normalizePhone(adminCreds.phone || '+251995406697');
-      if (inputPhoneNorm && adminPhoneNorm && adminPhoneNorm !== inputPhoneNorm) {
+      if (adminPhoneNorm !== inputPhoneNorm) {
         return res.status(400).json({
           success: false,
           message: 'The provided Phone Number does not match the registered Admin account phone number.'
@@ -2996,18 +3287,20 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     // 3. Registered Users Check
     else {
       const foundUser = users.find((u: any) => (u.email || '').toLowerCase() === inputEmail);
-      if (foundUser) {
-        const userPhoneNorm = normalizePhone(foundUser.phone || '');
-        if (inputPhoneNorm && userPhoneNorm && userPhoneNorm !== inputPhoneNorm) {
-          return res.status(400).json({
-            success: false,
-            message: `The provided Phone Number does not match the registered phone number on file for ${inputEmail}.`
-          });
-        }
-        matchedAccountName = foundUser.name || 'User';
-      } else {
-        matchedAccountName = inputEmail.split('@')[0];
+      if (!foundUser) {
+        return res.status(400).json({
+          success: false,
+          message: `No registered account found with email "${inputEmail}". You must register first in the "Sign Up" tab.`
+        });
       }
+      const userPhoneNorm = normalizePhone(foundUser.phone || '');
+      if (userPhoneNorm !== inputPhoneNorm) {
+        return res.status(400).json({
+          success: false,
+          message: `The provided Phone Number does not match the registered phone number on file for ${inputEmail}.`
+        });
+      }
+      matchedAccountName = foundUser.name || 'User';
     }
 
     // Extract destination Gmail address
@@ -3024,6 +3317,7 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     activeResetCodes.set(verificationCode, {
       id: `rst-${Date.now()}`,
       email: inputEmail,
+      phone: inputPhone,
       code: verificationCode,
       token: secureToken,
       createdAt: Date.now(),
@@ -3033,6 +3327,7 @@ app.post('/api/auth/send-reset-email', async (req, res) => {
     activeResetCodes.set(secureToken, {
       id: `rst-${Date.now()}`,
       email: inputEmail,
+      phone: inputPhone,
       code: verificationCode,
       token: secureToken,
       createdAt: Date.now(),
@@ -3249,15 +3544,22 @@ app.post('/api/auth/reset-password', async (req, res) => {
       const idx = users.findIndex((u: any) => (u.email || '').toLowerCase() === normalized);
       if (idx >= 0) {
         users[idx].password = newPassword.trim();
+        if (resetReq?.phone) {
+          users[idx].phone = resetReq.phone;
+        }
+        users[idx].lastActiveAt = new Date().toISOString();
       } else {
         users.push({
           id: `user-${Date.now()}`,
           name: normalized.split('@')[0],
           email: normalized,
-          phone: '+251995406697',
+          phone: resetReq?.phone || '+251995406697',
           role: 'tenant',
           password: newPassword.trim(),
           provider: 'local',
+          registeredAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+          lastActiveAt: new Date().toISOString(),
           savedPropertyIds: [],
           postedPropertyIds: [],
           toursBooked: []

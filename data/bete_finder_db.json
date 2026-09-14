@@ -64,29 +64,56 @@
       "postedPropertyIds": []
     }
   ],
+  "menuConfig": {
+    "adminTabs": {
+      "sync": true,
+      "feedback": true,
+      "payments": true,
+      "security": true,
+      "properties": true,
+      "telegram_bot": true,
+      "database_users": true,
+      "admin_controller": true,
+      "paid_subscribers": true,
+      "pricing_settings": true,
+      "telegram_channel": true
+    },
+    "lastUpdated": "2026-09-07T21:01:03.279Z",
+    "publicMenus": {
+      "home": true,
+      "post": true,
+      "rent": true,
+      "sale": true,
+      "pricing": true,
+      "feedback": true,
+      "dashboard": true,
+      "favorites": true,
+      "ai_assistant": true,
+      "post_property": true,
+      "feedback_button": true
+    }
+  },
   "properties": [],
-  "lastUpdated": 1788814708883,
+  "lastUpdated": 1789389862559,
   "ownerFeedbacks": [
     {
-      "id": "fb-1788814705082-cfjkm",
-      "name": "Abebe Tadesse",
-      "email": "abebe@gmail.com",
-      "phone": "+251911234567",
-      "rating": 5,
+      "id": "fb-1789029688644-wxivw",
+      "name": "Anonymous User",
+      "email": "guest@betefinder.com",
+      "phone": "",
+      "rating": 4,
       "status": "new",
-      "message": "Looking for 2-bedroom rental in Bole Atlas. Great platform!",
-      "category": "rental",
-      "createdAt": "2026-09-07T20:58:25.082Z",
-      "userAgent": "curl/7.88.1"
+      "message": "I really love the idea of this site .... it could actually be an amazing project once the right ppl find it and after the first few listings",
+      "category": "platform",
+      "createdAt": "2026-09-10T08:41:29.361Z",
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36"
     }
   ],
   "paymentRequests": [],
   "adminCredentials": {
-    "bio": "All System Admin",
     "name": "Bereket Tadesse",
     "email": "lekeneke@gmail.com/admin",
     "phone": "+251911749109",
-    "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
     "password": "Kaleb5873"
   },
   "ownerCredentials": {
@@ -282,34 +309,5 @@
       "canVerifyProperties": true,
       "canViewUserDatabase": true
     }
-  },
-  "menuConfig": {
-    "adminTabs": {
-      "payments": true,
-      "properties": true,
-      "paid_subscribers": true,
-      "database_users": true,
-      "admin_controller": true,
-      "pricing_settings": true,
-      "telegram_channel": true,
-      "telegram_bot": true,
-      "feedback": true,
-      "security": true,
-      "sync": true
-    },
-    "publicMenus": {
-      "home": true,
-      "rent": true,
-      "sale": true,
-      "pricing": true,
-      "post": true,
-      "ai_assistant": true,
-      "feedback_button": true,
-      "favorites": true,
-      "dashboard": true,
-      "post_property": true,
-      "feedback": true
-    },
-    "lastUpdated": "2026-09-07T20:58:28.883Z"
   }
 }

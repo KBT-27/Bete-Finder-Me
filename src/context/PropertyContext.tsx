@@ -73,6 +73,17 @@ interface PropertyContextType {
   approvePaymentRequest: (requestId: string) => void;
   rejectPaymentRequest: (requestId: string, reason: string) => void;
   deletePaymentRequest: (requestId: string) => void;
+  verifyPaymentWithLinksEt: (params: {
+    url?: string;
+    reference?: string;
+    userName?: string;
+    userPhone?: string;
+    plan?: ListingPlan | null;
+    durationMonths?: number;
+    totalAmount?: number;
+    autoActivate?: boolean;
+    requestId?: string;
+  }) => Promise<{ success: boolean; verified: boolean; message: string; receipt?: any; raw?: any }>;
   userPaymentRequests: PaymentRequest[];
   syncWithDatabase: () => Promise<{ success: boolean; message: string; connectedNeon: boolean }>;
   isDatabaseSyncing: boolean;
@@ -716,6 +727,111 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     fetch(`/api/payments/${requestId}`, { method: 'DELETE' }).catch(console.error);
   };
 
+  // Automated Verification with links.et
+  const verifyPaymentWithLinksEt = async (params: {
+    url?: string;
+    reference?: string;
+    userName?: string;
+    userPhone?: string;
+    plan?: ListingPlan | null;
+    durationMonths?: number;
+    totalAmount?: number;
+    autoActivate?: boolean;
+    requestId?: string;
+  }): Promise<{ success: boolean; verified: boolean; message: string; receipt?: any; raw?: any }> => {
+    try {
+      const duration = params.durationMonths || 1;
+      const targetPlan = params.plan || selectedPlan;
+      const planPrice = targetPlan ? targetPlan.price * duration : (params.totalAmount || 299);
+
+      const response = await fetch('/api/links-et/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: params.url,
+          reference: params.reference,
+          userEmail: user?.email,
+          userName: params.userName || user?.name,
+          userPhone: params.userPhone || user?.phone,
+          planId: targetPlan?.id || (pendingPaymentPurpose === 'boost' ? 'premium' : 'basic'),
+          planName: targetPlan?.name || (pendingPaymentPurpose === 'boost' ? 'Featured Boost' : 'Basic Package'),
+          durationMonths: duration,
+          totalAmount: params.totalAmount || planPrice,
+          autoActivate: params.autoActivate ?? true
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.verified) {
+        if (params.autoActivate ?? true) {
+          const rawPlanId = targetPlan?.id as string | undefined;
+          const resolvedPlanId = (rawPlanId === 'boost' ? 'premium' : rawPlanId) || 'basic';
+          const isVip = resolvedPlanId === 'vip';
+          const isPremium = resolvedPlanId === 'premium';
+          const durationDays = duration * 30;
+          const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+
+          if (user) {
+            updateUser({
+              role: user.role === 'tenant' ? 'landlord' : user.role,
+              activePlan: (isVip ? 'vip' : isPremium ? 'premium' : 'basic') as any,
+              planExpiresAt: expiresAt,
+              planStartedAt: new Date().toISOString()
+            });
+          }
+
+          setProperties(prev => prev.map(p => {
+            if (user && p.owner?.email?.toLowerCase() === user.email?.toLowerCase()) {
+              return {
+                ...p,
+                isVerified: true,
+                isFeatured: isVip || isPremium,
+                payPlan: (isVip ? 'vip' : isPremium ? 'premium' : 'basic') as any,
+                payPlanName: targetPlan?.name || (isVip ? 'VIP TOP+ Package' : isPremium ? 'Premium Package' : 'Basic Package')
+              };
+            }
+            return p;
+          }));
+
+          // Add or update payment request in state as verified
+          const newVerifiedReq: PaymentRequest = {
+            id: `links-et-${Date.now()}`,
+            userId: user?.id || `user-${Date.now()}`,
+            userName: data.receipt?.payerName || params.userName || user?.name || 'Customer',
+            userEmail: user?.email || '',
+            userPhone: params.userPhone || user?.phone || '',
+            planId: (targetPlan?.id as any) || 'premium',
+            planName: targetPlan?.name || 'Premium Package',
+            durationMonths: duration,
+            totalAmount: params.totalAmount || planPrice,
+            transactionRef: data.receipt?.receiptNo || params.reference || 'VERIFIED',
+            submittedAt: new Date().toISOString(),
+            status: 'approved',
+            reviewedAt: new Date().toISOString(),
+            reviewedBy: 'links.et Automated Verifier',
+            expiresAt,
+            linksEtVerified: true,
+            linksEtData: data.receipt
+          };
+
+          setPaymentRequests(prev => [
+            newVerifiedReq, 
+            ...prev.filter(r => r.transactionRef !== newVerifiedReq.transactionRef && (!params.requestId || r.id !== params.requestId))
+          ]);
+        }
+      }
+
+      return data;
+    } catch (err: any) {
+      return { 
+        success: false, 
+        verified: false, 
+        message: err.message || 'Failed to connect to links.et verification service.' 
+      };
+    }
+  };
+
   const userPaymentRequests = useMemo(() => {
     if (!user) return [];
     return paymentRequests.filter(r => {
@@ -769,6 +885,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         approvePaymentRequest,
         rejectPaymentRequest,
         deletePaymentRequest,
+        verifyPaymentWithLinksEt,
         userPaymentRequests,
         syncWithDatabase,
         isDatabaseSyncing,

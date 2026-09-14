@@ -16,7 +16,7 @@ export const PopularLocations: React.FC = () => {
   };
 
   return (
-    <section className="py-14 lg:py-20 bg-white border-b border-slate-200/80">
+    <section id="popular-locations" className="py-14 lg:py-20 bg-white border-b border-slate-200/80 scroll-mt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
         {/* Section Header */}

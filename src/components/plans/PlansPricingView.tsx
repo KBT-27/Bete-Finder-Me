@@ -84,8 +84,8 @@ export const PlansPricingView: React.FC = () => {
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-10">
           <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 text-xs font-extrabold mb-3">
-            <Sparkles className="w-4 h-4 text-emerald-600" />
-            <span>Telebirr Fast Mobile Checkout ({telebirrSettings.accountNumber})</span>
+            <Zap className="w-4 h-4 text-emerald-600" />
+            <span>⚡ links.et Connected • Instant Verification (Telebirr & 17+ Ethiopian Banks)</span>
           </div>
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight">
             {t('pricingTitle')}
@@ -281,6 +281,45 @@ export const PlansPricingView: React.FC = () => {
               </div>
             );
           })}
+        </div>
+
+        {/* links.et Integration Banner */}
+        <div className="mt-14 max-w-4xl mx-auto bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 flex items-center justify-center shrink-0">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="text-base sm:text-lg font-black text-slate-900">
+                    Instant Activation with links.et
+                  </h4>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                    Official API
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed max-w-xl">
+                  Bete Finder is integrated directly with <strong>links.et</strong> to provide automated, real-time receipt verification across Telebirr and 17+ Ethiopian banks. Simply enter your receipt link or transaction number to unlock VIP / Premium spotlights instantly.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap sm:flex-col gap-2 shrink-0 text-xs font-bold text-slate-600">
+              <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Telebirr Instant Check</span>
+              </span>
+              <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>17+ Ethiopian Banks</span>
+              </span>
+              <span className="flex items-center gap-1.5 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Zero Wait Time</span>
+              </span>
+            </div>
+          </div>
         </div>
 
       </div>

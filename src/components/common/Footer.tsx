@@ -11,10 +11,11 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
+import { smoothScrollToSection } from '../../lib/scrollUtils';
 
 export const Footer: React.FC = () => {
   const { t } = useLanguage();
-  const { setCurrentView, updateFilter, setActiveListingType } = useProperties();
+  const { currentView, setCurrentView, updateFilter, setActiveListingType } = useProperties();
 
   const handleLocationClick = (city: string, subcity?: string) => {
     updateFilter('city', city);
@@ -135,57 +136,100 @@ export const Footer: React.FC = () => {
             <ul className="space-y-2.5 text-sm">
               <li>
                 <button
+                  id="footer-nav-home-btn"
                   onClick={() => {
-                    setCurrentView('home');
+                    if (currentView !== 'home') {
+                      setCurrentView('home');
+                    }
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="hover:text-emerald-400 transition-colors"
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
                   {t('navHome')}
                 </button>
               </li>
               <li>
                 <button
+                  id="footer-featured-properties-btn"
+                  onClick={() => smoothScrollToSection('featured-properties', currentView, setCurrentView)}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left flex items-center gap-1.5"
+                >
+                  <span>Featured Properties (ተለይተው የቀረቡ ቤቶች)</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-why-choose-us-btn"
+                  onClick={() => smoothScrollToSection('why-choose-us', currentView, setCurrentView)}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left flex items-center gap-1.5"
+                >
+                  <span>Why Choose Us (ለምን ቤቴ ፈላጊ?)</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-property-categories-btn"
+                  onClick={() => smoothScrollToSection('property-categories', currentView, setCurrentView)}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
+                >
+                  <span>Property Categories (የቤት አይነቶች)</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-popular-locations-btn"
+                  onClick={() => smoothScrollToSection('popular-locations', currentView, setCurrentView)}
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
+                >
+                  <span>Popular Locations (ተወዳጅ አካባቢዎች)</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  id="footer-nav-rent-btn"
                   onClick={() => {
                     setActiveListingType('rent');
                     setCurrentView('properties');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="hover:text-emerald-400 transition-colors"
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
                   {t('navRent')}
                 </button>
               </li>
               <li>
                 <button
+                  id="footer-nav-sale-btn"
                   onClick={() => {
                     setActiveListingType('sale');
                     setCurrentView('properties');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="hover:text-emerald-400 transition-colors"
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
                   {t('navSale')}
                 </button>
               </li>
               <li>
                 <button
+                  id="footer-nav-post-btn"
                   onClick={() => {
                     setCurrentView('post');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="hover:text-emerald-400 transition-colors"
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
                   {t('navPostProperty')}
                 </button>
               </li>
               <li>
                 <button
+                  id="footer-nav-pricing-btn"
                   onClick={() => {
                     setCurrentView('pricing');
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
-                  className="hover:text-emerald-400 transition-colors"
+                  className="hover:text-emerald-400 transition-colors cursor-pointer text-left"
                 >
                   {t('navPricing')}
                 </button>

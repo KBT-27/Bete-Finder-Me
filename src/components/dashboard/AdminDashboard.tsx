@@ -101,6 +101,7 @@ export const AdminDashboard: React.FC = () => {
     approvePaymentRequest,
     rejectPaymentRequest,
     deletePaymentRequest,
+    verifyPaymentWithLinksEt,
     verifyProperty,
     plans,
     updatePlanPrice,
@@ -1045,6 +1046,52 @@ export const AdminDashboard: React.FC = () => {
   // -------------------------------------------------------------
   // Payment Request Handlers
   // -------------------------------------------------------------
+  const [verifyingPaymentId, setVerifyingPaymentId] = useState<string | null>(null);
+
+  const handleVerifyWithLinksEtAdmin = async (req: PaymentRequest) => {
+    if (!canControlAll && effectivePermissions.isSuspended) {
+      showToast('❌ Action blocked: Administrative access is suspended.');
+      return;
+    }
+    if (!canControlAll && !effectivePermissions.canApprovePayments) {
+      showToast('❌ Permission denied: You do not have authority to verify payments.');
+      return;
+    }
+
+    setVerifyingPaymentId(req.id);
+    try {
+      const isUrl = req.transactionRef.startsWith('http://') || req.transactionRef.startsWith('https://');
+      const res = await verifyPaymentWithLinksEt({
+        url: isUrl ? req.transactionRef : undefined,
+        reference: !isUrl ? req.transactionRef : undefined,
+        userName: req.userName,
+        userPhone: req.userPhone,
+        durationMonths: req.durationMonths,
+        totalAmount: req.totalAmount,
+        autoActivate: true,
+        requestId: req.id
+      });
+
+      if (res.success && res.verified) {
+        showToast(`⚡ Verified by links.et! Plan activated for ${req.userName}.`);
+        logAdminActivity(
+          isOwner ? 'Owner (Kaleb Bereket)' : 'Admin',
+          'Payment Verified via links.et',
+          `Automated verification successful for receipt ${req.transactionRef}. Plan activated for user ${req.userName}`,
+          'payment',
+          'success'
+        );
+        reloadUsers();
+      } else {
+        showToast(`❌ links.et: ${res.message || 'Receipt could not be verified'}`);
+      }
+    } catch (err: any) {
+      showToast(`❌ Error: ${err.message || 'links.et verification failed'}`);
+    } finally {
+      setVerifyingPaymentId(null);
+    }
+  };
+
   const handleApprove = (requestId: string) => {
     if (!canControlAll && effectivePermissions.isSuspended) {
       showToast('❌ Action blocked: Administrative access is suspended.');
@@ -1674,6 +1721,13 @@ export const AdminDashboard: React.FC = () => {
                             {req.planName}
                           </span>
 
+                          {req.linksEtVerified && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-emerald-500 text-white text-xs font-black shadow-2xs">
+                              <Zap className="w-3 h-3" />
+                              <span>links.et Verified</span>
+                            </span>
+                          )}
+
                           <span className="text-xs text-slate-400">
                             Submitted: {new Date(req.submittedAt).toLocaleDateString()} at {new Date(req.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
@@ -1746,6 +1800,17 @@ export const AdminDashboard: React.FC = () => {
                       <div className="flex sm:flex-col gap-2 shrink-0 pt-2 lg:pt-0">
                         {req.status === 'pending' && (
                           <>
+                            <button
+                              type="button"
+                              onClick={() => handleVerifyWithLinksEtAdmin(req)}
+                              disabled={verifyingPaymentId === req.id}
+                              className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 text-white font-black text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                              title="Verify receipt reference or link using official links.et Ethiopian Gateway"
+                            >
+                              <Zap className={`w-4 h-4 ${verifyingPaymentId === req.id ? 'animate-spin' : ''}`} />
+                              <span>{verifyingPaymentId === req.id ? 'Verifying via links.et...' : '⚡ Verify via links.et'}</span>
+                            </button>
+
                             <button
                               onClick={() => handleApprove(req.id)}
                               className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer"

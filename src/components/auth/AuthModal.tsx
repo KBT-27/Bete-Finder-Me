@@ -22,6 +22,7 @@ import { UserRole } from '../../types';
 import { ResetPasswordView } from './ResetPasswordView';
 import { isSlashAllowedForPassword, getRegisteredUsers } from '../../lib/passwords';
 import { authenticateWithGoogle, GoogleUserProfile } from '../../lib/googleAuth';
+import { toast } from 'sonner';
 
 const GoogleIcon: React.FC = () => (
   <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -230,6 +231,7 @@ export const AuthModal: React.FC = () => {
       if (mode === 'signin') {
         const result = login(email, password);
         if (result.success) {
+          toast.success(language === 'am' ? 'እንኳን ደህና መጡ! በተሳካ ሁኔታ ገብተዋል' : 'Welcome back! Signed in successfully.');
           handleClose();
           setEmail('');
           setPassword('');
@@ -257,6 +259,7 @@ export const AuthModal: React.FC = () => {
           role: selectedRole
         });
         if (result.success) {
+          toast.success(language === 'am' ? 'መለያዎ በተሳካ ሁኔታ ተመዝግቧል!' : 'Account registered successfully! Logging you in...');
           setSuccessMessage(language === 'am' ? 'መለያዎ በተሳካ ሁኔታ ተመዝግቧል!' : 'Account registered successfully! Logging you in...');
           setTimeout(() => {
             handleClose();
@@ -280,6 +283,15 @@ export const AuthModal: React.FC = () => {
           return;
         }
 
+        // Mandatory Phone Number constraint
+        if (!trimmedPhone) {
+          setErrorMessage(language === 'am'
+            ? 'የተመዘገበው ስልክ ቁጥር ግዴታ ነው። እባክዎ ያስገቡ።'
+            : 'Registered Phone Number is mandatory (ግዴታ ነው). Please enter your registered phone number.');
+          setIsLoading(false);
+          return;
+        }
+
         if (trimmedEmail.includes('/')) {
           const isRoleAllowed = trimmedEmail.endsWith('/admin') || trimmedEmail.endsWith('/owner');
           if (!isRoleAllowed) {
@@ -291,16 +303,26 @@ export const AuthModal: React.FC = () => {
           }
         }
 
-        const res = await requestPasswordReset(trimmedEmail, trimmedPhone || undefined);
+        const res = await requestPasswordReset(trimmedEmail, trimmedPhone);
         if (res.success) {
           setIsDeliveredViaSmtp(Boolean(res.delivered));
+          toast.success(res.message || (language === 'am' 
+            ? 'ባለ 6 አሃዝ የማረጋገጫ ኮድ ወደ ኢሜይልዎ ተልኳል!' 
+            : '6-digit verification code sent to your email!'));
           setSuccessMessage(res.message || (language === 'am'
             ? 'ባለ 6 አሃዝ የማረጋገጫ ቁጥር ወደ Gmail Primary Inbox ተልኳል!'
             : 'An automatic 6-digit verification code has been dispatched to your Gmail Primary Inbox Access.'));
+          if (res.resetCode || res.resetToken) {
+            setActiveResetToken(res.resetCode || res.resetToken);
+          }
+          setTimeout(() => {
+            setMode('reset');
+          }, 1200);
         } else {
+          toast.error(res.message || (language === 'am' ? 'የማረጋገጫ ኮድ መላክ አልተቻለም።' : 'Unable to send verification code.'));
           setErrorMessage(res.message || (language === 'am'
             ? 'ይቅርታ፣ ኮዱን መላክ አልተቻለም። እባክዎ እንደገና ይሞክሩ።'
-            : 'Unable to send verification code. Please check your Gmail address and try again.'));
+            : 'Unable to send verification code. Please check your Gmail address and phone number and try again.'));
         }
       } else if (mode === 'change') {
         // Change Password Handler: Asks for Gmail, Phone, Current Password, New Password
@@ -317,7 +339,7 @@ export const AuthModal: React.FC = () => {
 
         if (!isSlashAllowedForPassword(email, newPassword)) {
           setErrorMessage(language === 'am'
-            ? 'የ "/" ምልክት በይለፍ ቃል ውስጥ ለአድሚንና ለባлеቤት መለያዎች ብቻ የተፈቀደ ነው።'
+            ? 'የ "/" ምልክት በይለፍ ቃል ውስጥ ለአድሚንና ለባለቤት መለያዎች ብቻ የተፈቀደ ነው።'
             : "The '/' symbol in passwords is reserved for Admin and Owner accounts only.");
           setIsLoading(false);
           return;
@@ -331,6 +353,7 @@ export const AuthModal: React.FC = () => {
         });
 
         if (res.success) {
+          toast.success(res.message || (language === 'am' ? 'የይለፍ ቃልዎ በተሳካ ሁኔታ ተቀይሯል!' : 'Your password has been changed successfully!'));
           setSuccessMessage(res.message || (language === 'am' ? 'የይለፍ ቃልዎ በተሳካ ሁኔታ ተቀይሯል!' : 'Your password has been changed successfully!'));
           setTimeout(() => {
             setMode('signin');
@@ -339,6 +362,7 @@ export const AuthModal: React.FC = () => {
             setNewPassword('');
           }, 1200);
         } else {
+          toast.error(res.message || 'Password change failed.');
           setErrorMessage(res.message || (language === 'am' ? 'የይለፍ ቃል መቀየር አልተሳካም።' : 'Failed to change password.'));
         }
       }
@@ -774,7 +798,7 @@ export const AuthModal: React.FC = () => {
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     {mode === 'forgot' ? (
-                      language === 'am' ? 'ስልክ ቁጥር (አማራጭ)' : 'Phone Number (Optional)'
+                      language === 'am' ? 'የተመዘገበ ስልክ ቁጥር (ግዴታ) *' : 'Registered Phone Number (Mandatory) *'
                     ) : mode === 'change' ? (
                       language === 'am' ? '2. የተመዘገበ ስልክ ቁጥር *' : '2. Registered Phone Number *'
                     ) : (
@@ -785,7 +809,7 @@ export const AuthModal: React.FC = () => {
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="tel"
-                      required={mode === 'change'}
+                      required={mode === 'change' || mode === 'forgot'}
                       id="auth-phone-input"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
@@ -793,6 +817,13 @@ export const AuthModal: React.FC = () => {
                       className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                     />
                   </div>
+                  {mode === 'forgot' && (
+                    <p className="mt-1 text-[10px] text-slate-500 font-medium">
+                      {language === 'am'
+                        ? 'የይለፍ ቃል ለመቀየር ስልክ ቁጥሩ ለዚህ ኢሜይል ከተመዘገበው ጋር አንድ መሆን አለበት።'
+                        : 'Phone number is mandatory and must match the registered phone on file for this email.'}
+                    </p>
+                  )}
                 </div>
               )}
 

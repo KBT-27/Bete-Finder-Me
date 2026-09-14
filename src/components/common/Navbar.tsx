@@ -25,6 +25,7 @@ import { useProperties } from '../../context/PropertyContext';
 import { UserRole, MenuVisibilityConfig } from '../../types';
 import { GeminiIcon } from './GeminiIcon';
 import { getMenuConfig, syncMenuConfigFromServer } from '../../lib/menuConfig';
+import { smoothScrollToSection } from '../../lib/scrollUtils';
 
 export const Navbar: React.FC = () => {
   const { t, language, toggleLanguage, isAmharic } = useLanguage();
@@ -125,6 +126,22 @@ export const Navbar: React.FC = () => {
                 {t('navHome')}
               </button>
             )}
+
+            <button
+              id="nav-featured-btn"
+              onClick={() => smoothScrollToSection('featured-properties', currentView, setCurrentView)}
+              className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-650 hover:text-slate-900 hover:bg-slate-100/70 transition-colors cursor-pointer"
+            >
+              {isAmharic ? 'ተለይተው የቀረቡ' : 'Featured'}
+            </button>
+
+            <button
+              id="nav-why-us-btn"
+              onClick={() => smoothScrollToSection('why-choose-us', currentView, setCurrentView)}
+              className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-650 hover:text-slate-900 hover:bg-slate-100/70 transition-colors cursor-pointer"
+            >
+              {isAmharic ? 'ለምን ቤቴ?' : 'Why Us'}
+            </button>
 
             {menuConfig.publicMenus.rent && (
               <button
@@ -405,6 +422,30 @@ export const Navbar: React.FC = () => {
                 <span>{t('navHome')}</span>
               </button>
             )}
+
+            <button
+              id="mobile-nav-featured-btn"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                smoothScrollToSection('featured-properties', currentView, setCurrentView);
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3 cursor-pointer"
+            >
+              <Sparkles className="w-5 h-5 text-amber-500" />
+              <span>{isAmharic ? 'ተለይተው የቀረቡ ቤቶች' : 'Featured Properties'}</span>
+            </button>
+
+            <button
+              id="mobile-nav-why-us-btn"
+              onClick={() => {
+                setIsMobileMenuOpen(false);
+                smoothScrollToSection('why-choose-us', currentView, setCurrentView);
+              }}
+              className="w-full text-left px-3 py-2.5 rounded-xl text-base font-semibold text-slate-800 hover:bg-slate-100 flex items-center gap-3 cursor-pointer"
+            >
+              <ShieldCheck className="w-5 h-5 text-emerald-600" />
+              <span>{isAmharic ? 'ለምን ቤቴ ፈላጊ?' : 'Why Choose Us'}</span>
+            </button>
 
             {menuConfig.publicMenus.rent && (
               <button

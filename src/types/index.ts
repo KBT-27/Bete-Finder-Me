@@ -229,6 +229,8 @@ export interface PaymentRequest {
   reviewedAt?: string;
   reviewedBy?: string;
   expiresAt?: string;
+  linksEtVerified?: boolean;
+  linksEtData?: any;
 }
 
 export interface AdminPermissions {

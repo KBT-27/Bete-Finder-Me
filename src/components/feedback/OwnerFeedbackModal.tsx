@@ -17,6 +17,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { sendOwnerFeedback } from '../../lib/feedback';
 import { OwnerFeedback } from '../../types';
+import { toast } from 'sonner';
 
 interface OwnerFeedbackModalProps {
   isOpen: boolean;
@@ -104,6 +105,7 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
 
       if (res.success) {
         setIsSubmitted(true);
+        toast.success(isAmharic ? 'አስተያየትዎ በተሳካ ሁኔታ ተልኳል!' : 'Feedback sent successfully!');
         if (onSuccessToast) {
           onSuccessToast(
             isAmharic 

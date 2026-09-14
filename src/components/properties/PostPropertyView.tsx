@@ -35,6 +35,7 @@ import { ETHIOPIAN_LOCATIONS, AMENITIES_LIST } from '../../data/ethiopianLocatio
 import { getCoordinatesForLocation } from '../../data/ethiopianGeoData';
 import { PropertyType, ListingType } from '../../types';
 import { safeFetchJson } from '../../lib/apiHelper';
+import { toast } from 'sonner';
 
 export const PostPropertyView: React.FC = () => {
   const { t, isAmharic } = useLanguage();
@@ -317,6 +318,7 @@ export const PostPropertyView: React.FC = () => {
     }
 
     setSubmittedPropertyTitle(generatedTitle);
+    toast.success(isAmharic ? 'የቤት መረጃው በተሳካ ሁኔታ ተለጥፏል!' : 'Property posted successfully!');
     setIsSuccess(true);
   };
 

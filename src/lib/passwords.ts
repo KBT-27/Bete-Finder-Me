@@ -78,7 +78,7 @@ export const normalizePhoneNumber = (phone: string): string => {
   return digitsOnly;
 };
 
-// Verify that the requested Gmail and optional Phone Number are verified to receive verification code
+// Verify that the requested Gmail and mandatory Phone Number match the registered account
 export const verifyRegisteredAccountAndPhone = (
   email: string,
   phone?: string
@@ -90,10 +90,18 @@ export const verifyRegisteredAccountAndPhone = (
   error?: string 
 } => {
   const normEmail = (email || '').trim().toLowerCase();
-  const normPhone = phone ? normalizePhoneNumber(phone) : '';
+  const rawPhone = (phone || '').trim();
+  const normPhone = normalizePhoneNumber(rawPhone);
 
   if (!normEmail || !normEmail.includes('@')) {
     return { matched: false, error: 'A valid registered Gmail / Email is required.' };
+  }
+
+  if (!rawPhone || !normPhone) {
+    return { 
+      matched: false, 
+      error: 'Registered Phone Number is mandatory (ግዴታ ነው). Please enter your registered phone number.' 
+    };
   }
 
   // 1. Check Owner Account
@@ -110,7 +118,7 @@ export const verifyRegisteredAccountAndPhone = (
     normEmail === 'kalebbereker49@gmail.com'
   ) {
     const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '0995406697');
-    if (!normPhone || ownerPhoneNorm === normPhone) {
+    if (ownerPhoneNorm === normPhone) {
       return { 
         matched: true, 
         accountType: 'owner', 
@@ -136,7 +144,7 @@ export const verifyRegisteredAccountAndPhone = (
     normEmail === 'kalebbereket49@gmail.com/admin'
   ) {
     const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
-    if (!normPhone || adminPhoneNorm === normPhone) {
+    if (adminPhoneNorm === normPhone) {
       return { 
         matched: true, 
         accountType: 'admin', 
@@ -157,7 +165,7 @@ export const verifyRegisteredAccountAndPhone = (
 
   if (foundUser) {
     const userPhoneNorm = normalizePhoneNumber(foundUser.phone || '');
-    if (!normPhone || (userPhoneNorm && userPhoneNorm === normPhone)) {
+    if (userPhoneNorm && userPhoneNorm === normPhone) {
       return { 
         matched: true, 
         accountType: 'user', 
@@ -167,17 +175,15 @@ export const verifyRegisteredAccountAndPhone = (
     } else {
       return { 
         matched: false, 
-        error: `The provided Phone Number does not match the registered phone number for ${normEmail}.` 
+        error: `The provided Phone Number does not match the registered phone number on file for ${normEmail}.` 
       };
     }
   }
 
-  // Support any Gmail address requesting an automatic verification code to primary inbox
+  // Reject if no account is found with this email
   return { 
-    matched: true, 
-    accountType: 'user',
-    accountName: normEmail.split('@')[0],
-    registeredPhone: ''
+    matched: false, 
+    error: `No registered account found with email "${normEmail}". You must register first in the "Sign Up" tab before requesting a reset code.` 
   };
 };
 
@@ -529,7 +535,7 @@ export const markTokenAsUsed = (tokenOrCode: string) => {
   localStorage.setItem('bete_finder_reset_tokens', JSON.stringify(updated));
 };
 
-export const updateAccountPasswordByEmail = (email: string, newPass: string): { success: boolean; message: string } => {
+export const updateAccountPasswordByEmail = (email: string, newPass: string, phone?: string): { success: boolean; message: string } => {
   const normalizedEmail = email.trim().toLowerCase();
   const cleanPass = newPass.trim();
 
@@ -561,16 +567,25 @@ export const updateAccountPasswordByEmail = (email: string, newPass: string): { 
 
   if (foundIndex >= 0) {
     registered[foundIndex].password = cleanPass;
+    if (phone && phone.trim()) {
+      registered[foundIndex].phone = phone.trim();
+    }
+    registered[foundIndex].lastActiveAt = new Date().toISOString();
     localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(registered));
-    return { success: true, message: 'Password updated successfully!' };
+    fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(registered[foundIndex])
+    }).catch(() => {});
+    return { success: true, message: 'Password updated and saved in registered users!' };
   }
 
-  // If user wasn't registered before, create account with new password
+  // If user wasn't registered before in localStorage, save as registered user
   const newAccount: RegisteredAccount = {
     id: `user-${Date.now()}`,
     name: email.split('@')[0] || 'User',
     email: normalizedEmail,
-    phone: '+251995406697',
+    phone: phone?.trim() || '+251995406697',
     role: 'tenant',
     password: cleanPass,
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
@@ -579,8 +594,13 @@ export const updateAccountPasswordByEmail = (email: string, newPass: string): { 
     toursBooked: []
   };
   saveRegisteredUser(newAccount);
+  fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(newAccount)
+  }).catch(() => {});
 
-  return { success: true, message: 'Password updated successfully!' };
+  return { success: true, message: 'Password updated and saved in registered users!' };
 };
 
 export const changeAccountPassword = (

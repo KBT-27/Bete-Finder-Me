@@ -14,6 +14,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import { useProperties } from '../../context/PropertyContext';
 import { isSlashAllowedForPassword } from '../../lib/passwords';
+import { toast } from 'sonner';
 
 interface ResetPasswordViewProps {
   initialToken?: string;
@@ -124,6 +125,7 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
       const res = await resetPasswordWithToken(token, newPassword);
       if (res.success) {
         setIsCompleted(true);
+        toast.success(res.message || 'Password successfully reset and saved in registered users!');
         // Automatically log in with the new password
         if (targetEmail) {
           login(targetEmail, newPassword);
@@ -132,9 +134,11 @@ export const ResetPasswordView: React.FC<ResetPasswordViewProps> = ({
           setTimeout(onSuccess, 1500);
         }
       } else {
+        toast.error(res.message || 'Failed to reset password.');
         setErrorMessage(res.message);
       }
     } catch (err: any) {
+      toast.error(err?.message || 'Failed to update password.');
       setErrorMessage(err?.message || 'Failed to update password.');
     } finally {
       setIsSubmitting(false);

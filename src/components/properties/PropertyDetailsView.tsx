@@ -30,6 +30,7 @@ import { useProperties } from '../../context/PropertyContext';
 import { useAuth } from '../../context/AuthContext';
 import { AMENITIES_LIST } from '../../data/ethiopianLocations';
 import { PropertyCard } from '../common/PropertyCard';
+import { toast } from 'sonner';
 
 export const PropertyDetailsView: React.FC = () => {
   const { t, isAmharic } = useLanguage();
@@ -87,6 +88,7 @@ export const PropertyDetailsView: React.FC = () => {
   const handleShare = () => {
     navigator.clipboard?.writeText(window.location.href);
     setCopiedLink(true);
+    toast.success(isAmharic ? 'የቤቱ ማስፈንጠሪያ ተገልብጧል!' : 'Property link copied to clipboard!');
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
@@ -100,6 +102,7 @@ export const PropertyDetailsView: React.FC = () => {
     const success = bookTour(selectedProperty.id, tourDate, tourTime, tourNotes);
     if (success) {
       setIsTourBooked(true);
+      toast.success(isAmharic ? 'የጉብኝት ጥያቄዎ በተሳካ ሁኔታ ተልኳል!' : 'Tour visit requested successfully! Landlord notified.');
       setTimeout(() => setIsTourBooked(false), 6000);
     }
   };
