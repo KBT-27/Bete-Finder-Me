@@ -2533,6 +2533,26 @@ app.post('/api/user/update-profile', async (req, res) => {
     const users = currentData.users || [];
     const index = users.findIndex((u: any) => (u.email || '').toLowerCase() === targetEmail);
 
+    // Validate phone uniqueness if user is setting or changing phone number
+    if (phone && phone.trim()) {
+      const cleanPhone = phone.trim();
+      const normPhoneDigits = cleanPhone.replace(/\D/g, '').slice(-9);
+      if (normPhoneDigits.length >= 9) {
+        const phoneConflict = users.find((u: any) => {
+          const uEmail = (u.email || '').trim().toLowerCase();
+          if (uEmail === targetEmail) return false; // same user
+          const uPhoneDigits = (u.phone || '').replace(/\D/g, '').slice(-9);
+          return uPhoneDigits && uPhoneDigits === normPhoneDigits;
+        });
+        if (phoneConflict) {
+          return res.status(400).json({
+            success: false,
+            message: 'This phone number is already registered to another account. 1 account can only register 1.'
+          });
+        }
+      }
+    }
+
     if (index === 0 || index > 0) {
       const user = users[index];
       if (newPassword && newPassword.trim()) {

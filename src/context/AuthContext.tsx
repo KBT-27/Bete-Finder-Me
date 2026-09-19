@@ -421,15 +421,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    // Rule: Check if phone number is already registered to another account
-    if (cleanPhone) {
-      const existingPhone = registered.find(u => u.phone && u.phone.trim() === cleanPhone);
-      if (existingPhone) {
-        return {
-          success: false,
-          message: 'This phone number is already registered to an account. 1 account can only register 1.'
-        };
-      }
+    // Rule: Phone number is mandatory and unique
+    if (!cleanPhone || cleanPhone.length < 9) {
+      return {
+        success: false,
+        message: 'Phone number is mandatory for account creation. Please provide a valid phone number.'
+      };
+    }
+
+    const normPhone = normalizePhoneNumber(cleanPhone);
+    const existingPhone = registered.find(u => u.phone && normalizePhoneNumber(u.phone) === normPhone);
+    if (existingPhone) {
+      return {
+        success: false,
+        message: 'This phone number is already registered to an account. 1 account can only register 1.'
+      };
     }
 
     const nowIso = new Date().toISOString();
@@ -437,7 +443,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: `user-${Date.now()}`,
       name: data.name.trim() || email.split('@')[0],
       email: data.email.trim(),
-      phone: cleanPhone || '+251995406697',
+      phone: cleanPhone,
       role: data.role || 'tenant',
       password: data.password.trim(),
       provider: 'local',

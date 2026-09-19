@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Heart, 
   Calendar, 
@@ -23,7 +23,11 @@ import {
   Save,
   Check,
   KeyRound,
-  Tag
+  Tag,
+  Bell,
+  CheckCheck,
+  MessageCircle,
+  Inbox
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -31,6 +35,13 @@ import { useAuth } from '../../context/AuthContext';
 import { PropertyCard } from '../common/PropertyCard';
 import { AdminDashboard } from './AdminDashboard';
 import { safeFetchJson } from '../../lib/apiHelper';
+import { 
+  buildUserNotifications, 
+  markNotificationAsRead, 
+  markAllNotificationsAsRead, 
+  AppNotification 
+} from '../../lib/notifications';
+import { normalizePhoneNumber, getRegisteredUsers } from '../../lib/passwords';
 
 export const UserDashboard: React.FC = () => {
   const { t, language } = useLanguage();
@@ -48,7 +59,17 @@ export const UserDashboard: React.FC = () => {
   } = useProperties();
   const { user, role, logout, updateUser, changePassword } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'favorites' | 'tours' | 'myListings' | 'payments' | 'analytics' | 'profile'>('favorites');
+  const [activeTab, setActiveTab] = useState<'favorites' | 'tours' | 'myListings' | 'payments' | 'notifications' | 'analytics' | 'profile'>('favorites');
+
+  // Notifications state
+  const [readVersion, setReadVersion] = useState(0);
+  const notifications: AppNotification[] = useMemo(() => {
+    return buildUserNotifications(user, userPaymentRequests);
+  }, [user, userPaymentRequests, readVersion]);
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter(n => !n.read).length;
+  }, [notifications]);
 
   // Profile Edit State
   const [profileName, setProfileName] = useState(user?.name || '');
@@ -60,6 +81,15 @@ export const UserDashboard: React.FC = () => {
   const [profileSaveSuccess, setProfileSaveSuccess] = useState<string | null>(null);
   const [profileSaveError, setProfileSaveError] = useState<string | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Sync profile fields if user object updates in AuthContext
+  useEffect(() => {
+    if (user) {
+      setProfileName(user.name || '');
+      setProfilePhone(user.phone || '');
+      setProfileRole(user.role === 'landlord' ? 'landlord' : 'tenant');
+    }
+  }, [user]);
 
   if (!user) {
     return (
@@ -135,6 +165,24 @@ export const UserDashboard: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2 self-start sm:self-auto">
+              <button
+                onClick={() => setActiveTab('notifications')}
+                className={`relative px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-xs flex items-center gap-2 transition-colors cursor-pointer border ${
+                  activeTab === 'notifications'
+                    ? 'bg-amber-500 text-slate-950 border-amber-400'
+                    : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                }`}
+                title="View Notifications"
+              >
+                <Bell className={`w-4 h-4 ${unreadCount > 0 ? 'text-amber-600' : 'text-slate-500'}`} />
+                <span className="hidden sm:inline">Notifications</span>
+                {unreadCount > 0 && (
+                  <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                    {unreadCount}
+                  </span>
+                )}
+              </button>
+
               {(!user.activePlan || user.activePlan === 'free') && (
                 <button
                   onClick={() => setCurrentView('pricing')}
@@ -367,6 +415,21 @@ export const UserDashboard: React.FC = () => {
           >
             <CreditCard className="w-4 h-4 text-emerald-500" />
             <span>Payment History ({userPaymentRequests.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('notifications')}
+            className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'notifications' ? 'bg-slate-900 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-200/70'
+            }`}
+          >
+            <Bell className="w-4 h-4 text-amber-500" />
+            <span>Notifications ({notifications.length})</span>
+            {unreadCount > 0 && (
+              <span className="bg-rose-500 text-white text-[10px] font-black px-1.5 py-0.2 rounded-full animate-pulse">
+                {unreadCount} new
+              </span>
+            )}
           </button>
 
           <button
@@ -670,6 +733,165 @@ export const UserDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Tab: Notifications Panel */}
+        {activeTab === 'notifications' && (
+          <div className="max-w-4xl mx-auto space-y-4">
+            {/* Header with Mark All as Read button */}
+            <div className="bg-white rounded-2xl p-4 sm:p-5 border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <Bell className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-slate-900 flex items-center gap-2">
+                    <span>Notifications & Activity</span>
+                    {unreadCount > 0 && (
+                      <span className="bg-rose-500 text-white text-[11px] font-bold px-2 py-0.5 rounded-full">
+                        {unreadCount} unread
+                      </span>
+                    )}
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Payment approvals, owner answers to your feedback, and account security updates.
+                  </p>
+                </div>
+              </div>
+
+              {unreadCount > 0 && (
+                <button
+                  onClick={() => {
+                    markAllNotificationsAsRead(user.email, notifications.map(n => n.id));
+                    setReadVersion(v => v + 1);
+                  }}
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl flex items-center gap-1.5 transition-colors self-start sm:self-auto cursor-pointer"
+                >
+                  <CheckCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Mark all as read</span>
+                </button>
+              )}
+            </div>
+
+            {/* Notification items list */}
+            {notifications.length > 0 ? (
+              <div className="space-y-3">
+                {notifications.map((notif) => {
+                  const isPayment = notif.type === 'payment_approved' || notif.type === 'payment_rejected' || notif.type === 'payment_pending';
+                  const isFeedback = notif.type === 'feedback_reply' || notif.type === 'feedback_status';
+
+                  return (
+                    <div
+                      key={notif.id}
+                      onClick={() => {
+                        if (!notif.read) {
+                          markNotificationAsRead(user.email, notif.id);
+                          setReadVersion(v => v + 1);
+                        }
+                      }}
+                      className={`p-4 sm:p-5 rounded-2xl border transition-all cursor-pointer ${
+                        notif.read
+                          ? 'bg-white border-slate-200 shadow-2xs opacity-90'
+                          : 'bg-emerald-50/40 border-emerald-300 shadow-xs'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 sm:gap-4">
+                        {/* Status Icon */}
+                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                          notif.type === 'payment_approved'
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : notif.type === 'payment_rejected'
+                            ? 'bg-rose-100 text-rose-700 border border-rose-300'
+                            : notif.type === 'feedback_reply'
+                            ? 'bg-purple-100 text-purple-700 border border-purple-300'
+                            : notif.type === 'feedback_status'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-300'
+                            : 'bg-amber-100 text-amber-700 border border-amber-300'
+                        }`}>
+                          {notif.type === 'payment_approved' && <CheckCircle2 className="w-5 h-5" />}
+                          {notif.type === 'payment_rejected' && <AlertTriangle className="w-5 h-5" />}
+                          {notif.type === 'feedback_reply' && <MessageCircle className="w-5 h-5" />}
+                          {notif.type === 'feedback_status' && <MessageCircle className="w-5 h-5" />}
+                          {notif.type === 'payment_pending' && <Clock className="w-5 h-5" />}
+                          {notif.type === 'system' && <User className="w-5 h-5" />}
+                        </div>
+
+                        {/* Content */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-xs sm:text-sm font-bold text-slate-900">
+                                {notif.title}
+                              </h3>
+                              {!notif.read && (
+                                <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                              )}
+                            </div>
+                            <span className="text-[11px] font-medium text-slate-400">
+                              {new Date(notif.timestamp).toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-600 leading-relaxed">
+                            {notif.message}
+                          </p>
+
+                          {/* Extra metadata tags */}
+                          <div className="flex flex-wrap items-center gap-2 mt-2 pt-2 border-t border-slate-100">
+                            {isPayment && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">
+                                Telebirr Payment
+                              </span>
+                            )}
+                            {isFeedback && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200">
+                                Owner Response
+                              </span>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isPayment) {
+                                  setActiveTab('payments');
+                                } else if (isFeedback) {
+                                  setCurrentView('home');
+                                } else {
+                                  setActiveTab('profile');
+                                }
+                              }}
+                              className="text-[11px] font-bold text-emerald-600 hover:text-emerald-700 ml-auto flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>View details</span>
+                              <ArrowRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 max-w-md mx-auto">
+                <Inbox className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+                <h3 className="font-bold text-slate-900 mb-1">No Notifications Yet</h3>
+                <p className="text-xs text-slate-500 mb-4">
+                  When the Bete Finder Owner verifies your payment, responds to your feedback, or your account status changes, updates will appear right here.
+                </p>
+                <button
+                  onClick={() => setActiveTab('myListings')}
+                  className="px-4 py-2 bg-emerald-600 text-white font-bold text-xs rounded-xl cursor-pointer"
+                >
+                  Go to My Listings
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tab 5: Analytics */}
         {activeTab === 'analytics' && (
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -741,6 +963,26 @@ export const UserDashboard: React.FC = () => {
                     return;
                   }
 
+                  if (!profilePhone.trim()) {
+                    setProfileSaveError('Phone number is mandatory.');
+                    return;
+                  }
+
+                  // Verify phone uniqueness against other accounts
+                  const registeredUsers = getRegisteredUsers();
+                  const normalizedNewPhone = normalizePhoneNumber(profilePhone);
+                  const isPhoneTaken = registeredUsers.some(acc => {
+                    const accEmail = (acc.email || '').trim().toLowerCase();
+                    const currentEmail = (user.email || '').trim().toLowerCase();
+                    if (accEmail === currentEmail) return false;
+                    return normalizePhoneNumber(acc.phone || '') === normalizedNewPhone;
+                  });
+
+                  if (isPhoneTaken) {
+                    setProfileSaveError('This phone number is already registered to another account. Please use your own unique phone number.');
+                    return;
+                  }
+
                   // If user entered a new password, validate
                   if (newPassInput) {
                     if (newPassInput.length < 6) {
@@ -787,24 +1029,16 @@ export const UserDashboard: React.FC = () => {
                       setCurrentPassInput('');
                       setNewPassInput('');
                       setConfirmPassInput('');
-                      setProfileSaveSuccess('Profile and security details updated successfully in the database!');
+                      setProfileSaveSuccess('Profile and account settings updated successfully!');
                     } else if (result.isJson && result.data && !result.data.success) {
                       setProfileSaveError(result.data.message || 'Failed to update profile.');
+                    } else if (result.status === 400 && result.data && result.data.message) {
+                      setProfileSaveError(result.data.message);
                     } else {
-                      updateUser({
-                        name: profileName.trim(),
-                        phone: profilePhone.trim(),
-                        role: profileRole
-                      });
-                      setProfileSaveSuccess('Profile details saved locally!');
+                      setProfileSaveError('Could not update profile on server. Please try again.');
                     }
                   } catch (err: any) {
-                    updateUser({
-                      name: profileName.trim(),
-                      phone: profilePhone.trim(),
-                      role: profileRole
-                    });
-                    setProfileSaveSuccess('Profile details saved locally!');
+                    setProfileSaveError(err?.message || 'Network error updating profile. Please try again.');
                   } finally {
                     setIsSavingProfile(false);
                   }

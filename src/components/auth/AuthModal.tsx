@@ -20,7 +20,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth, AuthModalMode } from '../../context/AuthContext';
 import { UserRole } from '../../types';
 import { ResetPasswordView } from './ResetPasswordView';
-import { isSlashAllowedForPassword, getRegisteredUsers } from '../../lib/passwords';
+import { isSlashAllowedForPassword, getRegisteredUsers, normalizePhoneNumber } from '../../lib/passwords';
 import { authenticateWithGoogle, GoogleUserProfile } from '../../lib/googleAuth';
 import { toast } from 'sonner';
 
@@ -179,11 +179,12 @@ export const AuthModal: React.FC = () => {
 
     // Rule: 1 account can only register only 1 - check if phone is already registered
     const registered = getRegisteredUsers();
-    const existingPhone = registered.find(u => u.phone && u.phone.trim() === cleanPhone);
+    const normCleanPhone = normalizePhoneNumber(cleanPhone);
+    const existingPhone = registered.find(u => u.phone && normalizePhoneNumber(u.phone) === normCleanPhone);
     if (existingPhone) {
       setErrorMessage(
         language === 'am'
-          ? 'ይህ ስልክ ቁጥር አስቀድሞ በሌላ መለያ ተመዝግቧል። 1 መለያ 1 ጊዜ ብቻ ነው መመዝገብ የሚችለው።'
+          ? 'ይህ ስልክ ቁጥር አስቀድሞ በሌላ መለያ ተመዝግቧል። 1 መለያ 1 ስልክ ቁጥር ብቻ ነው መመዝገብ የሚችለው።'
           : 'This phone number is already registered to another account. 1 account can only register 1.'
       );
       return;
@@ -239,6 +240,31 @@ export const AuthModal: React.FC = () => {
           setErrorMessage(result.message || (language === 'am' ? 'መግባት አልተሳካም። እባክዎ መረጃዎን ይፈትሹ።' : 'Login failed. Please check your credentials.'));
         }
       } else if (mode === 'signup') {
+        const cleanPhone = phone.trim();
+        if (!cleanPhone || cleanPhone.length < 9) {
+          setErrorMessage(
+            language === 'am'
+              ? 'ስልክ ቁጥር ግዴታ ነው! እባክዎ ትክክለኛ ስልክ ቁጥር ያስገቡ (ለምሳሌ 09... ወይም +251...)።'
+              : 'Phone number is mandatory! Please enter a valid phone number (e.g. 09... or +251...).'
+          );
+          setIsLoading(false);
+          return;
+        }
+
+        // Rule: 1 account can only register 1 phone number
+        const registered = getRegisteredUsers();
+        const normPhone = normalizePhoneNumber(cleanPhone);
+        const existingPhone = registered.find(u => u.phone && normalizePhoneNumber(u.phone) === normPhone);
+        if (existingPhone) {
+          setErrorMessage(
+            language === 'am'
+              ? 'ይህ ስልክ ቁጥር አስቀድሞ በሌላ መለያ ተመዝግቧል። 1 መለያ 1 ስልክ ቁጥር ብቻ ነው መመዝገብ የሚችለው።'
+              : 'This phone number is already registered to another account. 1 account can only register 1.'
+          );
+          setIsLoading(false);
+          return;
+        }
+
         if (!password.trim() || password.length < 6) {
           setErrorMessage(language === 'am' ? 'የይለፍ ቃል ቢያንስ 6 ቁምፊዎች መሆን አለበት።' : 'Password must be at least 6 characters.');
           setIsLoading(false);
@@ -254,7 +280,7 @@ export const AuthModal: React.FC = () => {
         const result = signup({
           name: name.trim() || email.split('@')[0],
           email: email.trim(),
-          phone: phone.trim() || '+251995406697',
+          phone: cleanPhone,
           password: password.trim(),
           role: selectedRole
         });
@@ -802,14 +828,14 @@ export const AuthModal: React.FC = () => {
                     ) : mode === 'change' ? (
                       language === 'am' ? '2. የተመዘገበ ስልክ ቁጥር *' : '2. Registered Phone Number *'
                     ) : (
-                      t('authPhoneLabel')
+                      language === 'am' ? 'ስልክ ቁጥር (ግዴታ) *' : 'Phone Number (Mandatory) *'
                     )}
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                       type="tel"
-                      required={mode === 'change' || mode === 'forgot'}
+                      required
                       id="auth-phone-input"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
@@ -817,6 +843,13 @@ export const AuthModal: React.FC = () => {
                       className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl text-slate-900 font-medium focus:ring-2 focus:ring-emerald-500 focus:bg-white"
                     />
                   </div>
+                  {mode === 'signup' && (
+                    <p className="mt-1 text-[10px] text-slate-500 font-medium">
+                      {language === 'am'
+                        ? '1 መለያ 1 አዲስ ስልክ ቁጥር ብቻ ነው መመዝገብ የሚችለው።'
+                        : 'Each account must use a unique, non-registered phone number.'}
+                    </p>
+                  )}
                   {mode === 'forgot' && (
                     <p className="mt-1 text-[10px] text-slate-500 font-medium">
                       {language === 'am'
