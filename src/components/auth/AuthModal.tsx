@@ -89,6 +89,13 @@ export const AuthModal: React.FC = () => {
     if (authModalInitialMode) {
       setMode(authModalInitialMode);
     }
+    // Strictly do not auto-fill any credentials or inputs
+    setEmail('');
+    setPassword('');
+    setCurrentPassword('');
+    setNewPassword('');
+    setName('');
+    setPhone('');
     setErrorMessage(null);
     setSuccessMessage(null);
     setIsDeliveredViaSmtp(false);
@@ -99,6 +106,12 @@ export const AuthModal: React.FC = () => {
 
   const handleClose = () => {
     setIsAuthModalOpen(false);
+    setEmail('');
+    setPassword('');
+    setCurrentPassword('');
+    setNewPassword('');
+    setName('');
+    setPhone('');
     setErrorMessage(null);
     setSuccessMessage(null);
     setPendingGoogleProfile(null);
@@ -383,7 +396,8 @@ export const AuthModal: React.FC = () => {
           setSuccessMessage(res.message || (language === 'am' ? 'የይለፍ ቃልዎ በተሳካ ሁኔታ ተቀይሯል!' : 'Your password has been changed successfully!'));
           setTimeout(() => {
             setMode('signin');
-            setPassword(newPassword.trim());
+            setEmail('');
+            setPassword('');
             setCurrentPassword('');
             setNewPassword('');
           }, 1200);
@@ -452,6 +466,12 @@ export const AuthModal: React.FC = () => {
               id="auth-tab-signin"
               onClick={() => {
                 setMode('signin');
+                setEmail('');
+                setPassword('');
+                setCurrentPassword('');
+                setNewPassword('');
+                setName('');
+                setPhone('');
                 setErrorMessage(null);
                 setSuccessMessage(null);
               }}
@@ -468,6 +488,12 @@ export const AuthModal: React.FC = () => {
               id="auth-tab-signup"
               onClick={() => {
                 setMode('signup');
+                setEmail('');
+                setPassword('');
+                setCurrentPassword('');
+                setNewPassword('');
+                setName('');
+                setPhone('');
                 setErrorMessage(null);
                 setSuccessMessage(null);
               }}
@@ -583,6 +609,7 @@ export const AuthModal: React.FC = () => {
                   type="tel"
                   required
                   id="google-phone-input"
+                  autoComplete="off"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="09... or +251..."
@@ -766,7 +793,7 @@ export const AuthModal: React.FC = () => {
             )}
 
             {/* Authentication / Forgot / Change Password Form */}
-            <form onSubmit={handleSubmit} className="space-y-3.5">
+            <form onSubmit={handleSubmit} className="space-y-3.5" autoComplete="off">
               {/* Full Name for Sign Up */}
               {mode === 'signup' && (
                 <div>
@@ -777,6 +804,8 @@ export const AuthModal: React.FC = () => {
                       type="text"
                       required
                       id="signup-name-input"
+                      autoComplete="off"
+                      spellCheck={false}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="Abel Bekele"
@@ -802,7 +831,10 @@ export const AuthModal: React.FC = () => {
                   <input
                     type="text"
                     inputMode="email"
-                    autoComplete="email"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
                     required
                     id="auth-email-input"
                     value={email}
@@ -837,6 +869,7 @@ export const AuthModal: React.FC = () => {
                       type="tel"
                       required
                       id="auth-phone-input"
+                      autoComplete="off"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="09... or +251..."
@@ -872,6 +905,7 @@ export const AuthModal: React.FC = () => {
                       type={showCurrentPassword ? 'text' : 'password'}
                       required
                       id="change-current-password-input"
+                      autoComplete="new-password"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
                       placeholder="••••••••"
@@ -900,6 +934,7 @@ export const AuthModal: React.FC = () => {
                       type={showNewPassword ? 'text' : 'password'}
                       required
                       id="change-new-password-input"
+                      autoComplete="new-password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••"
@@ -929,6 +964,12 @@ export const AuthModal: React.FC = () => {
                         id="forgot-password-link-btn"
                         onClick={() => {
                           setMode('forgot');
+                          setEmail('');
+                          setPassword('');
+                          setCurrentPassword('');
+                          setNewPassword('');
+                          setName('');
+                          setPhone('');
                           setErrorMessage(null);
                           setSuccessMessage(null);
                         }}
@@ -944,6 +985,7 @@ export const AuthModal: React.FC = () => {
                       type={showPassword ? 'text' : 'password'}
                       required
                       id="auth-password-input"
+                      autoComplete="new-password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="••••••••"
@@ -987,6 +1029,12 @@ export const AuthModal: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setMode('signin');
+                      setEmail('');
+                      setPassword('');
+                      setCurrentPassword('');
+                      setNewPassword('');
+                      setName('');
+                      setPhone('');
                       setErrorMessage(null);
                       setSuccessMessage(null);
                     }}

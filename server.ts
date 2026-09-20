@@ -1564,7 +1564,21 @@ app.get('/api/feedback', async (req, res) => {
 
 app.post('/api/feedback', async (req, res) => {
   try {
-    const { name, email, phone, category, rating, message, propertyId, propertyTitle } = req.body || {};
+    const { 
+      name, 
+      email, 
+      phone, 
+      category, 
+      rating, 
+      message, 
+      propertyId, 
+      propertyTitle,
+      userId,
+      userRole,
+      userAvatar,
+      isRegisteredUser,
+      senderProfile 
+    } = req.body || {};
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, message: 'Message text is required.' });
     }
@@ -1576,14 +1590,19 @@ app.post('/api/feedback', async (req, res) => {
 
     const newFeedback = {
       id: req.body?.id || `fb-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-      name: (name || 'Anonymous User').trim(),
-      email: (email || 'user@example.com').trim(),
-      phone: (phone || '').trim(),
+      name: (name || (isRegisteredUser ? 'Registered User' : 'Guest')).trim(),
+      email: (email || (isRegisteredUser ? 'profile@betefinder.et' : 'Guest')).trim(),
+      phone: (phone || (isRegisteredUser ? 'Not Provided' : 'Guest')).trim(),
       category: category || 'general',
       rating: Number(rating) || 5,
       message: message.trim(),
       propertyId: propertyId || undefined,
       propertyTitle: propertyTitle || undefined,
+      userId: userId || undefined,
+      userRole: userRole || (isRegisteredUser ? 'User' : 'Guest'),
+      userAvatar: userAvatar || undefined,
+      isRegisteredUser: Boolean(isRegisteredUser),
+      senderProfile: senderProfile || undefined,
       status: 'new',
       createdAt: new Date().toISOString(),
       userAgent: req.headers['user-agent']
@@ -1592,7 +1611,7 @@ app.post('/api/feedback', async (req, res) => {
     currentData.ownerFeedbacks = [newFeedback, ...currentData.ownerFeedbacks];
     await persistMasterData(currentData);
 
-    console.log(`[Owner Feedback]: New feedback received from ${newFeedback.name} (${newFeedback.category})`);
+    console.log(`[Owner Feedback]: New feedback received from ${newFeedback.name} (${newFeedback.category}) [Role: ${newFeedback.userRole}]`);
 
     res.json({
       success: true,

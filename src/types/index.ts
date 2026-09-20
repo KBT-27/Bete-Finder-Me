@@ -290,6 +290,11 @@ export interface OwnerFeedback {
   replyNotes?: string;
   createdAt: string;
   userAgent?: string;
+  userId?: string;
+  userRole?: string;
+  userAvatar?: string;
+  isRegisteredUser?: boolean;
+  senderProfile?: string;
 }
 
 export interface AdminTabVisibility {

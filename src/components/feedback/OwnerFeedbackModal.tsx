@@ -11,7 +11,10 @@ import {
   Building2, 
   Sparkles,
   HelpCircle,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck,
+  UserCheck,
+  Info
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -37,7 +40,7 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
   const { user } = useAuth();
   const { isAmharic } = useLanguage();
 
-  // All fields start completely unfilled
+  // Contact fields: Auto-filled from signed-in profile, or set to 'Guest' if not registered/signed in
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -49,12 +52,20 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Guarantee that every time the modal opens, ALL questions/fields are strictly blank and not filled
+  // When modal opens:
+  // - If user is signed in: automatically fill by his sign in and profile
+  // - If user did not register or sign in: say Guest for the name, phone, and email
   useEffect(() => {
     if (isOpen) {
-      setName('');
-      setEmail('');
-      setPhone('');
+      if (user) {
+        setName(user.name || '');
+        setEmail(user.email || '');
+        setPhone(user.phone || '');
+      } else {
+        setName('Guest');
+        setEmail('Guest');
+        setPhone('Guest');
+      }
       setMessage('');
       setRating(0);
       setHoverRating(null);
@@ -62,12 +73,18 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
       setIsSubmitted(false);
       setErrorMsg(null);
     }
-  }, [isOpen, initialCategory]);
+  }, [isOpen, initialCategory, user]);
 
   const handleResetAllQuestions = () => {
-    setName('');
-    setEmail('');
-    setPhone('');
+    if (user) {
+      setName(user.name || '');
+      setEmail(user.email || '');
+      setPhone(user.phone || '');
+    } else {
+      setName('Guest');
+      setEmail('Guest');
+      setPhone('Guest');
+    }
     setMessage('');
     setRating(0);
     setHoverRating(null);
@@ -91,16 +108,40 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
     setIsSubmitting(true);
     setErrorMsg(null);
 
+    // Profile resolution rules:
+    // 1. If signed in: use typed values, but if user erases them, always send their profile (user name, email, phone)
+    // 2. If guest (not registered/signed in): default to 'Guest' for name, email, and phone
+    let finalName = '';
+    let finalEmail = '';
+    let finalPhone = '';
+
+    if (user) {
+      finalName = name.trim() ? name.trim() : (user.name || 'Registered User');
+      finalEmail = email.trim() ? email.trim() : user.email;
+      finalPhone = phone.trim() ? phone.trim() : (user.phone || 'Profile Phone Not Set');
+    } else {
+      finalName = name.trim() ? name.trim() : 'Guest';
+      finalEmail = email.trim() ? email.trim() : 'Guest';
+      finalPhone = phone.trim() ? phone.trim() : 'Guest';
+    }
+
     try {
       const res = await sendOwnerFeedback({
-        name: name.trim() || 'Anonymous User',
-        email: email.trim() || 'guest@betefinder.com',
-        phone: phone.trim() || '',
+        name: finalName,
+        email: finalEmail,
+        phone: finalPhone,
         category: category as OwnerFeedback['category'],
         rating: rating > 0 ? rating : 5,
         message: message.trim(),
         propertyId: propertyContext?.id,
         propertyTitle: propertyContext?.title,
+        userId: user ? user.id : undefined,
+        userRole: user ? user.role : 'Guest',
+        userAvatar: user ? user.avatar : undefined,
+        isRegisteredUser: Boolean(user),
+        senderProfile: user 
+          ? `Verified Profile: ${user.name || 'User'} (${user.email}) | Tel: ${user.phone || 'N/A'} | Role: ${user.role}`
+          : 'Guest User (Unregistered)'
       });
 
       if (res.success) {
@@ -335,11 +376,44 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
                 </div>
               </div>
 
-              {/* Sender Name & Contact - Blank / Empty by default */}
+              {/* Profile Context Banner: Auto-fill indication or Guest indication */}
+              {user ? (
+                <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200/80 text-emerald-900 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{isAmharic ? 'የተረጋገጠ መለያ መረጃ' : 'Signed-In Account Profile'}</span>
+                    <span className="ml-auto text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded-md bg-emerald-200/70 text-emerald-800">
+                      {user.role}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-emerald-700 mt-1 leading-relaxed">
+                    {isAmharic 
+                      ? 'ስም፣ ስልክ እና ኢሜይል ከመለያዎ በቀጥታ ተሞልተዋል። እነዚህን መቀየር ወይም ማጥፋት ይችላሉ፤ ቢሰርዟቸውም እንኳን የተረጋገጠው መለያዎ በቀጥታ ለባለቤቱ ይላካል።' 
+                      : 'Auto-filled from your profile. You can edit these fields; if erased, your verified profile will still be sent directly to the Owner.'}
+                  </p>
+                </div>
+              ) : (
+                <div className="p-2.5 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                    <User className="w-4 h-4 text-slate-500 shrink-0" />
+                    <span>{isAmharic ? 'እንግዳ (አልተመዘገቡም)' : 'Guest Mode (Not Signed In)'}</span>
+                    <span className="ml-auto text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded-md bg-slate-200 text-slate-700">
+                      Guest
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                    {isAmharic 
+                      ? 'ያልተመዘገቡ ስለሆኑ ስም፣ ስልክ እና ኢሜይል በነባሪነት "Guest" ተብለዋል። የራስዎን መረጃ መሙላት ወይም በ Guest መላክ ይችላሉ።' 
+                      : 'Because you are not signed in, Name, Phone, and Email default to "Guest". You may update them or send as Guest.'}
+                  </p>
+                </div>
+              )}
+
+              {/* Sender Name & Contact - Auto-filled from Profile or Guest */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {isAmharic ? 'ሙሉ ስም (አማራጭ)' : '3. Full Name (Optional)'}
+                    {isAmharic ? 'ሙሉ ስም' : '3. Full Name'}
                   </label>
                   <div className="relative">
                     <User className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
@@ -347,43 +421,61 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
                       type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
-                      placeholder={isAmharic ? 'ስምዎን ያስገቡ...' : 'e.g. Abebe Kebede'}
+                      placeholder={user ? (user.name || 'Your Name') : 'Guest'}
                       className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
+                  {user && !name.trim() && (
+                    <p className="mt-1 text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                      <Info className="w-3 h-3 shrink-0" />
+                      <span>{isAmharic ? `የተሰረዘ: የተረጋገጠው ስም (${user.name || 'User'}) ይላካል` : `Erased: Will send profile name (${user.name || 'User'})`}</span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {isAmharic ? 'ስልክ ቁጥር (አማራጭ)' : 'Phone Number (Optional)'}
+                    {isAmharic ? 'ስልክ ቁጥር' : 'Phone Number'}
                   </label>
                   <div className="relative">
                     <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                     <input
-                      type="tel"
+                      type="text"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+251 9..."
+                      placeholder={user ? (user.phone || '+251 9...') : 'Guest'}
                       className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                     />
                   </div>
+                  {user && !phone.trim() && (
+                    <p className="mt-1 text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                      <Info className="w-3 h-3 shrink-0" />
+                      <span>{isAmharic ? `የተሰረዘ: ከመለያዎ ስልክ (${user.phone || 'ያልተመዘገበ'}) ይላካል` : `Erased: Will send profile phone (${user.phone || 'Not Set'})`}</span>
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isAmharic ? 'ኢሜይል (አማራጭ)' : 'Email Address (Optional)'}
+                  {isAmharic ? 'ኢሜይል' : 'Email Address'}
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
                   <input
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="e.g. yourname@example.com"
+                    placeholder={user ? user.email : 'Guest'}
                     className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
+                {user && !email.trim() && (
+                  <p className="mt-1 text-[10px] text-emerald-600 font-medium flex items-center gap-1">
+                    <Info className="w-3 h-3 shrink-0" />
+                    <span>{isAmharic ? `የተሰረዘ: የተረጋገጠው ኢሜይል (${user.email}) ይላካል` : `Erased: Will send profile email (${user.email})`}</span>
+                  </p>
+                )}
               </div>
 
               {/* Message Box - Blank / Empty by default */}
