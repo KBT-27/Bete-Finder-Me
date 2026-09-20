@@ -811,22 +811,71 @@ app.post('/api/db/sync', async (req, res) => {
 
     const currentData = await fetchMasterData();
 
-    // If explicit full overwrite is passed (e.g. from owner delete/reorder action)
+    // Intelligently merge properties by ID unless explicit full overwrite is flagged
     let mergedProperties = currentData.properties || [];
     if (Array.isArray(incomingData.properties)) {
-      mergedProperties = incomingData.properties;
+      if (incomingData.explicitPropertyOverwrite) {
+        mergedProperties = incomingData.properties;
+      } else {
+        const propMap = new Map<string, any>();
+        for (const p of (currentData.properties || [])) {
+          if (p.id) propMap.set(p.id, p);
+        }
+        for (const p of incomingData.properties) {
+          if (p.id) {
+            propMap.set(p.id, { ...(propMap.get(p.id) || {}), ...p });
+          }
+        }
+        mergedProperties = Array.from(propMap.values());
+      }
     }
 
-    // Merge registered users or use updated list if passed
+    // Merge registered users smartly by email or id
     let mergedUsers = currentData.users || [];
     if (Array.isArray(incomingData.users)) {
-      mergedUsers = incomingData.users;
+      const userMap = new Map<string, any>();
+      for (const u of (currentData.users || [])) {
+        const key = (u.email || u.id || '').toLowerCase().trim();
+        if (key) userMap.set(key, u);
+      }
+      for (const u of incomingData.users) {
+        const key = (u.email || u.id || '').toLowerCase().trim();
+        if (!key) continue;
+        if (userMap.has(key)) {
+          userMap.set(key, { ...userMap.get(key), ...u });
+        } else {
+          userMap.set(key, u);
+        }
+      }
+      mergedUsers = Array.from(userMap.values());
     }
 
     // Merge payment requests or use updated list
     let mergedPayments = currentData.paymentRequests || [];
     if (Array.isArray(incomingData.paymentRequests)) {
-      mergedPayments = incomingData.paymentRequests;
+      const payMap = new Map<string, any>();
+      for (const p of (currentData.paymentRequests || [])) {
+        const key = p.id || p.transactionRef || '';
+        if (key) payMap.set(key, p);
+      }
+      for (const p of incomingData.paymentRequests) {
+        const key = p.id || p.transactionRef || '';
+        if (key) payMap.set(key, { ...(payMap.get(key) || {}), ...p });
+      }
+      mergedPayments = Array.from(payMap.values());
+    }
+
+    // Merge owner feedbacks
+    let mergedFeedbacks = currentData.ownerFeedbacks || [];
+    if (Array.isArray(incomingData.ownerFeedbacks)) {
+      const fbMap = new Map<string, any>();
+      for (const f of (currentData.ownerFeedbacks || [])) {
+        if (f.id) fbMap.set(f.id, f);
+      }
+      for (const f of incomingData.ownerFeedbacks) {
+        if (f.id) fbMap.set(f.id, { ...(fbMap.get(f.id) || {}), ...f });
+      }
+      mergedFeedbacks = Array.from(fbMap.values());
     }
 
     const updatedMaster = {
@@ -835,10 +884,19 @@ app.post('/api/db/sync', async (req, res) => {
       properties: mergedProperties,
       users: mergedUsers,
       paymentRequests: mergedPayments,
+      ownerFeedbacks: mergedFeedbacks,
       telebirrSettings: incomingData.telebirrSettings || currentData.telebirrSettings,
-      adminCredentials: incomingData.adminCredentials || currentData.adminCredentials,
-      ownerCredentials: incomingData.ownerCredentials || currentData.ownerCredentials,
+      adminCredentials: incomingData.adminCredentials 
+        ? { ...currentData.adminCredentials, ...incomingData.adminCredentials } 
+        : currentData.adminCredentials,
+      ownerCredentials: incomingData.ownerCredentials 
+        ? { ...currentData.ownerCredentials, ...incomingData.ownerCredentials } 
+        : currentData.ownerCredentials,
       adminControllerConfig: incomingData.adminControllerConfig || currentData.adminControllerConfig,
+      menuConfig: incomingData.menuConfig || currentData.menuConfig,
+      plans: Array.isArray(incomingData.plans) && incomingData.plans.length > 0 
+        ? incomingData.plans 
+        : currentData.plans,
       lastUpdated: Date.now()
     };
 
@@ -2509,12 +2567,69 @@ app.post('/api/admin/update-profile', async (req, res) => {
     currentData.adminCredentials = {
       email: cleanEmail,
       password: cleanPass,
-      name: name?.trim() || currentData.adminCredentials?.name || 'Admin (Kaleb Bereket)',
-      phone: phone?.trim() || currentData.adminCredentials?.phone || '+251995406697'
+      name: name?.trim() || currentData.adminCredentials?.name || 'Admin',
+      phone: phone?.trim() || currentData.adminCredentials?.phone || ''
     };
 
     await persistMasterData(currentData);
     res.json({ success: true, message: 'Admin profile and credentials updated successfully by Owner.', adminCredentials: currentData.adminCredentials });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: error?.message });
+  }
+});
+
+// Update Owner Profile Endpoint (Secured to Owner only)
+app.post('/api/owner/update-profile', async (req, res) => {
+  try {
+    const { name, email, phone, password, currentPassword, avatar, bio } = req.body;
+    if (!email) {
+      return res.status(400).json({ success: false, message: 'Owner email is required.' });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const currentData = await fetchMasterData();
+    const existingOwner = currentData.ownerCredentials || {};
+
+    // If changing password, verify current password if set
+    if (password && password.trim()) {
+      const cleanPass = password.trim();
+      if (cleanPass.length < 6) {
+        return res.status(400).json({ success: false, message: 'Owner password must be at least 6 characters.' });
+      }
+      if (existingOwner.password && currentPassword && existingOwner.password !== currentPassword.trim()) {
+        return res.status(400).json({ success: false, message: 'Current Owner password does not match.' });
+      }
+
+      if (existingOwner.password && existingOwner.password !== cleanPass) {
+        currentData.revokedOwnerPasswords = currentData.revokedOwnerPasswords || [];
+        if (!currentData.revokedOwnerPasswords.includes(existingOwner.password)) {
+          currentData.revokedOwnerPasswords.push(existingOwner.password);
+        }
+      }
+      existingOwner.password = cleanPass;
+    }
+
+    if (existingOwner.email && existingOwner.email.toLowerCase() !== cleanEmail) {
+      currentData.revokedOwnerEmails = currentData.revokedOwnerEmails || [];
+      if (!currentData.revokedOwnerEmails.includes(existingOwner.email)) {
+        currentData.revokedOwnerEmails.push(existingOwner.email);
+      }
+    }
+
+    existingOwner.email = cleanEmail;
+    if (name) existingOwner.name = name.trim();
+    if (phone) existingOwner.phone = phone.trim();
+    if (avatar) existingOwner.avatar = avatar.trim();
+    if (bio) existingOwner.bio = bio.trim();
+
+    currentData.ownerCredentials = existingOwner;
+    await persistMasterData(currentData);
+
+    res.json({ 
+      success: true, 
+      message: 'Owner profile securely updated and persisted to database.', 
+      ownerCredentials: existingOwner 
+    });
   } catch (error: any) {
     res.status(500).json({ success: false, message: error?.message });
   }
@@ -2580,7 +2695,7 @@ app.post('/api/user/update-profile', async (req, res) => {
         id: `user-${Date.now()}`,
         name: name?.trim() || targetEmail.split('@')[0],
         email: targetEmail,
-        phone: phone?.trim() || '+251995406697',
+        phone: phone?.trim() || '',
         role: role === 'landlord' ? 'landlord' : 'tenant',
         password: newPassword?.trim() || '123456',
         savedPropertyIds: [],

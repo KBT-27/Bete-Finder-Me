@@ -27,6 +27,7 @@ import {
 import { authenticateWithGoogle } from '../lib/googleAuth';
 import { safeFetchJson } from '../lib/apiHelper';
 import { getAdminControllerConfig } from '../lib/adminController';
+import { pushAllLocalStorageToDatabase, queueDatabaseSync } from '../lib/masterDatabaseSync';
 
 export type AuthModalMode = 'signin' | 'signup' | 'forgot' | 'reset' | 'change';
 
@@ -107,21 +108,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync auth state and registered accounts with server database
   const syncAuthWithDatabase = useCallback(async () => {
     try {
-      const result = await safeFetchJson<any>('/api/db/sync');
-      if (result.isJson && result.data && result.data.success && result.data.data) {
-        const d = result.data.data;
+      const syncRes = await pushAllLocalStorageToDatabase();
+      if (syncRes.success && syncRes.data) {
+        const d = syncRes.data;
         if (d.users && Array.isArray(d.users)) {
-          localStorage.setItem('bete_finder_registered_accounts', JSON.stringify(d.users));
           setRegisteredUsers(d.users);
         }
         if (d.adminCredentials) {
           setAdminCreds(d.adminCredentials);
-          localStorage.setItem('bete_finder_admin_creds', JSON.stringify(d.adminCredentials));
         }
         if (d.ownerCredentials) {
           setOwnerCreds(d.ownerCredentials);
-          localStorage.setItem('bete_finder_owner_creds', JSON.stringify(d.ownerCredentials));
         }
+
+        // Re-synchronize currently active user profile from database to ensure fresh security and data
+        setUser(prevUser => {
+          if (!prevUser) return null;
+          if (prevUser.role === 'owner' && d.ownerCredentials) {
+            return {
+              ...prevUser,
+              email: d.ownerCredentials.email || prevUser.email,
+              name: d.ownerCredentials.name || prevUser.name,
+              phone: d.ownerCredentials.phone !== undefined ? d.ownerCredentials.phone : prevUser.phone,
+              avatar: d.ownerCredentials.avatar || prevUser.avatar,
+              bio: d.ownerCredentials.bio !== undefined ? d.ownerCredentials.bio : prevUser.bio
+            };
+          }
+          if (prevUser.role === 'admin' && d.adminCredentials) {
+            return {
+              ...prevUser,
+              email: d.adminCredentials.email || prevUser.email,
+              name: d.adminCredentials.name || prevUser.name,
+              phone: d.adminCredentials.phone !== undefined ? d.adminCredentials.phone : prevUser.phone,
+              avatar: d.adminCredentials.avatar || prevUser.avatar,
+              bio: d.adminCredentials.bio !== undefined ? d.adminCredentials.bio : prevUser.bio
+            };
+          }
+          if (Array.isArray(d.users)) {
+            const currentEmail = (prevUser.email || '').trim().toLowerCase();
+            const matchedUser = d.users.find((u: any) => 
+              (u.id && prevUser.id && u.id === prevUser.id) || 
+              ((u.email || '').trim().toLowerCase() === currentEmail)
+            );
+            if (matchedUser) {
+              return {
+                ...prevUser,
+                name: matchedUser.name || prevUser.name,
+                phone: matchedUser.phone !== undefined ? matchedUser.phone : prevUser.phone,
+                role: matchedUser.role || prevUser.role,
+                avatar: matchedUser.avatar || prevUser.avatar,
+                savedPropertyIds: matchedUser.savedPropertyIds || prevUser.savedPropertyIds || [],
+                postedPropertyIds: matchedUser.postedPropertyIds || prevUser.postedPropertyIds || [],
+                toursBooked: matchedUser.toursBooked || prevUser.toursBooked || []
+              };
+            }
+          }
+          return prevUser;
+        });
       }
     } catch {
       // Offline fallback to localStorage
@@ -571,7 +614,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: `google-${Date.now()}`,
         name: googleName || 'Google User',
         email: googleEmail || 'user@gmail.com',
-        phone: customProfile?.phone || '+251995406697',
+        phone: customProfile?.phone || '',
         role: userRole,
         password: 'google-oauth-auth',
         provider: 'google',
@@ -830,6 +873,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return updated;
       });
+      queueDatabaseSync(200);
     }
   };
 
@@ -853,12 +897,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bio: updated.bio
       } : null);
     }
-    // Push update to server
-    fetch('/api/db/sync', {
+    // Push update to server admin endpoint and master database sync
+    fetch('/api/admin/update-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adminCredentials: updated })
+      body: JSON.stringify({
+        email: updated.email,
+        password: updated.password,
+        name: updated.name,
+        phone: updated.phone
+      })
     }).catch(() => {});
+    queueDatabaseSync(100);
     return true;
   };
 
@@ -882,12 +932,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         bio: updated.bio
       } : null);
     }
-    // Push update to server
-    fetch('/api/db/sync', {
+    // Push update to server owner endpoint and master database sync
+    fetch('/api/owner/update-profile', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ownerCredentials: updated })
+      body: JSON.stringify({
+        email: updated.email,
+        password: updated.password,
+        name: updated.name,
+        phone: updated.phone,
+        avatar: updated.avatar,
+        bio: updated.bio
+      })
     }).catch(() => {});
+    queueDatabaseSync(100);
     return true;
   };
 

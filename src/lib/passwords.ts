@@ -117,18 +117,18 @@ export const verifyRegisteredAccountAndPhone = (
     normEmail === 'kalebbereker49@gmail.com/owner' ||
     normEmail === 'kalebbereker49@gmail.com'
   ) {
-    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '0995406697');
+    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '');
     if (ownerPhoneNorm === normPhone) {
       return { 
         matched: true, 
         accountType: 'owner', 
-        accountName: owner.name || 'Kaleb Bereket (Owner)', 
+        accountName: owner.name || 'Owner', 
         registeredPhone: owner.phone 
       };
     } else {
       return { 
         matched: false, 
-        error: `The provided Phone Number does not match the registered Owner account phone number (${owner.phone || '0995406697'}).` 
+        error: 'The provided Phone Number does not match the registered Owner account phone number on file.' 
       };
     }
   }
@@ -143,7 +143,7 @@ export const verifyRegisteredAccountAndPhone = (
     normEmail === `${cleanAdminEmail}/admin` ||
     normEmail === 'kalebbereket49@gmail.com/admin'
   ) {
-    const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
+    const adminPhoneNorm = normalizePhoneNumber(admin.phone || '');
     if (adminPhoneNorm === normPhone) {
       return { 
         matched: true, 
@@ -154,7 +154,7 @@ export const verifyRegisteredAccountAndPhone = (
     } else {
       return { 
         matched: false, 
-        error: `The provided Phone Number does not match the registered Admin account phone number (${admin.phone || '+251995406697'}).` 
+        error: 'The provided Phone Number does not match the registered Admin account phone number on file.' 
       };
     }
   }
@@ -585,7 +585,7 @@ export const updateAccountPasswordByEmail = (email: string, newPass: string, pho
     id: `user-${Date.now()}`,
     name: email.split('@')[0] || 'User',
     email: normalizedEmail,
-    phone: phone?.trim() || '+251995406697',
+    phone: phone?.trim() || '',
     role: 'tenant',
     password: cleanPass,
     avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
@@ -640,7 +640,7 @@ export const changeAccountPassword = (
   // 1. Check Owner account
   const owner = getOwnerCredentials();
   if ((owner.email || '').toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/owner' || normalizedEmail === 'kalebbereket49@gmail.com') {
-    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '+251995406697');
+    const ownerPhoneNorm = normalizePhoneNumber(owner.phone || '');
     if (ownerPhoneNorm !== inputPhoneNorm) {
       return { success: false, message: 'Provided phone number does not match registered Owner phone number.' };
     }
@@ -657,7 +657,7 @@ export const changeAccountPassword = (
   // 2. Check Admin account
   const admin = getAdminCredentials();
   if ((admin.email || '').toLowerCase() === normalizedEmail || normalizedEmail === 'kalebbereket49@gmail.com/admin') {
-    const adminPhoneNorm = normalizePhoneNumber(admin.phone || '+251995406697');
+    const adminPhoneNorm = normalizePhoneNumber(admin.phone || '');
     if (adminPhoneNorm !== inputPhoneNorm) {
       return { success: false, message: 'Provided phone number does not match registered Admin phone number.' };
     }

@@ -3,6 +3,7 @@ import { Property, PropertyFilterState, ListingPlan, PaymentRequest, TelebirrSet
 import { INITIAL_PROPERTIES, LISTING_PLANS } from '../data/initialProperties';
 import { useAuth } from './AuthContext';
 import { safeFetchJson } from '../lib/apiHelper';
+import { pushAllLocalStorageToDatabase, queueDatabaseSync } from '../lib/masterDatabaseSync';
 
 const DEFAULT_FILTER: PropertyFilterState = {
   searchQuery: '',
@@ -219,50 +220,50 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     localStorage.setItem('bete_finder_sync_interval', validSec.toString());
   }, []);
 
-  // Database Synchronization Function
+  // Database Synchronization Function - sends all local storage to DB and updates state
   const syncWithDatabase = useCallback(async (): Promise<{ success: boolean; message: string; connectedNeon: boolean }> => {
     setIsDatabaseSyncing(true);
     try {
-      // 1. Fetch current server DB state safely
-      const result = await safeFetchJson<any>('/api/db/sync');
+      const syncRes = await pushAllLocalStorageToDatabase();
 
-      if (result.isJson && result.data && result.data.success && result.data.data) {
-        const remote = result.data.data;
-        setIsNeonConnected(Boolean(result.data.connectedNeon));
+      if (syncRes.success && syncRes.data) {
+        const remote = syncRes.data;
+        setIsNeonConnected(Boolean(syncRes.connectedNeon));
         setLastDbSyncTimestamp(Date.now());
 
-        // Update properties (reflects additions and deletions across all devices)
+        // Update properties
         if (Array.isArray(remote.properties)) {
           setProperties(remote.properties);
-          localStorage.setItem('bete_finder_properties', JSON.stringify(remote.properties));
         }
 
         // Update payment requests
         if (Array.isArray(remote.paymentRequests)) {
           setPaymentRequests(remote.paymentRequests);
-          localStorage.setItem('bete_finder_payment_requests', JSON.stringify(remote.paymentRequests));
         }
 
         // Update settings
         if (remote.telebirrSettings) {
           setTelebirrSettings(remote.telebirrSettings);
-          localStorage.setItem('bete_finder_telebirr_settings', JSON.stringify(remote.telebirrSettings));
+        }
+
+        if (Array.isArray(remote.plans) && remote.plans.length > 0) {
+          setPlans(remote.plans);
         }
 
         setIsDatabaseSyncing(false);
         return {
           success: true,
-          message: result.data.connectedNeon 
-            ? 'Synced successfully with Neon Database & Server Store.' 
-            : 'Synced successfully with Persistent Server Database.',
-          connectedNeon: Boolean(result.data.connectedNeon)
+          message: syncRes.connectedNeon 
+            ? 'All local data safely sent and synchronized with Neon Database & Server Store.' 
+            : 'All local data safely sent and synchronized with Persistent Server Database.',
+          connectedNeon: Boolean(syncRes.connectedNeon)
         };
       }
 
       setIsDatabaseSyncing(false);
       return {
         success: false,
-        message: result.message || 'Database sync standby.',
+        message: syncRes.message || 'Database sync standby.',
         connectedNeon: false
       };
     } catch (err: any) {
@@ -469,6 +470,8 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       body: JSON.stringify(newProperty)
     }).catch(console.error);
 
+    queueDatabaseSync(200);
+
     if (user) {
       updateUser({
         postedPropertyIds: [...(user.postedPropertyIds || []), newProperty.id]
@@ -485,6 +488,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setSelectedProperty(null);
     }
     fetch(`/api/properties/${propertyId}`, { method: 'DELETE' }).catch(console.error);
+    queueDatabaseSync(200);
   };
 
   // Erase / Clear All Properties (Syncs to DB)
@@ -498,6 +502,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       const res = await fetch('/api/properties', { method: 'DELETE' });
       const data = await res.json();
+      await pushAllLocalStorageToDatabase(true);
       return Boolean(data && data.success);
     } catch (err) {
       console.error('[Properties] Error clearing all properties:', err);
@@ -505,6 +510,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       try {
         const fallbackRes = await fetch('/api/properties/clear-all', { method: 'POST' });
         const fallbackData = await fallbackRes.json();
+        await pushAllLocalStorageToDatabase(true);
         return Boolean(fallbackData && fallbackData.success);
       } catch {
         return true;
@@ -533,6 +539,7 @@ export const PropertyProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedObj)
       }).catch(console.error);
+      queueDatabaseSync(300);
     }
   };
 

@@ -94,20 +94,11 @@ export async function authenticateWithGoogle(): Promise<{
     const google = gWindow?.google;
 
     if (!clientId) {
-      console.warn('[Google Auth] No GOOGLE_CLIENT_ID or VITE_GOOGLE_CLIENT_ID configured in environment. Using demo sign-in.');
-      // Auto-fallback with sample profile when no Client ID is configured yet
-      setTimeout(() => {
-        resolve({
-          success: true,
-          profile: {
-            id: `google-${Date.now()}`,
-            name: 'Kaleb Bereket',
-            email: 'kalebbereket49@gmail.com',
-            avatar: 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
-            verifiedEmail: true
-          }
-        });
-      }, 400);
+      console.warn('[Google Auth] No Google Client ID configured.');
+      resolve({
+        success: false,
+        error: 'Google Sign-In is not configured with a valid Client ID. Please sign up or log in with your email and password.'
+      });
       return;
     }
 
@@ -139,13 +130,20 @@ export async function authenticateWithGoogle(): Promise<{
 
                 if (res.ok) {
                   const data = await res.json();
+                  if (!data.email) {
+                    resolve({
+                      success: false,
+                      error: 'Google account did not return a valid email address.'
+                    });
+                    return;
+                  }
                   resolve({
                     success: true,
                     profile: {
                       id: data.sub || `google-${Date.now()}`,
                       name: data.name || data.given_name || 'Google User',
-                      email: (data.email || 'kalebbereket49@gmail.com').toLowerCase(),
-                      avatar: data.picture || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
+                      email: data.email.toLowerCase(),
+                      avatar: data.picture || 'https://lh3.googleusercontent.com/a/default-user=s96-c',
                       verifiedEmail: data.email_verified
                     }
                   });
@@ -156,16 +154,9 @@ export async function authenticateWithGoogle(): Promise<{
               }
             }
 
-            // Fallback profile if fetch had network issues
             resolve({
-              success: true,
-              profile: {
-                id: `google-${Date.now()}`,
-                name: 'Kaleb Bereket',
-                email: 'kalebbereket49@gmail.com',
-                avatar: 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
-                verifiedEmail: true
-              }
+              success: false,
+              error: 'Failed to retrieve profile from Google. Please sign in with email/password.'
             });
           }
         });
@@ -193,7 +184,7 @@ export async function authenticateWithGoogle(): Promise<{
                     id: decoded.sub || `google-${Date.now()}`,
                     name: decoded.name || 'Google User',
                     email: decoded.email.toLowerCase(),
-                    avatar: decoded.picture || 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
+                    avatar: decoded.picture || 'https://lh3.googleusercontent.com/a/default-user=s96-c',
                     verifiedEmail: decoded.email_verified
                   }
                 });
@@ -201,14 +192,8 @@ export async function authenticateWithGoogle(): Promise<{
               }
             }
             resolve({
-              success: true,
-              profile: {
-                id: `google-${Date.now()}`,
-                name: 'Kaleb Bereket',
-                email: 'kalebbereket49@gmail.com',
-                avatar: 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
-                verifiedEmail: true
-              }
+              success: false,
+              error: 'Invalid Google credential received. Please try again or use email sign-in.'
             });
           }
         });
@@ -216,14 +201,8 @@ export async function authenticateWithGoogle(): Promise<{
         google.accounts.id.prompt((notification: any) => {
           if (notification?.isNotDisplayed() || notification?.isSkippedMoment()) {
             resolve({
-              success: true,
-              profile: {
-                id: `google-${Date.now()}`,
-                name: 'Kaleb Bereket',
-                email: 'kalebbereket49@gmail.com',
-                avatar: 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
-                verifiedEmail: true
-              }
+              success: false,
+              error: 'Google One-Tap was not displayed or was dismissed.'
             });
           }
         });
@@ -233,17 +212,11 @@ export async function authenticateWithGoogle(): Promise<{
       }
     }
 
-    // 3. Graceful fallback
+    // 3. Graceful fallback if neither GSI flow succeeded
     setTimeout(() => {
       resolve({
-        success: true,
-        profile: {
-          id: `google-${Date.now()}`,
-          name: 'Kaleb Bereket',
-          email: 'kalebbereket49@gmail.com',
-          avatar: 'https://lh3.googleusercontent.com/a/ACg8ocIS8YgD1xYpUaN7c4l6WjZg8M8yBqH3q4y9wR=s96-c',
-          verifiedEmail: true
-        }
+        success: false,
+        error: 'Google Sign-In service is not ready. Please register or log in using email and password.'
       });
     }, 400);
   });
