@@ -182,34 +182,52 @@ export const OwnerFeedbackTab: React.FC<OwnerFeedbackTabProps> = ({ onShowToast 
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-slate-700 shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
-              <span>{isRefreshing ? 'Refreshing...' : 'Sync Feedbacks'}</span>
-            </button>
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Owner Identity Pill */}
+            <div className="flex items-center gap-3 bg-slate-800/90 border border-slate-700/80 rounded-2xl p-2 pr-3.5 shadow-md">
+              <img 
+                src="/owner-kaleb.svg" 
+                alt="Kaleb Bereket" 
+                className="w-10 h-10 rounded-xl object-cover border-2 border-amber-400 shadow-sm shrink-0" 
+              />
+              <div className="text-left">
+                <div className="flex items-center gap-1.5">
+                  <Crown className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                  <span className="text-xs font-black text-white">Kaleb Bereket</span>
+                </div>
+                <p className="text-[10px] text-amber-300 font-semibold">Master Owner Identity</p>
+              </div>
+            </div>
 
-            <button
-              onClick={handleExport}
-              disabled={feedbacks.length === 0}
-              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
-            >
-              <Download className="w-3.5 h-3.5" />
-              <span>Export Feedbacks</span>
-            </button>
-
-            {feedbacks.length > 0 && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowClearAllModal(true)}
-                className="px-4 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 font-bold text-xs rounded-xl border border-rose-500/30 shadow-xs flex items-center gap-2 transition-all cursor-pointer"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl border border-slate-700 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
               >
-                <Trash2 className="w-3.5 h-3.5" />
-                <span>Clear All</span>
+                <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
+                <span>{isRefreshing ? 'Refreshing...' : 'Sync'}</span>
               </button>
-            )}
+
+              <button
+                onClick={handleExport}
+                disabled={feedbacks.length === 0}
+                className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Export</span>
+              </button>
+
+              {feedbacks.length > 0 && (
+                <button
+                  onClick={() => setShowClearAllModal(true)}
+                  className="px-3 py-2.5 bg-rose-600/20 hover:bg-rose-600/30 text-rose-300 font-bold text-xs rounded-xl border border-rose-500/30 shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>

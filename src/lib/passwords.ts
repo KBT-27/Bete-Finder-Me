@@ -24,7 +24,8 @@ const DEFAULT_OWNER_CREDENTIALS: StoredCredentials = {
   email: 'kalebbereket49@gmail.com/owner',
   password: 'Kaleb5873',
   name: 'Kaleb Bereket',
-  phone: '0995406697'
+  phone: '0995406697',
+  avatar: '/owner-kaleb.svg'
 };
 
 // Check if "/" is allowed for this email/username (allowed ONLY for Admin and Owner)
@@ -310,9 +311,18 @@ export const getOwnerCredentials = (): StoredCredentials => {
     const saved = localStorage.getItem('bete_finder_owner_creds');
     if (saved) {
       const parsed = JSON.parse(saved);
+      let needsSave = false;
       // Migrate old default password if still set to placeholder
       if (parsed.password === '1234567890owner') {
         parsed.password = 'Kaleb5873';
+        needsSave = true;
+      }
+      // Migrate old placeholder avatar to official Kaleb Bereket owner avatar
+      if (!parsed.avatar || parsed.avatar.includes('photo-1534528741775-53994a69daeb')) {
+        parsed.avatar = '/owner-kaleb.svg';
+        needsSave = true;
+      }
+      if (needsSave) {
         localStorage.setItem('bete_finder_owner_creds', JSON.stringify(parsed));
       }
       return parsed;

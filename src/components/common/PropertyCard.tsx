@@ -251,9 +251,16 @@ export const PropertyCard: React.FC<PropertyCardProps> = ({ property, onSelect }
       <div className="px-4 sm:px-5 pb-4 pt-1 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <img
-            src={property.owner.avatar}
+            src={
+              ((property.owner as any).role === 'owner' || property.owner.email?.toLowerCase().includes('kalebbereket49@gmail.com') || !property.owner.avatar || property.owner.avatar.includes('photo-1534528741775-53994a69daeb'))
+                ? (property.owner.avatar && !property.owner.avatar.includes('photo-1534528741775-53994a69daeb') ? property.owner.avatar : '/owner-kaleb.svg')
+                : property.owner.avatar
+            }
             alt={property.owner.name}
             referrerPolicy="no-referrer"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = '/owner-kaleb.svg';
+            }}
             className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0"
           />
           <div className="min-w-0">

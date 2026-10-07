@@ -83,6 +83,7 @@ import { TelegramChannelTab } from './TelegramChannelTab';
 import { TelegramBotTab } from './TelegramBotTab';
 import { OwnerFeedbackTab } from './OwnerFeedbackTab';
 import { MenuControllerModal } from './MenuControllerModal';
+import { DEFAULT_OWNER_PHOTO, processUploadedImage } from '../../constants/ownerAvatar';
 import { getMenuConfig, syncMenuConfigFromServer } from '../../lib/menuConfig';
 import { getOwnerFeedbacks, syncFeedbacksFromServer } from '../../lib/feedback';
 import { getAdminControllerConfig, logAdminActivity } from '../../lib/adminController';
@@ -341,7 +342,7 @@ export const AdminDashboard: React.FC = () => {
     user?.phone || (isOwner ? (ownerCredentials.phone || '0995406697') : (adminCredentials.phone || '+251995406697'))
   );
   const [securityAvatar, setSecurityAvatar] = useState(
-    user?.avatar || (isOwner ? (ownerCredentials.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80') : (adminCredentials.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80'))
+    user?.avatar || (isOwner ? (ownerCredentials.avatar || DEFAULT_OWNER_PHOTO) : (adminCredentials.avatar || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80'))
   );
   const [securityBio, setSecurityBio] = useState(
     user?.bio || (isOwner ? (ownerCredentials.bio || 'Platform Founder & Master Executive') : (adminCredentials.bio || 'System Administrator'))
@@ -2793,12 +2794,12 @@ export const AdminDashboard: React.FC = () => {
                   <div className="flex flex-col sm:flex-row items-center gap-4">
                     <div className="relative shrink-0">
                       <img
-                        src={securityAvatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'}
+                        src={securityAvatar || (isOwner ? DEFAULT_OWNER_PHOTO : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80')}
                         alt={securityName}
                         referrerPolicy="no-referrer"
                         className="w-20 h-20 rounded-2xl object-cover border-2 border-amber-400 shadow-md"
                         onError={(e) => {
-                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80';
+                          (e.target as HTMLImageElement).src = isOwner ? DEFAULT_OWNER_PHOTO : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80';
                         }}
                       />
                       {isOwner && (
@@ -2809,22 +2810,46 @@ export const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div className="flex-1 w-full space-y-2">
-                      <div className="relative">
-                        <Camera className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                        <input
-                          type="url"
-                          placeholder="Paste custom avatar image URL..."
-                          value={securityAvatar}
-                          onChange={(e) => setSecurityAvatar(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:ring-2 focus:ring-amber-500"
-                        />
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Camera className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input
+                            type="url"
+                            placeholder="Paste custom avatar image URL..."
+                            value={securityAvatar}
+                            onChange={(e) => setSecurityAvatar(e.target.value)}
+                            className="w-full pl-9 pr-3 py-2 text-xs bg-white border border-slate-200 rounded-xl text-slate-800 font-medium focus:ring-2 focus:ring-amber-500"
+                          />
+                        </div>
+
+                        {/* File Upload Button */}
+                        <label className="shrink-0 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors">
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload File</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (file) {
+                                try {
+                                  const dataUrl = await processUploadedImage(file);
+                                  setSecurityAvatar(dataUrl);
+                                } catch {
+                                  // fallback
+                                }
+                              }
+                            }}
+                          />
+                        </label>
                       </div>
 
                       {/* Fast Preset Avatars */}
                       <div className="flex items-center gap-2 pt-1 flex-wrap">
                         <span className="text-[10px] font-bold text-slate-400 uppercase">Presets:</span>
                         {[
-                          { label: 'Executive 1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80' },
+                          { label: '👑 Kaleb Bereket (Owner)', url: DEFAULT_OWNER_PHOTO },
                           { label: 'Corporate', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80' },
                           { label: 'Tech Leader', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80' },
                           { label: 'Director', url: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80' }

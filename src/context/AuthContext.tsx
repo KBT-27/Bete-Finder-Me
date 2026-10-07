@@ -321,7 +321,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email: currentOwner.email,
         phone: currentOwner.phone || '0995406697',
         role: 'owner',
-        avatar: currentOwner.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+        avatar: currentOwner.avatar || '/owner-kaleb.svg',
         bio: currentOwner.bio || 'Platform Owner & Administrator',
         savedPropertyIds: [],
         postedPropertyIds: [],
@@ -554,7 +554,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           email: currentOwner.email,
           phone: currentOwner.phone || '0995406697',
           role: 'owner',
-          avatar: googleAvatar || currentOwner.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
+          avatar: googleAvatar || currentOwner.avatar || '/owner-kaleb.svg',
           bio: currentOwner.bio || 'Platform Owner & Administrator',
           savedPropertyIds: [],
           postedPropertyIds: [],
@@ -856,6 +856,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(prev => {
         if (!prev) return null;
         const updated = { ...prev, ...data };
+
+        // 1. If active account is the Owner, sync to owner credentials and server
+        if (prev.role === 'owner') {
+          const currentOwner = getOwnerCredentials();
+          const updatedOwner = saveOwnerCredentials({
+            name: data.name !== undefined ? data.name : currentOwner.name,
+            phone: data.phone !== undefined ? data.phone : currentOwner.phone,
+            avatar: data.avatar !== undefined ? data.avatar : currentOwner.avatar,
+            bio: data.bio !== undefined ? data.bio : currentOwner.bio,
+          });
+          setOwnerCreds(updatedOwner);
+          fetch('/api/owner/update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: updatedOwner.email,
+              name: updatedOwner.name,
+              phone: updatedOwner.phone,
+              avatar: updatedOwner.avatar,
+              bio: updatedOwner.bio
+            })
+          }).catch(() => {});
+        }
+
+        // 2. If active account is Admin, sync to admin credentials and server
+        if (prev.role === 'admin' && prev.email.endsWith('/admin')) {
+          const currentAdmin = getAdminCredentials();
+          const updatedAdmin = saveAdminCredentials({
+            name: data.name !== undefined ? data.name : currentAdmin.name,
+            phone: data.phone !== undefined ? data.phone : currentAdmin.phone,
+            avatar: data.avatar !== undefined ? data.avatar : currentAdmin.avatar,
+            bio: data.bio !== undefined ? data.bio : currentAdmin.bio,
+          });
+          setAdminCreds(updatedAdmin);
+          fetch('/api/admin/update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: updatedAdmin.email,
+              name: updatedAdmin.name,
+              phone: updatedAdmin.phone,
+              avatar: updatedAdmin.avatar,
+              bio: updatedAdmin.bio
+            })
+          }).catch(() => {});
+        }
+
+        // 3. Registered accounts sync
         const registered = getRegisteredUsers();
         const prevEmail = (prev.email || '').trim().toLowerCase();
         const existing = registered.find(u => {
@@ -869,6 +917,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updatedAcc)
+          }).catch(() => {});
+          fetch('/api/user/update-profile', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: updatedAcc.email,
+              name: updatedAcc.name,
+              phone: updatedAcc.phone,
+              avatar: updatedAcc.avatar,
+              role: updatedAcc.role
+            })
           }).catch(() => {});
         }
         return updated;

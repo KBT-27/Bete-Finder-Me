@@ -529,9 +529,16 @@ export const PropertyDetailsView: React.FC = () => {
             <div className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-xs space-y-5">
               <div className="flex items-center gap-3.5">
                 <img
-                  src={selectedProperty.owner.avatar}
+                  src={
+                    ((selectedProperty.owner as any).role === 'owner' || selectedProperty.owner.email?.toLowerCase().includes('kalebbereket49@gmail.com') || !selectedProperty.owner.avatar || selectedProperty.owner.avatar.includes('photo-1534528741775-53994a69daeb'))
+                      ? (selectedProperty.owner.avatar && !selectedProperty.owner.avatar.includes('photo-1534528741775-53994a69daeb') ? selectedProperty.owner.avatar : '/owner-kaleb.svg')
+                      : selectedProperty.owner.avatar
+                  }
                   alt={selectedProperty.owner.name}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/owner-kaleb.svg';
+                  }}
                   className="w-14 h-14 rounded-2xl object-cover border-2 border-emerald-500 shadow-xs shrink-0"
                 />
                 <div>

@@ -17,7 +17,8 @@ import {
   ShieldCheck,
   Sparkles,
   Bot,
-  MessageSquare
+  MessageSquare,
+  Camera
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -26,6 +27,7 @@ import { UserRole, MenuVisibilityConfig } from '../../types';
 import { GeminiIcon } from './GeminiIcon';
 import { getMenuConfig, syncMenuConfigFromServer } from '../../lib/menuConfig';
 import { smoothScrollToSection } from '../../lib/scrollUtils';
+import { ChangePhotoModal } from '../profile/ChangePhotoModal';
 
 export const Navbar: React.FC = () => {
   const { t, language, toggleLanguage, isAmharic } = useLanguage();
@@ -33,6 +35,7 @@ export const Navbar: React.FC = () => {
   const { currentView, setCurrentView, setActiveListingType, savedProperties, updateFilter, resetFilters, openAIChatWithPrompt, openFeedbackModal } = useProperties();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   
   // Dynamic menu visibility controlled by the Owner
   const [menuConfig, setMenuConfig] = useState<MenuVisibilityConfig>(getMenuConfig());
@@ -317,6 +320,17 @@ export const Navbar: React.FC = () => {
                           <span>{t('navDashboard')}</span>
                         </button>
                         <button
+                          id="dropdown-photo-btn"
+                          onClick={() => {
+                            setIsUserDropdownOpen(false);
+                            setIsPhotoModalOpen(true);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-indigo-700 hover:bg-indigo-50 font-bold flex items-center gap-2.5 cursor-pointer"
+                        >
+                          <Camera className="w-4 h-4 text-indigo-600" />
+                          <span>{isAmharic ? 'የመለያ ፎቶ ቀይር' : 'Change Profile Photo'}</span>
+                        </button>
+                        <button
                           id="dropdown-post-btn"
                           onClick={() => {
                             setIsUserDropdownOpen(false);
@@ -552,16 +566,30 @@ export const Navbar: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  id="mobile-logout-btn"
-                  onClick={() => {
-                    logout();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="w-full text-center py-2 text-rose-600 font-semibold text-sm hover:bg-rose-50 rounded-lg cursor-pointer"
-                >
-                  {t('navSignOut')}
-                </button>
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setIsPhotoModalOpen(true);
+                    }}
+                    className="w-full text-center py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-lg flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{isAmharic ? 'ፎቶ ቀይር' : 'Change Photo'}</span>
+                  </button>
+
+                  <button
+                    id="mobile-logout-btn"
+                    onClick={() => {
+                      logout();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="w-full text-center py-2 text-rose-600 font-semibold text-xs hover:bg-rose-50 rounded-lg cursor-pointer"
+                  >
+                    {t('navSignOut')}
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-2">
@@ -592,6 +620,12 @@ export const Navbar: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Change Profile Photo Modal */}
+      <ChangePhotoModal 
+        isOpen={isPhotoModalOpen} 
+        onClose={() => setIsPhotoModalOpen(false)} 
+      />
     </header>
   );
 };

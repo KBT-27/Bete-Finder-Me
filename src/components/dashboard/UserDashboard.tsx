@@ -27,7 +27,8 @@ import {
   Bell,
   CheckCheck,
   MessageCircle,
-  Inbox
+  Inbox,
+  Camera
 } from 'lucide-react';
 import { useLanguage } from '../../context/LanguageContext';
 import { useProperties } from '../../context/PropertyContext';
@@ -42,9 +43,11 @@ import {
   AppNotification 
 } from '../../lib/notifications';
 import { normalizePhoneNumber, getRegisteredUsers } from '../../lib/passwords';
+import { ChangePhotoModal } from '../profile/ChangePhotoModal';
 
 export const UserDashboard: React.FC = () => {
   const { t, language } = useLanguage();
+  const isAmharic = language === 'am';
   const { 
     savedProperties, 
     userPostedProperties, 
@@ -58,6 +61,7 @@ export const UserDashboard: React.FC = () => {
     userPaymentRequests
   } = useProperties();
   const { user, role, logout, updateUser, changePassword } = useAuth();
+  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState<'favorites' | 'tours' | 'myListings' | 'payments' | 'notifications' | 'analytics' | 'profile'>('favorites');
 
@@ -125,12 +129,33 @@ export const UserDashboard: React.FC = () => {
         <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
-              <img
-                src={user.avatar}
-                alt={user.name}
-                referrerPolicy="no-referrer"
-                className="w-16 h-16 rounded-2xl object-cover border-2 border-emerald-500 shadow-xs"
-              />
+              <div 
+                className="relative group shrink-0 cursor-pointer" 
+                onClick={() => setIsPhotoModalOpen(true)}
+                title={isAmharic ? 'የመለያ ፎቶ ቀይር' : 'Change Profile Photo'}
+              >
+                <img
+                  src={user.avatar}
+                  alt={user.name}
+                  referrerPolicy="no-referrer"
+                  className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl object-cover border-2 border-emerald-500 shadow-md group-hover:brightness-90 transition-all"
+                />
+                <div className="absolute inset-0 bg-slate-950/40 rounded-2xl opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center text-white transition-opacity">
+                  <Camera className="w-5 h-5 drop-shadow-md" />
+                  <span className="text-[10px] font-bold mt-0.5">{isAmharic ? 'ቀይር' : 'Change'}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsPhotoModalOpen(true);
+                  }}
+                  className="absolute -bottom-1 -right-1 bg-indigo-600 hover:bg-indigo-700 text-white p-1.5 rounded-xl shadow-md border-2 border-white transition-transform group-hover:scale-110 cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">{user.name}</h1>
@@ -141,6 +166,15 @@ export const UserDashboard: React.FC = () => {
                 <p className="text-xs text-slate-500 mt-0.5">{user.email} • {user.phone}</p>
                 
                 <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsPhotoModalOpen(true)}
+                    className="text-[11px] font-bold px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <Camera className="w-3 h-3 text-indigo-600" />
+                    <span>{isAmharic ? 'ፎቶ ቀይር' : 'Change Photo'}</span>
+                  </button>
+
                   <span className="text-xs text-slate-600 font-semibold">Active Plan:</span>
                   <span className={`text-xs font-black px-2.5 py-0.5 rounded-md border uppercase ${
                     user.activePlan === 'vip' 
@@ -1207,6 +1241,11 @@ export const UserDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* Change Profile Photo Modal */}
+        <ChangePhotoModal
+          isOpen={isPhotoModalOpen}
+          onClose={() => setIsPhotoModalOpen(false)}
+        />
       </div>
     </div>
   );

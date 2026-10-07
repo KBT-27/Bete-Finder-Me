@@ -219,11 +219,16 @@ export const OwnerFeedbackModal: React.FC<OwnerFeedbackModalProps> = ({
                   Direct Inbox
                 </span>
               </div>
-              <p className="text-xs text-slate-300 mt-0.5">
-                {isAmharic 
-                  ? 'አስተያየትዎ በቀጥታ ለአስተዳዳሪው ይደርሳል' 
-                  : 'Delivered directly to the Owner & Administration team'}
-              </p>
+              <div className="flex items-center gap-2 mt-1">
+                <img 
+                  src="/owner-kaleb.svg" 
+                  alt="Kaleb Bereket" 
+                  className="w-4 h-4 rounded-full border border-amber-300 object-cover shrink-0" 
+                />
+                <span className="text-[11px] text-amber-300 font-bold">
+                  {isAmharic ? 'ቀጥታ ለካሌብ በረከት (ባለቤት)' : 'Recipient: Kaleb Bereket (Owner)'}
+                </span>
+              </div>
             </div>
           </div>
 

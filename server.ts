@@ -2657,7 +2657,7 @@ app.post('/api/owner/update-profile', async (req, res) => {
 // User Self Profile Update Endpoint (Name, Phone, Role, Password)
 app.post('/api/user/update-profile', async (req, res) => {
   try {
-    const { email, name, phone, role, currentPassword, newPassword } = req.body;
+    const { email, name, phone, role, avatar, currentPassword, newPassword } = req.body;
     if (!email) {
       return res.status(400).json({ success: false, message: 'Email is required.' });
     }
@@ -2701,6 +2701,7 @@ app.post('/api/user/update-profile', async (req, res) => {
 
       if (name) user.name = name.trim();
       if (phone) user.phone = phone.trim();
+      if (avatar) user.avatar = avatar.trim();
       if (role && (role === 'tenant' || role === 'landlord')) user.role = role;
 
       users[index] = user;
@@ -2715,6 +2716,7 @@ app.post('/api/user/update-profile', async (req, res) => {
         name: name?.trim() || targetEmail.split('@')[0],
         email: targetEmail,
         phone: phone?.trim() || '',
+        avatar: avatar?.trim() || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
         role: role === 'landlord' ? 'landlord' : 'tenant',
         password: newPassword?.trim() || '123456',
         savedPropertyIds: [],

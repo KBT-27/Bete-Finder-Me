@@ -1,5 +1,205 @@
 {
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free Plan",
+      "price": 0,
+      "nameAm": "ነፃ ፕላን (Free Plan)",
+      "features": [
+        "Standard search & interactive map placement",
+        "Direct phone, WhatsApp & Telegram contact",
+        "Upload high-quality property photos",
+        "Display amenities & location details",
+        "100% Free — No payment or Telebirr needed"
+      ],
+      "featuresAm": [
+        "በፍለጋ እና በካርታ ላይ መደበኛ ምደባ",
+        "ቀጥታ የስልክ፣ ዋትስአፕ እና ቴሌግራም ግንኙነት",
+        "ጥራት ያላቸው ፎቶዎችን በነፃ ማካተት",
+        "የቤት መገልገያዎችን እና አድራሻን ማሳየት",
+        "100% ነፃ — ምንም ክፍያ ወይም ቴሌብር አያስፈልግም"
+      ],
+      "durationDays": 30,
+      "renewInterval": "Standard search ranking",
+      "multiplierText": "Standard Listing",
+      "renewIntervalAm": "መደበኛ የፍለጋ ደረጃ",
+      "multiplierTextAm": "መደበኛ ነፃ ማስታወቂያ"
+    },
+    {
+      "id": "basic",
+      "name": "Basic Package",
+      "price": 299,
+      "nameAm": "መሠረታዊ ፓኬጅ (Basic)",
+      "features": [
+        "Up to 2 times more clients for ads",
+        "Promotion in search results and categories",
+        "Auto-renew of ads every 48 hours",
+        "Direct call & Telegram inquiries",
+        "Standard photo gallery"
+      ],
+      "featuresAm": [
+        "ለማስታወቂያዎች እስከ 2 እጥፍ ተጨማሪ ደንበኞች",
+        "በፍለጋ ውጤቶች እና ምድቦች ውስጥ ማስተዋወቅ",
+        "በየ 48 ሰዓቱ ማስታወቂያዎችን በራስ-ሰር ማደስ",
+        "ቀጥታ የስልክ እና የቴሌግራም ጥያቄዎች",
+        "መደበኛ የፎቶ ማሳያ"
+      ],
+      "durationDays": 30,
+      "renewInterval": "Auto-renew every 48 hours",
+      "multiplierText": "Up to 2x more clients",
+      "renewIntervalAm": "በየ 48 ሰዓቱ በራስ-ሰር ይታደሳል",
+      "multiplierTextAm": "እስከ 2 እጥፍ ተጨማሪ ደንበኞች"
+    },
+    {
+      "id": "premium",
+      "name": "Premium Package",
+      "price": 599,
+      "nameAm": "ፕሪሚየም ፓኬጅ (Premium)",
+      "features": [
+        "Up to 5 times more clients for your ads",
+        "Promotion in search results and categories",
+        "Auto-renew ads every 24 hours",
+        "5 TOP+ featured listing spots",
+        "Priority customer inquiries badge",
+        "Telebirr instant payment activation"
+      ],
+      "isPopular": true,
+      "featuresAm": [
+        "ለማስታወቂያዎ እስከ 5 እጥፍ ተጨማሪ ደንበኞች",
+        "በፍለጋ ውጤቶች እና ምድቦች ውስጥ ማስተዋወቅ",
+        "በየ 24 ሰዓቱ ማስታወቂያዎችን በራስ-ሰር ማደስ",
+        "5 ከፍተኛ ተመራጭ ማስታወቂያዎች (5 TOP+)",
+        "ቅድሚያ የሚሰጠው የደንበኞች ጥሪ ባጅ",
+        "በቴሌብር ፈጣን ክፍያ ማረጋገጫ"
+      ],
+      "durationDays": 30,
+      "renewInterval": "Auto-renew every 24 hours",
+      "topBadgeCount": "5 TOP+",
+      "multiplierText": "Up to 5x more clients",
+      "renewIntervalAm": "በየ 24 ሰዓቱ በራስ-ሰር ይታደሳል",
+      "topBadgeCountAm": "5 ከፍተኛ ተመራጭ (TOP+)",
+      "multiplierTextAm": "እስከ 5 እጥፍ ተጨማሪ ደንበኞች"
+    },
+    {
+      "id": "vip",
+      "name": "VIP Package",
+      "price": 999,
+      "nameAm": "ቪአይፒ ፓኬጅ (VIP)",
+      "features": [
+        "Up to 7 times more clients for ads",
+        "Promotion in search results and categories",
+        "Auto-renew ads every 12 hours",
+        "10 VIP TOP+ maximum exposure spots",
+        "100% Verified by the Owner badge",
+        "Top homepage banner & carousel spotlight",
+        "Direct Telegram & Phone VIP concierge"
+      ],
+      "featuresAm": [
+        "ለማስታወቂያዎች እስከ 7 እጥፍ ተጨማሪ ደንበኞች",
+        "በፍለጋ ውጤቶች እና ምድቦች ውስጥ ማስተዋወቅ",
+        "በየ 12 ሰዓቱ ማስታወቂያዎችን በራስ-ሰር ማደስ",
+        "10 ቪአይፒ ከፍተኛ ተመራጭ ቦታዎች (10 VIP TOP+)",
+        "በባለቤቱ ሙሉ በሙሉ የተረጋገጠ (Verified by Owner)",
+        "በዋናው ገፅ ከፍተኛ ስፖትላይት እና ባነር",
+        "የቀጥታ የቴሌግራም እና ስልክ የቪአይፒ ድጋፍ"
+      ],
+      "durationDays": 30,
+      "renewInterval": "Auto-renew every 12 hours",
+      "topBadgeCount": "10 VIP TOP+",
+      "multiplierText": "Up to 7x more clients",
+      "renewIntervalAm": "በየ 12 ሰዓቱ በራስ-ሰር ይታደሳል",
+      "topBadgeCountAm": "10 ቪአይፒ ከፍተኛ ተመራጭ (10 VIP TOP+)",
+      "multiplierTextAm": "እስከ 7 እጥፍ ተጨማሪ ደንበኞች"
+    }
+  ],
   "users": [
+    {
+      "id": "google-1790865244816",
+      "name": "bereket tadesse",
+      "role": "landlord",
+      "email": "bereketro1974@gmail.com",
+      "phone": "0911749109",
+      "avatar": "https://lh3.googleusercontent.com/a/ACg8ocJoR7apbkJ9itp3KyX2pL3QrPUhP1Q4pNJXQmR0m6D_7OhqAg=s96-c",
+      "password": "google-oauth-auth",
+      "provider": "google",
+      "lastLogin": "2026-10-01T14:34:04.816Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-10-01T14:34:04.816Z",
+      "registeredAt": "2026-10-01T14:34:04.816Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
+      "id": "google-1790420267870",
+      "name": "Silver Roro",
+      "role": "tenant",
+      "email": "silverroro12@gmail.com",
+      "phone": "0921598864",
+      "avatar": "https://lh3.googleusercontent.com/a/ACg8ocJd2eqgTeEv2WLjnZ4pp3S07eX8sapTi3xeauTPaHueQe19EA=s96-c",
+      "password": "google-oauth-auth",
+      "provider": "google",
+      "lastLogin": "2026-09-26T10:57:47.870Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-26T10:57:47.870Z",
+      "registeredAt": "2026-09-26T10:57:47.870Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
+      "id": "google-1789923163028",
+      "name": "Gemini Pro",
+      "role": "landlord",
+      "email": "gemini.pro.20301@gmail.com",
+      "phone": "090000000",
+      "avatar": "https://lh3.googleusercontent.com/a/ACg8ocKtRXw-w2Mfi4fTdpItQJdnxfjfgi3nauMKRrVpWLFXuExSSg=s96-c",
+      "password": "google-oauth-auth",
+      "provider": "google",
+      "lastLogin": "2026-09-20T16:52:43.028Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-20T14:53:20.196Z",
+      "registeredAt": "2026-09-20T16:52:43.028Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
+      "id": "google-1789729256750",
+      "name": "Abiyot Desaleg",
+      "role": "tenant",
+      "email": "abiyotdesaleg344@gmail.com",
+      "phone": "0912002768",
+      "avatar": "https://lh3.googleusercontent.com/a/ACg8ocLZT8g1wvn21XJcUuIk3LQYV1xprhYrgLPs0JUw7BgjkkNPnw=s96-c",
+      "password": "google-oauth-auth",
+      "provider": "google",
+      "lastLogin": "2026-09-18T11:00:56.749Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-18T11:07:24.834Z",
+      "registeredAt": "2026-09-18T11:00:56.749Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
+      "id": "google-1789416428761",
+      "name": "Shaki Man",
+      "role": "landlord",
+      "email": "sh51102321@gmail.com",
+      "phone": "0946340709",
+      "avatar": "https://lh3.googleusercontent.com/a/ACg8ocKcHuz14RLSv8OAY_w-YgSFuwG0SLGMSESKVqvqX73pcAz8m_0U=s96-c",
+      "password": "google-oauth-auth",
+      "provider": "google",
+      "lastLogin": "2026-09-14T20:07:08.761Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-14T20:10:48.303Z",
+      "registeredAt": "2026-09-14T20:07:08.761Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": [
+        "prop-1789416646215"
+      ]
+    },
     {
       "id": "google-1788769848160",
       "name": "Leul Lula",
@@ -62,6 +262,39 @@
       "planExpiresAt": "2027-09-01T07:30:42.094Z",
       "savedPropertyIds": [],
       "postedPropertyIds": []
+    },
+    {
+      "id": "user-1789812066284",
+      "name": "Ab gut",
+      "role": "tenant",
+      "email": "abc",
+      "phone": "09",
+      "avatar": "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80",
+      "password": "123456",
+      "provider": "local",
+      "lastLogin": "2026-09-19T10:22:10.724Z",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-19T10:22:11.569Z",
+      "registeredAt": "2026-09-19T10:01:06.284Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
+    },
+    {
+      "id": "google-1788635199893",
+      "name": "bereket tadesse",
+      "role": "landlord",
+      "email": "lekaneke@gmail.com",
+      "phone": "+251995406697",
+      "avatar": "https://lh3.googleusercontent.com/a/ACg8ocJrO8yj16-NX_LLigkkW-SQah3ceKHOpto1cCG_tocS-d22Ekc=s96-c",
+      "password": "google-oauth-auth",
+      "provider": "google",
+      "activePlan": "free",
+      "toursBooked": [],
+      "lastActiveAt": "2026-09-05T19:06:40.066Z",
+      "registeredAt": "2026-09-05T19:06:39.893Z",
+      "savedPropertyIds": [],
+      "postedPropertyIds": []
     }
   ],
   "menuConfig": {
@@ -94,7 +327,7 @@
     }
   },
   "properties": [],
-  "lastUpdated": 1789389862559,
+  "lastUpdated": 1791394906277,
   "ownerFeedbacks": [
     {
       "id": "fb-1789029688644-wxivw",
@@ -106,192 +339,207 @@
       "message": "I really love the idea of this site .... it could actually be an amazing project once the right ppl find it and after the first few listings",
       "category": "platform",
       "createdAt": "2026-09-10T08:41:29.361Z",
-      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36"
+      "userAgent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Mobile Safari/537.36",
+      "replyNotes": "Thank You Very Mach"
+    },
+    {
+      "id": "fb-1789813294808-19n10",
+      "name": "Anonymous User",
+      "email": "guest@betefinder.com",
+      "phone": "",
+      "rating": 5,
+      "status": "replied",
+      "message": "u",
+      "category": "platform",
+      "createdAt": "2026-09-19T10:21:35.540Z",
+      "userAgent": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "replyNotes": "6"
+    },
+    {
+      "id": "fb-1789812134756-q8mru",
+      "name": "Ab Gut",
+      "email": "Kalebbereket49@gmail.com",
+      "phone": "09909090",
+      "rating": 5,
+      "status": "replied",
+      "message": "okokokokok",
+      "category": "platform",
+      "createdAt": "2026-09-19T10:02:15.819Z",
+      "userAgent": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+      "replyNotes": "thanks"
     }
   ],
   "paymentRequests": [],
   "adminCredentials": {
+    "bio": "All System Admin",
     "name": "Bereket Tadesse",
     "email": "lekeneke@gmail.com/admin",
     "phone": "+251911749109",
+    "avatar": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
     "password": "Kaleb5873"
   },
   "ownerCredentials": {
+    "bio": "Platform Owner & Administrator",
     "name": "Owner (Kaleb Bereket)",
     "email": "kalebbereket49@gmail.com/owner",
     "phone": "+251995406697",
+    "avatar": "https://kommodo.ai/i/WwGeGJxc51MFg4VYuxTl",
     "password": "Kaleb5873"
   },
   "telebirrSettings": {
-    "accountName": "Desalegn Guta",
-    "accountNumber": "0995406697"
+    "accountName": "Owner (Kaleb Bereket) (Owner)",
+    "accountNumber": "+251995406697"
   },
   "adminControllerConfig": {
     "auditLogs": [
       {
-        "id": "log-1788813888694-g51j",
+        "id": "log-1788723734049-txvt",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "action": "User Deleted",
+        "details": "Permanently deleted registered account kaleb Bereket (kalebbereket894@gmail.com) from database",
+        "category": "user",
+        "severity": "danger",
+        "timestamp": "2026-09-06T19:42:14.049Z"
+      },
+      {
+        "id": "log-1788684618200-izc5",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "User Deleted",
+        "details": "Permanently deleted registered account kalebbereket4 (kalebbereket4@gmail.com/owner) from database",
+        "category": "user",
+        "severity": "danger",
+        "timestamp": "2026-09-06T08:50:18.200Z"
+      },
+      {
+        "id": "log-1788684542733-rl8b",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "User Deleted",
+        "details": "Permanently deleted registered account kalebbereket49 (kalebbereket49@gmail.com) from database",
+        "category": "user",
+        "severity": "danger",
+        "timestamp": "2026-09-06T08:49:02.733Z"
+      },
+      {
+        "id": "log-1788684538297-aca0",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "User Deleted",
+        "details": "Permanently deleted registered account kk (kk) from database",
+        "category": "user",
+        "severity": "danger",
+        "timestamp": "2026-09-06T08:48:58.297Z"
+      },
+      {
+        "id": "log-1788192618315-ef4b",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canDeleteProperties",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:48.694Z"
+        "timestamp": "2026-08-31T16:10:18.315Z"
       },
       {
-        "id": "log-1788813886757-ka3w",
+        "id": "log-1788192616853-aatn",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:46.757Z"
+        "timestamp": "2026-08-31T16:10:16.853Z"
       },
       {
-        "id": "log-1788813886038-i6nn",
+        "id": "log-1788192616338-gvhx",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:46.038Z"
+        "timestamp": "2026-08-31T16:10:16.338Z"
       },
       {
-        "id": "log-1788813883740-5481",
+        "id": "log-1788192616073-bnqc",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: canApprovePayments",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:43.740Z"
+        "timestamp": "2026-08-31T16:10:16.074Z"
       },
       {
-        "id": "log-1788813882652-zz1q",
+        "id": "log-1788192615725-ksp7",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canExportBackups",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:42.652Z"
+        "timestamp": "2026-08-31T16:10:15.725Z"
       },
       {
-        "id": "log-1788813881348-zel7",
+        "id": "log-1788192615311-kawz",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: canApprovePayments",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canViewUserDatabase",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:41.348Z"
+        "timestamp": "2026-08-31T16:10:15.311Z"
       },
       {
-        "id": "log-1788813879268-cjqx",
+        "id": "log-1788192614480-yhps",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: canApprovePayments",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canViewUserDatabase",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:39.268Z"
+        "timestamp": "2026-08-31T16:10:14.480Z"
       },
       {
-        "id": "log-1788813878356-7wsc",
+        "id": "log-1788192614186-ewyt",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canExportBackups",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:38.356Z"
+        "timestamp": "2026-08-31T16:10:14.186Z"
       },
       {
-        "id": "log-1788813877681-xaj9",
+        "id": "log-1788192613916-gqhu",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Modified First Admin Authority Matrix",
-        "details": "Updated primary admin permissions: isSuspended, canApprovePayments, canDeleteProperties, canVerifyProperties, canViewUserDatabase, canExportBackups, canBroadcastNotices",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canBroadcastNotices",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T20:44:37.681Z"
+        "timestamp": "2026-08-31T16:10:13.916Z"
       },
       {
-        "id": "log-1",
+        "id": "log-1788192589073-lq7j",
         "actor": "Owner (Kaleb Bereket)",
-        "action": "Synchronized Master DB Schema",
-        "details": "Full cross-device sync completed across 6 PostgreSQL entities.",
-        "category": "system",
-        "severity": "info",
-        "timestamp": "2026-09-07T20:28:59.245Z"
-      },
-      {
-        "id": "log-2",
-        "actor": "Admin (Kaleb Bereket)",
-        "action": "Verified Property Listing",
-        "details": "Approved luxury 3-bedroom apartment in Bole Olympia for public display.",
-        "category": "property",
-        "severity": "success",
-        "timestamp": "2026-09-07T19:58:59.245Z"
-      },
-      {
-        "id": "log-3",
-        "actor": "Admin (Kaleb Bereket)",
-        "action": "Processed Telebirr Payment",
-        "details": "Approved 2,499 ETB VIP Spotlight package for Landlord account.",
-        "category": "payment",
-        "severity": "success",
-        "timestamp": "2026-09-07T18:43:59.245Z"
-      },
-      {
-        "id": "log-4",
-        "actor": "Owner (Kaleb Bereket)",
-        "action": "Updated Admin Authority Rules",
-        "details": "Permissions matrix saved and broadcasted to edge cache.",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canApprovePayments",
         "category": "security",
         "severity": "warning",
-        "timestamp": "2026-09-07T14:43:59.245Z"
+        "timestamp": "2026-08-31T16:09:49.073Z"
+      },
+      {
+        "id": "log-1788192586121-ggwq",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canApprovePayments",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-08-31T16:09:46.121Z"
+      },
+      {
+        "id": "log-1788192584017-iua9",
+        "actor": "Owner (Kaleb Bereket)",
+        "action": "Modified Admin Authority Matrix",
+        "details": "Updated permissions: canDeleteProperties",
+        "category": "security",
+        "severity": "warning",
+        "timestamp": "2026-08-31T16:09:44.017Z"
       }
     ],
-    "subAdmins": [
-      {
-        "id": "subadmin-1",
-        "name": "Bole Sub-City Property Inspector",
-        "role": "regional_inspector",
-        "email": "bole.inspector@betefinder.com/admin",
-        "phone": "+251911223344",
-        "status": "active",
-        "password": "InspectorBole2025",
-        "createdAt": "2026-09-02T20:43:59.243Z",
-        "lastLogin": "2026-09-07T16:43:59.245Z",
-        "permissions": {
-          "isSuspended": false,
-          "canExportBackups": false,
-          "canApprovePayments": false,
-          "canBroadcastNotices": false,
-          "canDeleteProperties": false,
-          "canVerifyProperties": true,
-          "canViewUserDatabase": false
-        },
-        "assignedSubcity": "Bole"
-      },
-      {
-        "id": "subadmin-2",
-        "name": "Telebirr Payment Review Officer",
-        "role": "payment_officer",
-        "email": "telebirr.officer@betefinder.com/admin",
-        "phone": "+251922334455",
-        "status": "active",
-        "password": "TelebirrOfficer2025",
-        "createdAt": "2026-08-26T20:43:59.245Z",
-        "lastLogin": "2026-09-07T18:43:59.245Z",
-        "permissions": {
-          "isSuspended": false,
-          "canExportBackups": false,
-          "canApprovePayments": true,
-          "canBroadcastNotices": false,
-          "canDeleteProperties": false,
-          "canVerifyProperties": false,
-          "canViewUserDatabase": false
-        },
-        "assignedSubcity": "All Addis Ababa"
-      }
-    ],
+    "subAdmins": [],
     "adminPermissions": {
-      "isSuspended": true,
+      "isSuspended": false,
       "canExportBackups": true,
       "canApprovePayments": true,
       "canBroadcastNotices": true,
